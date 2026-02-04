@@ -49,3 +49,12 @@ Chrome 123+, Firefox 120+, Safari 17.5+, Opera 109+, Edge 123+, WebView Android 
 draw.io is a registered EU trademark (#018062448).
 
 Do not use the draw.io name or logo in ways that suggest affiliation with, endorsement by, or sponsorship by draw.io. Do not use draw.io logos for your own business, product, project, domain, or social media presence. Do not modify the draw.io logos. Use of draw.io trademarks requires prior written permission.
+
+
+
+Running it:
+
+```docker rm -f drawio || true && \
+docker build --no-cache -t my-custom-drawio . && \
+docker run -d -p 8080:8080 --name drawio my-custom-drawio
+```
