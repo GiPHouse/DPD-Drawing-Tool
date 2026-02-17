@@ -14,7 +14,7 @@ Menus = function(editorUi)
 /**
  * Sets the default font family.
  */
-Menus.prototype.defaultFont = 'Helvetica';
+Menus.prototype.defaultFont = 'Comic Sans MS';
 
 /**
  * Sets the default font size.
@@ -24,7 +24,9 @@ Menus.prototype.defaultFontSize = '12';
 /**
  * Sets the default font size.
  */
-Menus.prototype.defaultMenuItems = ['file', 'edit', 'view', 'arrange', 'extras', 'help'];
+
+// Menus.prototype.defaultMenuItems = ['file', 'edit', 'view', 'arrange', 'extras', 'help'];
+Menus.prototype.defaultMenuItems = ['file', 'edit', 'view', 'help'];
 
 /**
  * Adds the label menu items to the given menu and parent.

@@ -6,6 +6,12 @@
  // urlParams is null when used for embedding
 window.urlParams = window.urlParams || {};
 
+// Remove unnecessary libraries
+window.DRAWIO_CONFIG = {
+    defaultLibraries: 'general;misc;basic',
+    enabledLibraries: ['general', 'misc', 'basic']
+};
+
 // Public global variables
 window.DOM_PURIFY_CONFIG = window.DOM_PURIFY_CONFIG ||
     {ADD_TAGS: ['use', 'foreignObject'], FORBID_TAGS: ['form'],
