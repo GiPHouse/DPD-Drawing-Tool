@@ -285,6 +285,7 @@ App.startTime = new Date();
  */
 App.pluginRegistry = {'4xAKTrabTpTzahoLthkwPNUn': 'plugins/explore.js',
 	'ex': 'plugins/explore.js',
+	'dpd': 'plugins/dpd.js',
 	'ac': 'plugins/connect.js', 'acj': 'plugins/connectJira.js',
 	'ac148': 'plugins/cConf-1-4-8.js', 'ac148cmnt': 'plugins/cConf-comments.js', 
 	'nxtcld': 'plugins/nextcloud.js',
@@ -316,7 +317,8 @@ App.publicPlugin = [
 	'anon',
 	'webcola',
 //	'rnd', 'page', 'gd',
-	'tags'
+	'tags',
+	'dpd'
 ];
 
 /**
