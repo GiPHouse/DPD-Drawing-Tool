@@ -1,15 +1,15 @@
 :root {
-	--ge-panel-color: #f1f3f4;
-	--toolbar-color: #f1f3f4;
+	--ge-panel-color: #ffffff;
+	--toolbar-color: #ffffff;
 	--workspace-color: #ececec;
 	--dark-toolbar-color: #1e2022;
 	--inactive-color: #e4e4e4;
 	--active-color: #c4c4c4;
-	--primary-color: #c2e7ff;
-	--primary-hover-color: #abcfe7;
-	--accent-color: #e1e9f7;
+	--primary-color: #004A8F;
+	--primary-hover-color: #0063BE;
+	--accent-color: #EBF3FA;
 	--accent-hover-color: #d8e5f8;
-	--accent-text-color: #0b57d0;
+	--accent-text-color: #004A8F;
 	--border-color: #dadada;
 	--highlight-color: #e2e2e2;
 	--scrollbar-hover-color: #959798;
@@ -175,43 +175,48 @@ div[id*="dgeMermaidOutput-"] {
 }
 
 .geAppIcon {
-	display: block;
-	position: absolute;
-	top: 10px;
-	left: 16px;
-	width: 32px;
-	height: 36px;
-	border-radius: 4px;
-	background-color: rgb(240, 135, 5);
-	background-position: center center;
-	background-repeat: no-repeat;
-	transition: 0.1s linear;
-	cursor: pointer;
-	background-size: 100%;
-	opacity: 0.9;
+    display: block;
+    position: absolute;
+    top: 0px;
+    left: 10px;
+    width: 94px;
+    height: 56px; /* Kept at 42px so it doesn't break the top bar height */
+    border-radius: 4px;
+    background-color: transparent;
+    background-position: left center;
+    background-repeat: no-repeat;
+    transition: 0.1s linear;
+    cursor: pointer;
+    background-size: contain;
+    opacity: 0.9;
 }
 
 .geMenubar {
-	top: 28px;
-	width: 100%;
-	height: 30px;
-	display: flex;
-	position: absolute;
-	align-items: center;
-	box-sizing: border-box;
-	padding: 0px 2px 0px 58px;
+    top: 28px;
+    width: 100%;
+    height: 30px;
+    display: flex;
+    position: absolute;
+    align-items: center;
+    box-sizing: border-box;
+    /* Pushes the text to exactly 115px */
+    padding: 0px 2px 0px 109px; 
+    /* Removed the margin so it doesn't double up */
+    margin-left: 0px; 
 }
 
 .geFilenameContainer {
-	position: absolute;
-	right: 260px;
-	left: 60px;
-	top: 4px;
-	height: 26px;
-	display: block;
-	margin-left: 0px;
-	overflow: hidden;
-	text-overflow: ellipsis;
+    position: absolute;
+    right: 260px;
+    /* Sets the start position to exactly 115px */
+    left: 115px; 
+    top: 4px;
+    height: 26px;
+    display: block;
+    /* Removed the margin so it doesn't double up */
+    margin-left: 0px; 
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .geFilename {

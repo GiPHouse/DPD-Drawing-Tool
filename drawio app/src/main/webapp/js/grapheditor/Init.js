@@ -2,15 +2,14 @@
  * Copyright (c) 2006-2021, JGraph Holdings Ltd
  * Copyright (c) 2006-2021, draw.io AG
  */
-
- // urlParams is null when used for embedding
-window.urlParams = window.urlParams || {};
-
-// Remove unnecessary libraries
 window.DRAWIO_CONFIG = {
     defaultLibraries: 'general;misc;basic',
     enabledLibraries: ['general', 'misc', 'basic']
 };
+
+window.urlParams = window.urlParams || {};
+
+
 
 // Public global variables
 window.DOM_PURIFY_CONFIG = window.DOM_PURIFY_CONFIG ||

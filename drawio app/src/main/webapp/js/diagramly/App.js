@@ -1858,7 +1858,7 @@ App.prototype.init = function()
 		if (Editor.currentTheme == 'atlas' || urlParams['atlas'] == '1')
 		{	
 			this.icon = document.createElement('img');
-			this.icon.setAttribute('src', IMAGE_PATH + '/logo-flat-small.png');
+			this.icon.setAttribute('src', IMAGE_PATH + '/NOLAI_logo.png');
 			this.icon.setAttribute('title', mxResources.get('draw.io'));
 			this.icon.className = 'geSmallAppIcon';
 			// this.icon.style.padding = '0 4px 0 0';
@@ -2828,11 +2828,13 @@ App.prototype.appIconClicked = function(evt)
 	}
 	else if (mode == App.MODE_DEVICE)
 	{
-		this.openLink('https://get.draw.io/');
+		// changed this to make it go to the nolai site
+		this.openLink('http://ru.nl/en/nolai');
 	}
 	else
 	{
-		this.openLink('https://www.drawio.com/');
+		// changed this to make it go to the nolai site
+		this.openLink('http://ru.nl/en/nolai');
 	}
 	
 	mxEvent.consume(evt);
@@ -7318,7 +7320,7 @@ App.prototype.updateHeader = function()
 {
 	if (this.menubar != null)
 	{
-		var logo = 'url(' + Editor.logoImage + ')';
+		var logo = 'url(' + IMAGE_PATH + '/NOLAI_logo.png)';
 		this.appIcon = document.createElement('a');
 		this.appIcon.className = 'geAppIcon';
 		this.appIcon.style.backgroundImage = logo;
