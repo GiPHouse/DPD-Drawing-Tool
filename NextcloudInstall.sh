@@ -65,7 +65,7 @@ docker cp my-nextcloud-caddy-proxy-1:/data/caddy/pki/authorities/local/root.crt 
 
 echo ""
 echo "======================================================="
-echo "✅ INSTALLATION COMPLETE!"
+echo "INSTALLATION COMPLETE!"
 echo "======================================================="
 echo "STEP 1: Install the Certificate in Windows"
 echo "   - The Windows folder will now open automatically."
