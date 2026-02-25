@@ -32,7 +32,7 @@ if (!mxIsElectron)
 		var devCsp = csp.
 			// Adds script tags and loads shapes with eval
 			replace(/%script-src%/g, 'https://www.dropbox.com https://api.trello.com \'unsafe-eval\'').
-			// Adds Trello and Dropbox backend storage and localhost for Nextcloud testing
+			// Adds Trello and Dropbox backend storage and localhost for Nextcloud testing (changed by software engineering team)
 			replace(/%connect-src%/g, 'https://*.dropboxapi.com https://trello.com https://api.trello.com https://my.microsoftpersonalcontent.com https://localhost http://localhost').
 			// Loads common.css from mxgraph
 			replace(/%style-src%/g, '').

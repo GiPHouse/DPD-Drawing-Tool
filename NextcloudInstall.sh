@@ -87,4 +87,11 @@ echo "Wait till everything is started (45 sec)..."
 sleep 45
 
 echo "Now go to https://localhost and do the setup"
+echo "STEP 2: Nextcloud Setup via Browser"
+echo "   - Go to: https://localhost"
+echo "   - Select 'MySQL/MariaDB' and enter the following:"
+echo "     * Database User: nextcloud"
+echo "     * Database Password: nextcloudpass"
+echo "     * Database Name: nextcloud"
+echo "     * Database Host: db"
 echo "Run NextcloudHTTPS.sh script"
