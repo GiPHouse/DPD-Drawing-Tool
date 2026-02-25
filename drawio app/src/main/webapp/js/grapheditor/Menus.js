@@ -14,7 +14,7 @@ Menus = function(editorUi)
 /**
  * Sets the default font family.
  */
-Menus.prototype.defaultFont = 'Helvetica';
+Menus.prototype.defaultFont = 'Comic Sans MS';
 
 /**
  * Sets the default font size.
@@ -24,6 +24,8 @@ Menus.prototype.defaultFontSize = '12';
 /**
  * Sets the default font size.
  */
+
+// NOLAI - Sprint 1 - this can be edited to customise toolbar
 Menus.prototype.defaultMenuItems = ['file', 'edit', 'view', 'arrange', 'extras', 'help'];
 
 /**
