@@ -2,6 +2,16 @@
  * Copyright (c) 2006-2024, JGraph Holdings Ltd
  * Copyright (c) 2006-2024, draw.io AG
  */
+/* 
+
++--------------------------------------------------------+
+| This file contains modified code by SE team,           |
+| refer to keywords: 'NOLAI'                             |
+|                                                        |
++--------------------------------------------------------+
+
+*/
+
 // Overrides of global vars need to be pre-loaded
 window.DRAWIO_PUBLIC_BUILD = true;
 window.EXPORT_URL = 'REPLACE_WITH_YOUR_IMAGE_SERVER';
@@ -14,7 +24,7 @@ window.DRAWIO_CONFIG = null; // Replace with your custom draw.io configurations.
 urlParams['sync'] = 'manual';
 
 
-// NOLAI - Sprint 1 - custom configuration
+// ======	NOLAI - Frontend - /Sprint 1/ Task #89	=====
 // Create a new HTTP request
 var req = new XMLHttpRequest();
 
@@ -29,3 +39,4 @@ if (req.status >= 200 && req.status < 300) {
 } else {
     console.error("Failed to load nolai_configuration.json. Status: " + req.status);
 }
+// ====== end of changes by SE	======
