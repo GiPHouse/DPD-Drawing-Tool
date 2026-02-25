@@ -4,12 +4,23 @@
 /**
  * Constructs a new graph editor
  */
+
+/* 
+
++--------------------------------------------------------+
+| This file contains modified code by SE team,           |
+| refer to keywords: 'NOLAI'                             |
+|                                                        |
++--------------------------------------------------------+
+
+*/
 Menus = function(editorUi)
 {
 	this.editorUi = editorUi;
 	this.menus = new Object();
 	this.init();
 };
+// ======	NOLAI - Frontend/Sprint 1/ Task #89	=====
 
 /**
  * Sets the default font family.
@@ -38,7 +49,7 @@ Menus.prototype.defaultFonts = ['Helvetica', 'Verdana', 'Times New Roman', 'Gara
  * Adds the label menu items to the given menu and parent.
  */
 Menus.prototype.autoPopup = true;
-
+// ====== end of changes by SE	======
 /**
  * Adds the label menu items to the given menu and parent.
  */
