@@ -1,0 +1,52 @@
+Naming conventions The Painters:
+
+apart from code explanations: 
+
+
+Header for each touched file"
+/* 
+
++--------------------------------------------------------+
+| This file contains modified code by SE team,           |
+| refer to keywords: 'NOLAI'                             |
+|                                                        |
++--------------------------------------------------------+
+
+*/
+
+
+for every edited/ created code snippet, start with this as header: 
+
+// ======	NOLAI - {- Name of the group, e.g. "Frontend" -} /Sprint NR/ Task #	=====
+
+
+// WORKING and WELL COMMENTED CODE
+
+
+close with:
+// ====== end of changes by SE	======
+
+
+General rules: 
+
+Rule 1: Comments should not duplicate the code.
+
+Rule 2: Good comments do not excuse unclear code.
+
+Rule 3: If you can't write a clear comment, there may be a problem with the code.
+
+Rule 4: Comments should dispel confusion, not cause it.
+
+Rule 5: Explain unidiomatic code in comments.
+
+Rule 6: Provide links to the original source of copied code.
+
+Rule 7: Include links to external references where they will be most helpful.
+
+Rule 8: Add comments when fixing bugs.
+
+Rule 9: Use comments to mark incomplete implementations.
+
+
+ref: https://stackoverflow.blog/2021/12/23/best-practices-for-writing-code-comments/
+

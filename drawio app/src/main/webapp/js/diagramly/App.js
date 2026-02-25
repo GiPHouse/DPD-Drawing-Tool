@@ -11,6 +11,16 @@
  * @param {number} x X-coordinate of the point.
  * @param {number} y Y-coordinate of the point.
  */
+
+/* 
+
++--------------------------------------------------------+
+| This file contains modified code by SE team,           |
+| refer to keywords: 'NOLAI'                             |
+|                                                        |
++--------------------------------------------------------+
+
+*/
 App = function(editor, container, lightbox)
 {
 	EditorUi.call(this, editor, container, (lightbox != null) ? lightbox :
@@ -1856,7 +1866,7 @@ App.prototype.init = function()
 		{
 			this.setCompactMode(true);
 		}
-
+		// ======	NOLAI - Frontend/Sprint 1/ Task #89	=====
 		if (Editor.currentTheme == 'atlas' || urlParams['atlas'] == '1')
 		{	
 			this.icon = document.createElement('img');
@@ -1880,6 +1890,7 @@ App.prototype.init = function()
 			
 			this.menubar.container.insertBefore(this.icon, this.menubar.container.firstChild);
 		}
+		// ====== end of changes by SE	======
 	}
 	
 	if (this.editor.graph.isViewer())
