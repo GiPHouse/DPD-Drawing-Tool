@@ -12,3 +12,20 @@ window.DRAWIO_LIGHTBOX_URL = null; // Replace with your lightbox URL, eg. https:
 window.DRAW_MATH_URL = 'math4/es5';
 window.DRAWIO_CONFIG = null; // Replace with your custom draw.io configurations. For more details, https://www.drawio.com/doc/faq/configure-diagram-editor
 urlParams['sync'] = 'manual';
+
+
+// NOLAI - Sprint 1 - custom configuration
+// Create a new HTTP request
+var req = new XMLHttpRequest();
+
+// Open a Synchronous GET request to your JSON file (the 'false' makes it wait)
+req.open('GET', 'configuration/nolai_configuration.json', false);
+req.send(null);
+
+// If the file is successfully found and downloaded
+if (req.status >= 200 && req.status < 300) {
+    // Parse the text into a JS object and assign it to the global config
+    window.DRAWIO_CONFIG = JSON.parse(req.responseText);
+} else {
+    console.error("Failed to load nolai_configuration.json. Status: " + req.status);
+}

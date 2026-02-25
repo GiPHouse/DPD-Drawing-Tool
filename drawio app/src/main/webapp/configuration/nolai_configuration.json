@@ -90,5 +90,16 @@
       ]
     }
   ],
-  "css": ".geAppIcon { display: block; position: absolute; top: 0px; left: 10px; width: 94px; height: 56px; border-radius: 4px; background-color: transparent; background-position: left center; background-repeat: no-repeat; transition: 0.1s linear; cursor: pointer; background-size: contain; opacity: 0.9; } .geMenubar { top: 28px; width: 100%; height: 30px; display: flex; position: absolute; align-items: center; box-sizing: border-box; padding: 0px 2px 0px 109px; margin-left: 0px; } .geFilenameContainer { position: absolute; right: 260px; left: 115px; top: 4px; height: 26px; display: block; margin-left: 0px; overflow: hidden; text-overflow: ellipsis; }"
+  "css": "@import url('https://fonts.googleapis.com/css?family=Open+Sans'); body, .geEditor, .geEditor * { font-family: 'Open Sans', sans-serif !important; } .geAppIcon { display: block; position: absolute; top: 0px; left: 10px; width: 94px; height: 56px; border-radius: 4px; background-color: transparent; background-position: left center; background-repeat: no-repeat; transition: 0.1s linear; cursor: pointer; background-size: contain; opacity: 0.9; } .geMenubar { top: 28px; width: 100%; height: 30px; display: flex; position: absolute; align-items: center; box-sizing: border-box; padding: 0px 2px 0px 109px; margin-left: 0px; } .geFilenameContainer { position: absolute; right: 260px; left: 115px; top: 4px; height: 26px; display: block; margin-left: 0px; overflow: hidden; text-overflow: ellipsis; }",
+  "customFonts": [
+      {
+        "fontFamily": "Open Sans",
+        "fontUrl": "https://fonts.googleapis.com/css?family=Open+Sans"
+      }
+    ],
+  "defaultFonts": [
+    "Helvetica",
+    "Arial",
+    "Times New Roman"
+  ]
 }
