@@ -3,6 +3,7 @@
  * Copyright (c) 2006-2021, draw.io AG
  */
 
+//------ Added for NOLAI ------
 window.DRAWIO_CONFIG = {
     override: true,
     defaultLibraries: 'general;dpds;basic;misc',
@@ -83,6 +84,8 @@ window.DRAWIO_CONFIG = {
         }
     ]
 };
+
+//--------------------------
 
 window.urlParams = window.urlParams || {};
 
