@@ -1,8 +1,5 @@
-/*
-    *
-    * Added by Software Engineering team
-    *
-*/
+# Added by Software Engineering team
+
 echo 
 "Optimizing settings for HTTPS..."
 

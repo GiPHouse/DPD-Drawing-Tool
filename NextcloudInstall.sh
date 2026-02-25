@@ -1,8 +1,4 @@
-/*
-    *
-    * Added by Software Engineering team
-    *
-*/
+# Added by Software Engineering team
 
 echo "Creating folder structure..."
 mkdir -p ~/my-nextcloud
