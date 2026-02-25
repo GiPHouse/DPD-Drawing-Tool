@@ -841,6 +841,11 @@
 				mxResources.get('exportOptionsDisabled'));
 		});
 
+		/*
+			*
+			* Added by Software Engineering team
+			*
+		*/
 		editorUi.actions.addAction('saveToNextcloud', function()
 		{
 			var currentFile = editorUi.getCurrentFile();
@@ -924,7 +929,11 @@
 					editorUi.handleError({message: 'NextcloudFile.js is not loaded'});
 				}
 			});
-			
+			/*
+				*
+				* End of addition by Software Engineering team
+				*
+			*/
 			editorUi.showDialog(dlg.container, 420, 280, true, false);
 			urlInput.focus();
 		});
@@ -5239,7 +5248,7 @@
 				menu.addSeparator(parent);
 				this.addSubmenu('importFrom', menu, parent);
 				this.addSubmenu('exportAs', menu, parent);
-				this.addMenuItems(menu, ['saveToNextcloud'], parent);
+				this.addMenuItems(menu, ['saveToNextcloud'], parent); // Added by software engineering team
 
 				if (!editorUi.isOffline())
 				{

@@ -1,4 +1,10 @@
-echo "Optimizing settings for HTTPS..."
+/*
+    *
+    * Added by Software Engineering team
+    *
+*/
+echo 
+"Optimizing settings for HTTPS..."
 
 CONTAINER_NAME="my-nextcloud-nextcloud-main-1"
 
