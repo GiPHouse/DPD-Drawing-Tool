@@ -32,8 +32,8 @@ if (!mxIsElectron)
 		var devCsp = csp.
 			// Adds script tags and loads shapes with eval
 			replace(/%script-src%/g, 'https://www.dropbox.com https://api.trello.com \'unsafe-eval\'').
-			// Adds Trello and Dropbox backend storage
-			replace(/%connect-src%/g, 'https://*.dropboxapi.com https://trello.com https://api.trello.com https://my.microsoftpersonalcontent.com').
+			// Adds Trello and Dropbox backend storage and localhost for Nextcloud testing
+			replace(/%connect-src%/g, 'https://*.dropboxapi.com https://trello.com https://api.trello.com https://my.microsoftpersonalcontent.com https://localhost http://localhost').
 			// Loads common.css from mxgraph
 			replace(/%style-src%/g, '').
 			replace(/%frame-src%/g, '').
@@ -232,6 +232,7 @@ mxscript(drawDevUrl + 'js/diagramly/TrelloClient.js');
 mxscript(drawDevUrl + 'js/diagramly/GitLabFile.js');
 mxscript(drawDevUrl + 'js/diagramly/GitLabLibrary.js');
 mxscript(drawDevUrl + 'js/diagramly/GitLabClient.js');
+mxscript(drawDevUrl + 'js/diagramly/NextcloudFile.js');
 
 mxscript(drawDevUrl + 'js/diagramly/App.js');
 mxscript(drawDevUrl + 'js/diagramly/Menus.js');
@@ -253,7 +254,6 @@ if (!window.DRAWIO_PUBLIC_BUILD)
 mxscript(drawDevUrl + 'js/mermaid/mermaid2drawio.js');	
 
 // Vsdx/vssx support
-mxscript(drawDevUrl + 'js/diagramly/vsdx/mxVsdxCanvas2D.js');
 mxscript(drawDevUrl + 'js/diagramly/vsdx/bmpDecoder.js');
 mxscript(drawDevUrl + 'js/diagramly/vsdx/importer.js');
 mxscript(drawDevUrl + 'js/jszip/jszip.min.js');
