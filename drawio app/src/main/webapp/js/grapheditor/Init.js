@@ -82,7 +82,51 @@ window.DRAWIO_CONFIG = {
                 }
             ]
         }
-    ]
+    ],
+    css: `
+        .geAppIcon {
+            display: block;
+            position: absolute;
+            top: 0px;
+            left: 10px;
+            width: 94px;
+            height: 56px; /* Kept at 42px so it doesn't break the top bar height */
+            border-radius: 4px;
+            background-color: transparent;
+            background-position: left center;
+            background-repeat: no-repeat;
+            transition: 0.1s linear;
+            cursor: pointer;
+            background-size: contain;
+            opacity: 0.9;
+        }
+        /* This part needs to stay here for the logo alignment */
+        .geMenubar {
+            top: 28px;
+            width: 100%;
+            height: 30px;
+            display: flex;
+            position: absolute;
+            align-items: center;
+            box-sizing: border-box;
+            /* Pushes the text to exactly 115px */
+            padding: 0px 2px 0px 109px; 
+            /* Removed the margin so it doesn't double up */
+            margin-left: 0px; 
+        }
+        /* This part needs to stay here for the logo alignment */
+        .geFilenameContainer {
+            position: absolute;
+            right: 260px;
+            /* Sets the start position to exactly 115px */
+            left: 115px; 
+            top: 4px;
+            height: 26px;
+            display: block;
+            /* Removed the margin so it doesn't double up */
+            margin-left: 0px; 
+            overflow: hidden;
+            text-overflow: ellipsis;}`
 };
 
 //--------------------------
