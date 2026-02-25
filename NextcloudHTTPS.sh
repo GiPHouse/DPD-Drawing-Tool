@@ -39,5 +39,3 @@ echo "     * Database Password: nextcloudpass"
 echo "     * Database Name: nextcloud"
 echo "     * Database Host: db"
 echo "======================================================="
-
-explorer.exe .
