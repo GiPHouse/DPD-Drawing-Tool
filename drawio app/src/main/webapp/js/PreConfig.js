@@ -40,3 +40,6 @@ if (req.status >= 200 && req.status < 300) {
     console.error("Failed to load nolai_configuration.json. Status: " + req.status);
 }
 // ====== end of changes by SE	======
+urlParams['dev'] =  '1'; // Enable development mode added by software engineering team
+urlParams['p']= 'dpd'; // custom plugin loaded in the url
+// ====== end of changes by SE	======
