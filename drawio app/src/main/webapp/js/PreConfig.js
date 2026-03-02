@@ -24,19 +24,22 @@ window.DRAWIO_CONFIG = null; // Replace with your custom draw.io configurations.
 urlParams['sync'] = 'manual';
 
 
-// ======	NOLAI - Frontend - /Sprint 1/ Task #89	=====
-// Create a new HTTP request
-var req = new XMLHttpRequest();
+// ======   NOLAI - Frontend - /Sprint 1/ Task #89=====
+try {
+    var req = new XMLHttpRequest();
+    req.open('GET', 'configuration/nolai_configuration.json', false);
+    req.send(null);
 
-// Open a Synchronous GET request to your JSON file (the 'false' makes it wait)
-req.open('GET', 'configuration/nolai_configuration.json', false);
-req.send(null);
-
-// If the file is successfully found and downloaded
-if (req.status >= 200 && req.status < 300) {
-    // Parse the text into a JS object and assign it to the global config
-    window.DRAWIO_CONFIG = JSON.parse(req.responseText);
-} else {
-    console.error("Failed to load nolai_configuration.json. Status: " + req.status);
+    if (req.status >= 200 && req.status < 300) {
+        var contentType = req.getResponseHeader("Content-Type");
+        if (contentType && contentType.indexOf("application/json") !== -1) {
+            window.DRAWIO_CONFIG = JSON.parse(req.responseText);
+        } else {
+            console.error("NOLAI: Expected JSON, got " + contentType);
+        }
+    }
+} catch (e) {
+    console.error("NOLAI: Failed to parse config, preventing fatal crash.", e);
 }
-// ====== end of changes by SE	======
+
+urlParams['p']= 'dpd'; // This is fine here, plugins load later in the lifecycle
