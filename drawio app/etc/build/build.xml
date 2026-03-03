@@ -518,6 +518,7 @@ OUTPUT FILES (in src/main/webapp/js/):
 				<file name="GitLabClient.js" />
 				<file name="DrawioComment.js" />
 				<file name="DriveComment.js" />
+				<file name="NextcloudFile.js" />
 			</sources>
 			
 			<sources dir="${war.dir}/js/onedrive">

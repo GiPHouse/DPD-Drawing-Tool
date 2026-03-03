@@ -32,8 +32,10 @@ if (!mxIsElectron)
 		var devCsp = csp.
 			// Adds script tags and loads shapes with eval
 			replace(/%script-src%/g, 'https://www.dropbox.com https://api.trello.com \'unsafe-eval\'').
-			// Adds Trello and Dropbox backend storage and localhost for Nextcloud testing (changed by software engineering team)
+			// ======	NOLAI - {- Backend -} /Sprint 1/ Task 16	=====
+			// Adds Trello and Dropbox backend storage and localhost for Nextcloud testing
 			replace(/%connect-src%/g, 'https://*.dropboxapi.com https://trello.com https://api.trello.com https://my.microsoftpersonalcontent.com https://localhost http://localhost').
+			// ====== end of changes by SE	======
 			// Loads common.css from mxgraph
 			replace(/%style-src%/g, '').
 			replace(/%frame-src%/g, '').
@@ -232,7 +234,6 @@ mxscript(drawDevUrl + 'js/diagramly/TrelloClient.js');
 mxscript(drawDevUrl + 'js/diagramly/GitLabFile.js');
 mxscript(drawDevUrl + 'js/diagramly/GitLabLibrary.js');
 mxscript(drawDevUrl + 'js/diagramly/GitLabClient.js');
-mxscript(drawDevUrl + 'js/diagramly/NextcloudFile.js');         // Added by Software Engineering team
 
 mxscript(drawDevUrl + 'js/diagramly/App.js');
 mxscript(drawDevUrl + 'js/diagramly/Menus.js');
