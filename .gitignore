@@ -4,3 +4,4 @@ caddy-root.crt
 /nextcloud_db/
 /caddy_data/
 Caddyfile
+docker-compose.yml
