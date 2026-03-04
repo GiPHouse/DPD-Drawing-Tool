@@ -2845,12 +2845,12 @@ App.prototype.appIconClicked = function(evt)
 	else if (mode == App.MODE_DEVICE)
 	{
 		// NOLAI - Sprint 1 - Change logo redirect to nolai site
-		this.openLink('https://ru.nl/en/nolai');
+		this.openLink('https://www.ru.nl/en/nolai');
 	}
 	else
 	{
 		// NOLAI - Sprint 1 - Change logo redirect to nolai site
-		this.openLink('https://ru.nl/en/nolai');
+		this.openLink('https://www.ru.nl/en/nolai');
 	}
 	
 	mxEvent.consume(evt);

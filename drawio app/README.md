@@ -54,7 +54,8 @@ Do not use the draw.io name or logo in ways that suggest affiliation with, endor
 
 Running it:
 
-```docker rm -f drawio || true && \
+```
+docker rm -f drawio || true && \
 docker build --no-cache -t my-custom-drawio . && \
 docker run -d -p 8080:8080 --name drawio my-custom-drawio
 ```
