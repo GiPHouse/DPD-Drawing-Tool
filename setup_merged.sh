@@ -1,5 +1,11 @@
 #!/bin/bash
 
+#+--------------------------------------------------------+
+#| This was made by SE team,                              |
+#| refer to keywords: 'NOLAI'                             |
+#|                                                        |
+#+--------------------------------------------------------+
+
 # This combined setup script launches a secure Nextcloud instance behind
 # Caddy, as well as a custom Draw.io build.  It also performs the
 # auto-installation of Nextcloud and configures the Draw.io integration
@@ -105,7 +111,7 @@ docker-compose up -d --build
 
 echo "Waiting for Nextcloud to initialize..."
 # Increased sleep slightly to ensure the container is ready for installation
-sleep 25
+sleep 5
 
 echo "Auto-installing Nextcloud (if needed)..."
 docker exec --user www-data -w /var/www/html nextcloud-main bash -c '
@@ -122,28 +128,6 @@ docker exec --user www-data -w /var/www/html nextcloud-main bash -c '
       --admin-pass "admin" || echo "install command failed, continuing"
   fi
 '
-
-echo "Enabling Draw.io App..."
-docker exec --user www-data -w /var/www/html nextcloud-main php occ app:enable drawio
-
-echo "Injecting Payload into DrawioConfig..."
-# 1. Copy your already-formatted file into the container
-docker cp payload.json nextcloud-main:/tmp/payload.json
-
-# 2. Inject the URL using the CamelCase key we discovered earlier
-docker exec --user www-data nextcloud-main php occ config:app:set drawio DrawioUrl --value="http://localhost:5500"
-
-# 3. Inject the JSON using PHP to read the file directly. 
-# This avoids all shell-related quote issues.
-docker exec --user www-data nextcloud-main php -r '
-    $json = file_get_contents("/tmp/payload.json");
-    if ($json === false) { exit(1); }
-    exec("php occ config:app:set drawio DrawioConfig --value=" . escapeshellarg($json));
-'
-
-echo "Refreshing App State..."
-docker exec --user www-data -w /var/www/html nextcloud-main php occ app:disable drawio
-docker exec --user www-data -w /var/www/html nextcloud-main php occ app:enable drawio
 
 echo "---------------------------------------"
 echo "DONE! Custom DPDS shapes are now active."

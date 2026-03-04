@@ -1,4 +1,12 @@
-# Added by Software Engineering team
+: '
+
++--------------------------------------------------------+
+| This file is made by SE team,                          |
+| refer to keywords: 'NOLAI'                             |
+|                                                        |
++--------------------------------------------------------+
+
+'
 
 echo 
 "Optimizing settings for HTTPS..."
