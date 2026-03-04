@@ -1,5 +1,15 @@
 #!/bin/bash
 
+#+--------------------------------------------------------+
+#| This was made by SE team,                              |
+#| refer to keywords: 'NOLAI'                             |
+#|                                                        |
+#+--------------------------------------------------------+
+
+# This combined setup script launches a secure Nextcloud instance behind
+# Caddy, as well as a custom Draw.io build.  It also performs the
+# auto-installation of Nextcloud and configures the Draw.io integration.
+
 set -e
 
 # Detect docker compose command
@@ -113,8 +123,9 @@ EOF
 echo "Building and starting the containers..."
 $DOCKER_COMPOSE up -d --build
 
-echo "Waiting for containers to settle..."
-sleep 45
+echo "Waiting for Nextcloud to initialize..."
+# Increased sleep slightly to ensure the container is ready for installation
+sleep 5
 
 # --- DYNAMIC NAME DETECTION ---
 # This finds the actual name of the caddy container even if Docker prefixes it
