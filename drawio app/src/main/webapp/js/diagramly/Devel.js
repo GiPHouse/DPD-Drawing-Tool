@@ -245,6 +245,7 @@ mxscript(drawDevUrl + 'js/diagramly/mxRuler.js');
 mxscript(drawDevUrl + 'js/diagramly/mxFreehand.js');
 mxscript(drawDevUrl + 'js/diagramly/P2PCollab.js');
 mxscript(drawDevUrl + 'js/diagramly/DevTools.js');
+mxscript(drawDevUrl + 'js/diagramly/NextcloudFile.js');
 
 if (!window.DRAWIO_PUBLIC_BUILD)
 {
