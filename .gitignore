@@ -1,1 +1,7 @@
 .DS_Store
+caddy-root.crt
+/nextcloud_data/
+/nextcloud_db/
+/caddy_data/
+Caddyfile
+docker-compose.yml

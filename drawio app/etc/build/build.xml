@@ -1,4 +1,10 @@
 <?xml version="1.0"?>
+
+<!--
+| This file contains modified code by SE team,           |
+| refer to keywords: 'NOLAI'                             |
+|                                                        |
+-->
 <!--
 ================================================================================
 draw.io BUILD (github-build.xml)
@@ -518,6 +524,9 @@ OUTPUT FILES (in src/main/webapp/js/):
 				<file name="GitLabClient.js" />
 				<file name="DrawioComment.js" />
 				<file name="DriveComment.js" />
+				<!-- NOLAI - backend - Sprint 1 - task #63-->
+				<file name="NextcloudFile.js" />
+				<!-- ====== end of changes by SE ====== -->
 			</sources>
 			
 			<sources dir="${war.dir}/js/onedrive">
