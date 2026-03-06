@@ -1,3 +1,13 @@
+/* 
+
++--------------------------------------------------------+
+| This file contains modified code by SE team,           |
+| refer to keywords: 'NOLAI'                             |
+|                                                        |
++--------------------------------------------------------+
+
+*/
+
 /*
  * Copyright (c) 2006-2020, JGraph Holdings Ltd
  * 
@@ -32,8 +42,10 @@ if (!mxIsElectron)
 		var devCsp = csp.
 			// Adds script tags and loads shapes with eval
 			replace(/%script-src%/g, 'https://www.dropbox.com https://api.trello.com \'unsafe-eval\'').
-			// Adds Trello and Dropbox backend storage
-			replace(/%connect-src%/g, 'https://*.dropboxapi.com https://trello.com https://api.trello.com https://my.microsoftpersonalcontent.com').
+			// ======	NOLAI - {- Backend -} /Sprint 1/ Task 16	=====
+			// Adds Trello and Dropbox backend storage and localhost for Nextcloud testing
+			replace(/%connect-src%/g, 'https://*.dropboxapi.com https://trello.com https://api.trello.com https://my.microsoftpersonalcontent.com https://localhost http://localhost').
+			// ====== end of changes by SE	======
 			// Loads common.css from mxgraph
 			replace(/%style-src%/g, '').
 			replace(/%frame-src%/g, '').
@@ -232,6 +244,7 @@ mxscript(drawDevUrl + 'js/diagramly/TrelloClient.js');
 mxscript(drawDevUrl + 'js/diagramly/GitLabFile.js');
 mxscript(drawDevUrl + 'js/diagramly/GitLabLibrary.js');
 mxscript(drawDevUrl + 'js/diagramly/GitLabClient.js');
+mxscript(drawDevUrl + 'js/diagramly/NextcloudFile.js');         // Added by Software Engineering team
 
 mxscript(drawDevUrl + 'js/diagramly/App.js');
 mxscript(drawDevUrl + 'js/diagramly/Menus.js');
@@ -243,6 +256,7 @@ mxscript(drawDevUrl + 'js/diagramly/mxRuler.js');
 mxscript(drawDevUrl + 'js/diagramly/mxFreehand.js');
 mxscript(drawDevUrl + 'js/diagramly/P2PCollab.js');
 mxscript(drawDevUrl + 'js/diagramly/DevTools.js');
+mxscript(drawDevUrl + 'js/diagramly/NextcloudFile.js');
 
 if (!window.DRAWIO_PUBLIC_BUILD)
 {
@@ -253,7 +267,6 @@ if (!window.DRAWIO_PUBLIC_BUILD)
 mxscript(drawDevUrl + 'js/mermaid/mermaid2drawio.js');	
 
 // Vsdx/vssx support
-mxscript(drawDevUrl + 'js/diagramly/vsdx/mxVsdxCanvas2D.js');
 mxscript(drawDevUrl + 'js/diagramly/vsdx/bmpDecoder.js');
 mxscript(drawDevUrl + 'js/diagramly/vsdx/importer.js');
 mxscript(drawDevUrl + 'js/jszip/jszip.min.js');

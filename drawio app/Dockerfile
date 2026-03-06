@@ -20,7 +20,7 @@ RUN ant war
 # ==========================================
 # Stage 2: The Runner (Updated to Java 17)
 # ==========================================
-FROM tomcat:9.0-jdk17-openjdk
+FROM tomcat:9.0-jdk17-temurin
 
 # Add metadata
 LABEL maintainer="Your Name <your.email@example.com>" \
