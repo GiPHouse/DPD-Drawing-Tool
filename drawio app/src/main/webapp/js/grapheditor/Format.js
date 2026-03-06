@@ -1,6 +1,16 @@
 /**
  * Copyright (c) 2006-2012, JGraph Holdings Ltd
  */
+
+/* 
+
++--------------------------------------------------------+
+| This file contains modified code by SE team,           |
+| refer to keywords: 'NOLAI'                             |
+|                                                        |
++--------------------------------------------------------+
+
+*/
 Format = function(editorUi, container)
 {
 	this.editorUi = editorUi;
@@ -7338,8 +7348,9 @@ DiagramFormatPanel.prototype.addPaperSize = function(div)
  */
 DiagramFormatPanel.prototype.addStyleOps = function(div)
 {
-	this.addActions(div, ['editData']);
-	this.addActions(div, ['clearDefaultStyle']);
+	// NOLAI - Sprint 1 - hidden unnecessary options
+	//this.addActions(div, ['editData']);
+	//this.addActions(div, ['clearDefaultStyle']);
 
 	return div;
 };
