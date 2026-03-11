@@ -82,6 +82,13 @@
                   "h": 154.4085693359375,
                   "aspect": "fixed",
                   "title": "Distributed processes"
+                },
+                {
+                  "xml": "<mxGraphModel><root><mxCell id=\"0\"/><mxCell id=\"1\" parent=\"0\"/><mxCell id=\"2\" parent=\"1\" style=\"shape=rect;rounded=1;arcSize=15;strokeWidth=2;fillColor=#008a00;strokeColor=#005700;opacity=60;dashed=1;fixDash=1;fillStyle=cross-hatch;\" vertex=\"1\"><mxGeometry height=\"582.7057495117188\" width=\"671.8905639648438\" x=\"69.99890151977536\" y=\"1509.9977587890626\" as=\"geometry\"/></mxCell></root></mxGraphModel>",
+                  "w": 671.89,
+                  "h": 582.71,
+                  "aspect": "fixed",
+                  "title": "Green background"
                 }
               ]
             }
