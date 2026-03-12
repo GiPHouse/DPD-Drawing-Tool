@@ -125,7 +125,7 @@ $DOCKER_COMPOSE up -d --build
 
 echo "Waiting for Nextcloud to initialize..."
 # Increased sleep slightly to ensure the container is ready for installation
-sleep 5
+sleep 20
 
 # --- DYNAMIC NAME DETECTION ---
 # This finds the actual name of the caddy container even if Docker prefixes it
