@@ -361,6 +361,128 @@ async function listDrawIOFilesInNextcloud(nextcloudUrl, username, password, remo
     return files;
 }
 
+// ======	NOLAI - {- Backend -} /Sprint 2/ Task 117	=====
+async function deleteFileInNextcloud(nextcloudUrl, username, password, remotePath = '/', filename) {
+    
+    const webdavContext = buildNextcloudWebdavContext(filename, nextcloudUrl, username, password, remotePath);
+    
+    if (!webdavContext) {
+        return false;
+    }
+
+    const authHeader = webdavContext.authHeader;
+    const requestBase = webdavContext.requestBase;
+    const webdavUrl = webdavContext.webdavUrl;
+    const effectiveUsername = webdavContext.effectiveUsername;
+
+    let lockToken = null;
+    let lockSupported = true;
+
+    // WebDAV LOCK request body to acquire an exclusive lock on the file to prevent concurrent edits.
+    const lockInfo = `<?xml version="1.0" encoding="utf-8"?>
+    <d:lockinfo xmlns:d="DAV:">
+    <d:lockscope><d:exclusive/></d:lockscope>
+    <d:locktype><d:write/></d:locktype>
+    <d:owner><d:href>${effectiveUsername}</d:href></d:owner>
+    </d:lockinfo>`;
+
+    try {
+        // 1. LOCK request (optional fallback for servers that do not support locking)
+        // Try LOCK first to avoid overwriting concurrent edits.
+        // Bugfix note: some deployments return 405/501 for LOCK; in that case we still attempt a plain PUT.
+        const lockResponse = await fetch(webdavUrl, {
+            ...requestBase,
+            method: 'LOCK',
+            headers: {
+                'Authorization': authHeader,
+                'Content-Type': 'application/xml; charset=utf-8',
+                'Depth': '0',
+                'Timeout': 'Second-300',
+            },
+            body: lockInfo,
+        });
+
+        // If LOCK isn't supported, log a warning and still continue with PUT to save.
+        if (!lockResponse.ok) {
+            if (lockResponse.status === 405 || lockResponse.status === 501) {
+                lockSupported = false;
+                console.warn(`LOCK not supported by server (${lockResponse.status}). Falling back to unlocked PUT.`);
+            } else {
+                console.error(`LOCK failed: ${lockResponse.status} ${lockResponse.statusText}`);
+                return false;
+            }
+        } else {
+            // Lock token extraction
+            // Some servers return Lock-Token as a header, others only in XML response body.
+            // Handle both formats to keep interoperability across WebDAV implementations.
+            const lockTokenHeader = lockResponse.headers.get('Lock-Token');
+            if (lockTokenHeader) {
+                lockToken = lockTokenHeader.trim();
+            } else {
+                const lockBody = await lockResponse.text();
+                const tokenMatch = lockBody.match(/opaquelocktoken:[^<\s]+/i);
+                if (tokenMatch && tokenMatch[0]) {
+                    lockToken = `<${tokenMatch[0]}>`;
+                }
+            }
+
+            // If attempted to obtain a lock but didn't get a token, abort.
+            if (!lockToken) {
+                console.error('No lock token acquired. Aborting PUT to prevent data loss.');
+                return false;
+            }
+        }
+
+        // WebDAV DELETE request
+        const deleteHeaders = {
+            'Authorization': authHeader,
+            'Content-Type': 'application/xml',
+        };
+
+        if (lockSupported && lockToken) {
+            deleteHeaders['If'] = `(${lockToken})`;
+        }
+
+        // Actual WebDAV DELETE request.
+        const response = await fetch(webdavUrl, {
+            ...requestBase,
+            method: 'DELETE',
+            headers: deleteHeaders,
+        });
+
+        if (response.ok) {
+            console.log(`Successfully deleted ${filename} from Nextcloud`);
+            return true;
+        }
+
+        console.error(`Error deleting file ${filename}: ${response.status} ${response.statusText}`);
+        return false;
+    } catch (error) {
+        if (error && error.name === 'TypeError') {
+            // In browsers, failed CORS preflight often surfaces as TypeError from fetch which is shown as an error in Networks tab on browser.
+            console.error('CORS/network error while deleting from Nextcloud. If draw.io runs on a different origin than Nextcloud, allow CORS preflight and WebDAV headers on the server.');
+        }
+        console.error('WebDAV Delete Error:', error);
+        return false;
+    } finally {
+        // UNLOCK request
+        if (lockToken) {
+            try {
+                await fetch(webdavUrl, {
+                    ...requestBase,
+                    method: 'UNLOCK',
+                    headers: {
+                        'Authorization': authHeader,
+                        'Lock-Token': lockToken,
+                    },
+                });
+            } catch (unlockError) {
+                console.error('Unlock failed:', unlockError);
+                }
+            }
+        }
+    }
+
 // Helper function that extracts relative path from full WebDAV by removing the user-specific prefix. 
 // Returns null if pathname doesn't start with the expected prefix.
 function extractRelativeWebdavPath(pathname, userDavPrefix) {
