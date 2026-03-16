@@ -124,8 +124,21 @@
                   "h": 23.41,
                   "aspect": "fixed",
                   "title": "Soft Pseudonymous"
+                },
+                {
+                  "xml": "<mxGraphModel><root><mxCell id=\"0\" /><mxCell id=\"1\" parent=\"0\" /><mxCell id=\"2zeXTtjjpeL2r_Vvo7NS-1\" edge=\"1\" parent=\"1\" style=\"endArrow=classic;html=1;rounded=0;\" value=\"\"><mxGeometry height=\"50\" relative=\"1\" width=\"50\" as=\"geometry\"><mxPoint y=\"50\" as=\"sourcePoint\" /><mxPoint x=\"50\" as=\"targetPoint\" /></mxGeometry></mxCell></root></mxGraphModel>",
+                  "w": 50,
+                  "h": 50,
+                  "aspect": "fixed",
+                  "title": "Directional connector"
+                },
+                {
+                  "xml": "<mxGraphModel><root><mxCell id=\"0\" /><mxCell id=\"1\" parent=\"0\" /><mxCell id=\"2zeXTtjjpeL2r_Vvo7NS-2\" parent=\"1\" style=\"text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;\" value=\"Text\" vertex=\"1\"><mxGeometry height=\"30\" width=\"60\" as=\"geometry\" /></mxCell></root></mxGraphModel>",
+                  "w": 60,
+                  "h": 30,
+                  "aspect": "fixed",
+                  "title": "Text"
                 }
-
               ]
             }
           ]
