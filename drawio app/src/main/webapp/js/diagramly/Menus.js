@@ -5441,6 +5441,17 @@
 				{
 					this.addMenuItems(menu, ['print'], parent);
 				}
+				
+				menu.addSeparator(parent);
+				this.addSubmenu('exportAs', menu, parent);
+
+				if (urlParams['noDevice'] != '1')
+				{
+					menu.addItem(mxResources.get('device') + '...', null, function()
+					{
+						editorUi.importLocalFile(true);
+					}, parent);
+				}
 
 				this.addMenuItems(menu, ['-', 'close']);
 			}
