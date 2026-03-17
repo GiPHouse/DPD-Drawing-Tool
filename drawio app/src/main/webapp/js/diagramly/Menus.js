@@ -948,7 +948,7 @@
 		});
 		
 			// ======	NOLAI - {- Backend -} /Sprint 1/ Task 92	=====
-			editorUi.actions.addAction('loadFromNextcloud', function()
+			editorUi.actions.addAction('My Files', function()
 			{
 				var div = document.createElement('div');
 				div.style.padding = '10px';
@@ -993,7 +993,7 @@
 					var path = pathInput.value;
 
 					// Check if Nextcloud helper functions are loaded.
-					if (typeof listDrawIOFilesInNextcloud !== 'function' || typeof getDrawIOFromNextcloudXML !== 'function')
+					if (typeof listDrawIOFilesInNextcloud !== 'function' || typeof getDrawIOFromNextcloudXML !== 'function' || typeof deleteFileInNextcloud !== 'function')
 					{
 						editorUi.handleError({message: 'NextcloudFile.js is not loaded'});
 						return;
@@ -1062,9 +1062,8 @@
 
 									try
 									{
-										// Load XML as a fresh document and clear modified flag.
-										editorUi.setCurrentFile(null);
-										editorUi.setFileData(xml);
+										// Load XML as a named local file so title/header reflects selected file.
+										editorUi.fileLoaded(new LocalFile(editorUi, xml, selected.name, true), true); // BUG FIX
 										editorUi.editor.modified = false;
 										editorUi.editor.setStatus('Loaded from Nextcloud successfully');
 									}
@@ -1090,8 +1089,59 @@
 								performLoad();
 							}
 						};
+						// ======	NOLAI - {- Backend -} /Sprint 2/ Task 117	=====
 
-						var listDlg = new CustomDialog(editorUi, listDiv, loadSelected);
+						var deleteSelected = function()
+						{
+							if (select.selectedIndex < 0)
+							{
+								editorUi.handleError({message: 'Please select a file to delete.'});
+								return;
+							}
+
+							var selected = files[parseInt(select.value, 10)];
+
+							editorUi.confirm('Are you sure you want to delete "' + selected.displayPath + '"?', null, function()
+							{
+								editorUi.spinner.spin(document.body, 'Deleting file from Nextcloud...');
+
+								deleteFileInNextcloud(url, user, pass, selected.remotePath, selected.name).then(function(success)
+								{
+									editorUi.spinner.stop();
+
+									if (!success)
+									{
+										editorUi.handleError({message: 'Failed to delete selected file from Nextcloud.'});
+										return;
+									}
+
+									files.splice(select.selectedIndex, 1);
+									select.remove(select.selectedIndex);
+
+									if (files.length === 0)
+									{
+										editorUi.hideDialog();
+										editorUi.editor.setStatus('Deleted from Nextcloud successfully');
+										return;
+									}
+
+									if (select.selectedIndex < 0)
+									{
+										select.selectedIndex = 0;
+									}
+
+									editorUi.editor.setStatus('Deleted from Nextcloud successfully');
+								}).catch(function(error)
+								{
+									editorUi.spinner.stop();
+									editorUi.handleError({message: 'Error deleting file: ' + error.message});
+								});
+							}, mxResources.get('cancel'), 'Delete');
+						};
+
+						var listDlg = new CustomDialog(editorUi, listDiv, loadSelected, null, 'Load', null,
+							null, false, null, false, [['Delete file', deleteSelected]]); 
+						// ======	NOLAI - {- Backend -} /Sprint 2/ Task 117	END OF SNIPPET =====
 						editorUi.showDialog(listDlg.container, 480, 360, true, false);
 						select.focus();
 					}).catch(function(error)
@@ -1106,7 +1156,31 @@
 			});
 
 			// ====== end of changes by SE	======
+		
+		// ======	NOLAI - {- Backend -} /Sprint 2/ Task 117	=====
+		editorUi.actions.addAction('deleteFromNextcloud', function()
+		{
+			editorUi.spinner.spin(document.body, 'Deleting from Nextcloud...');
+			deleteFileInNextcloud(url, user, pass, path, filename).then(function(success)
+ 			{
+    			editorUi.spinner.stop();
 
+    				if (success)
+    				{
+      					editorUi.editor.setStatus('Deleted from Nextcloud successfully');
+    				}
+    			else
+    				{
+      				editorUi.handleError({message: 'Failed to delete from Nextcloud. Check console for details.'});
+    				}
+  			}).catch(function(error)
+			{
+    			editorUi.spinner.stop();
+    			editorUi.handleError({message: 'Error: ' + error.message});
+			});
+		});
+		// ======	NOLAI - {- Backend -} /Sprint 2/ Task 117	END OF SNIPPET	======
+			
 		editorUi.actions.addAction('keyboardShortcuts...', function()
 		{
 			if (!mxClient.IS_CHROMEAPP &&
@@ -5038,7 +5112,7 @@
 			
 			if (urlParams['noFileMenu'] != '1')
 			{
-				editorUi.menus.addMenuItems(menu, ['saveToNextcloud', 'loadFromNextcloud'], parent);
+				editorUi.menus.addMenuItems(menu, ['saveToNextcloud', 'My Files'], parent);
 			}
 	
 			if (Editor.currentTheme != 'simple' && Editor.currentTheme != 'min')
@@ -5187,7 +5261,7 @@
 					}
 					else
 					{
-						this.addMenuItems(menu, ['saveToNextcloud', 'loadFromNextcloud'], parent);
+						this.addMenuItems(menu, ['saveToNextcloud', 'My Files'], parent);
 						
 						if (urlParams['saveAndExit'] == '1')
 						{
@@ -5213,7 +5287,7 @@
 				}
 				
 				menu.addSeparator(parent);
-				editorUi.menus.addMenuItems(menu, ['saveToNextcloud', 'loadFromNextcloud'], parent);
+				editorUi.menus.addMenuItems(menu, ['saveToNextcloud', 'My Files'], parent);
 
 				if (!mxClient.IS_CHROMEAPP && !EditorUi.isElectronApp &&
 					file != null && (file.constructor != LocalFile ||
@@ -5403,7 +5477,7 @@
 				
 				menu.addSeparator(parent);
 				// ======	NOLAI - {- Backend -} /Sprint 1/ Task 16	=====
-				this.addMenuItems(menu, ['saveToNextcloud', 'loadFromNextcloud'], parent);
+				this.addMenuItems(menu, ['saveToNextcloud', 'My Files'], parent);
 				// ====== end of changes by SE	======
 
 				if (!editorUi.isOffline())

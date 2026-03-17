@@ -7042,7 +7042,12 @@ App.prototype.descriptorChanged = function()
 		{
 			this.fname.innerText = '';
 			var filename = (file.getTitle() != null) ? file.getTitle() : this.defaultFilename;
-			mxUtils.write(this.fname, filename);
+
+			// Keep title blank for the default untitled placeholder.
+			if (filename != null && filename != this.defaultFilename) // BUG FIX
+			{
+				mxUtils.write(this.fname, filename);
+			}
 		}
 		
 		var graph = this.editor.graph;
