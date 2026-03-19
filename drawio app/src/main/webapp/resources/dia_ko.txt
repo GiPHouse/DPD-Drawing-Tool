@@ -490,6 +490,7 @@ linewidth=선 두께
 link=링크
 links=링크
 loading=불러오는 중입니다.
+loadFromNextcloud=Load from NextCloud
 lock=잠그다
 locked=잠김
 lockUnlock=잠금/잠금 해제
@@ -695,6 +696,7 @@ saveDiagramsTo=다이어그램 저장위치
 saveLibrary403=이 라이브러리를 편집할 수 있는 권한이 부족합니다.
 saveLibrary500=라이브러리를 저장하는 중 오류가 발생했습니다.
 saveLibraryReadOnly=읽기 전용 모드가 활성화되어 있는 동안에는 라이브러리를 저장할 수 없습니다.
+saveToNextcloud=Save to NextCloud
 saving=저장중
 scratchpad=스크래치 패드
 scrollbars=스크롤바
@@ -884,7 +886,8 @@ noDiagrams=다이어그램을 찾을 수 없습니다.
 authFailed=인증에 실패했습니다.
 officeFailedAuthMsg=사용자 인증 또는 권한 획득을 실패했습니다.
 convertingDiagramFailed=다이어그램 변환을 실패했습니다.
-officeCopyImgErrMsg=호스트 응용 프로그램의 일부 제한 때문에 이미지를 삽입할 수 없습니다. 이미지를 수동으로 복사한 다음 문서에 붙여넣으십시오.
+officeCopyImgErrMsg=호스트 응용 프로그램의 일부 제한 때문에 이미지를 삽입할 수 없습니다.
+ 이미지를 수동으로 복사한 다음 문서에 붙여넣으십시오.
 insertingImageFailed=이미지 삽입을 실패했습니다.
 officeCopyImgInst=설명: 아래 이미지를 마우스 오른쪽 단추로 클릭한 뒤 "이미지 복사"를 선택합니다. 그런 다음 문서에서 마우스 오른쪽 단추를 클릭하고 "붙여넣기"를 선택합니다.
 folderEmpty=폴더가 비어 있습니다.

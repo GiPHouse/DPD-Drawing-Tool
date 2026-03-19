@@ -946,166 +946,166 @@
 			editorUi.showDialog(dlg.container, 420, 280, true, false);
 			urlInput.focus();
 		});
-		
-			// ======	NOLAI - {- Backend -} /Sprint 1/ Task 92	=====
-			editorUi.actions.addAction('loadFromNextcloud', function()
+	
+		// ======	NOLAI - {- Backend -} /Sprint 1/ Task 92	=====
+		editorUi.actions.addAction('loadFromNextcloud', function()
+		{
+			var div = document.createElement('div');
+			div.style.padding = '10px';
+
+			var title = document.createElement('p');
+			title.innerHTML = 'Load diagram from Nextcloud';
+			div.appendChild(title);
+
+			var table = document.createElement('table');
+
+			// Helper to create one label/input row and return the created input element.
+			function addRow(label, type, defaultValue)
 			{
-				var div = document.createElement('div');
-				div.style.padding = '10px';
+				var tr = document.createElement('tr');
+				var td1 = document.createElement('td');
+				td1.innerHTML = label;
+				var td2 = document.createElement('td');
+				var input = document.createElement('input');
+				input.type = type;
+				input.value = defaultValue;
+				input.style.width = '300px';
+				td2.appendChild(input);
+				tr.appendChild(td1);
+				tr.appendChild(td2);
+				table.appendChild(tr);
+				return input;
+			}
 
-				var title = document.createElement('p');
-				title.innerHTML = 'Load diagram from Nextcloud';
-				div.appendChild(title);
+			var urlInput = addRow('Nextcloud Base URL:', 'text', 'https://localhost/remote.php/dav/files/admin/');
+			var userInput = addRow('Username:', 'text', 'admin');
+			var passInput = addRow('Password:', 'password', 'admin');
+			var pathInput = addRow('Remote Path:', 'text', '');
 
-				var table = document.createElement('table');
+			div.appendChild(table);
 
-				// Helper to create one label/input row and return the created input element.
-				function addRow(label, type, defaultValue)
+			// When user confirms: fetch available .drawio files from Nextcloud.
+			var dlg = new CustomDialog(editorUi, div, function()
+			{
+				var url = urlInput.value;
+				var user = userInput.value;
+				var pass = passInput.value;
+				var path = pathInput.value;
+
+				// Check if Nextcloud helper functions are loaded.
+				if (typeof listDrawIOFilesInNextcloud !== 'function' || typeof getDrawIOFromNextcloudXML !== 'function')
 				{
-					var tr = document.createElement('tr');
-					var td1 = document.createElement('td');
-					td1.innerHTML = label;
-					var td2 = document.createElement('td');
-					var input = document.createElement('input');
-					input.type = type;
-					input.value = defaultValue;
-					input.style.width = '300px';
-					td2.appendChild(input);
-					tr.appendChild(td1);
-					tr.appendChild(td2);
-					table.appendChild(tr);
-					return input;
+					editorUi.handleError({message: 'NextcloudFile.js is not loaded'});
+					return;
 				}
 
-				var urlInput = addRow('Nextcloud Base URL:', 'text', 'https://localhost/remote.php/dav/files/admin/');
-				var userInput = addRow('Username:', 'text', 'admin');
-				var passInput = addRow('Password:', 'password', 'admin');
-				var pathInput = addRow('Remote Path:', 'text', '');
+				editorUi.spinner.spin(document.body, 'Loading file list from Nextcloud...');
 
-				div.appendChild(table);
-
-				// When user confirms: fetch available .drawio files from Nextcloud.
-				var dlg = new CustomDialog(editorUi, div, function()
+				listDrawIOFilesInNextcloud(url, user, pass, path).then(function(files)
 				{
-					var url = urlInput.value;
-					var user = userInput.value;
-					var pass = passInput.value;
-					var path = pathInput.value;
+					editorUi.spinner.stop();
 
-					// Check if Nextcloud helper functions are loaded.
-					if (typeof listDrawIOFilesInNextcloud !== 'function' || typeof getDrawIOFromNextcloudXML !== 'function')
+					// Stop if no matching draw.io files were found.
+					if (files == null || files.length === 0)
 					{
-						editorUi.handleError({message: 'NextcloudFile.js is not loaded'});
+						editorUi.handleError({message: 'No .drawio files found in Nextcloud.'});
 						return;
 					}
 
-					editorUi.spinner.spin(document.body, 'Loading file list from Nextcloud...');
+					// Build second UI containing selectable file list.
+					var listDiv = document.createElement('div');
+					listDiv.style.padding = '10px';
 
-					listDrawIOFilesInNextcloud(url, user, pass, path).then(function(files)
+					var listTitle = document.createElement('p');
+					listTitle.innerHTML = 'Select a .drawio file to load';
+					listDiv.appendChild(listTitle);
+
+					var select = document.createElement('select');
+					select.style.width = '420px';
+					select.style.height = '220px';
+					select.size = 12;
+
+					for (var i = 0; i < files.length; i++)
 					{
-						editorUi.spinner.stop();
+						var option = document.createElement('option');
+						option.value = i;
+						option.text = files[i].displayPath;
+						select.appendChild(option);
+					}
 
-						// Stop if no matching draw.io files were found.
-						if (files == null || files.length === 0)
+					listDiv.appendChild(select);
+
+					var loadSelected = function()
+					{
+						if (select.selectedIndex < 0)
 						{
-							editorUi.handleError({message: 'No .drawio files found in Nextcloud.'});
+							editorUi.handleError({message: 'Please select a file to load.'});
 							return;
 						}
 
-						// Build second UI containing selectable file list.
-						var listDiv = document.createElement('div');
-						listDiv.style.padding = '10px';
-
-						var listTitle = document.createElement('p');
-						listTitle.innerHTML = 'Select a .drawio file to load';
-						listDiv.appendChild(listTitle);
-
-						var select = document.createElement('select');
-						select.style.width = '420px';
-						select.style.height = '220px';
-						select.size = 12;
-
-						for (var i = 0; i < files.length; i++)
+						var selected = files[parseInt(select.value, 10)];
+						
+						// Performs actual fetch+load into current editor state.
+						var performLoad = function()
 						{
-							var option = document.createElement('option');
-							option.value = i;
-							option.text = files[i].displayPath;
-							select.appendChild(option);
-						}
+							editorUi.spinner.spin(document.body, 'Loading file from Nextcloud...');
 
-						listDiv.appendChild(select);
-
-						var loadSelected = function()
-						{
-							if (select.selectedIndex < 0)
+							getDrawIOFromNextcloudXML(selected.name, url, user, pass, selected.remotePath).then(function(xml)
 							{
-								editorUi.handleError({message: 'Please select a file to load.'});
-								return;
-							}
+								editorUi.spinner.stop();
 
-							var selected = files[parseInt(select.value, 10)];
-							
-							// Performs actual fetch+load into current editor state.
-							var performLoad = function()
-							{
-								editorUi.spinner.spin(document.body, 'Loading file from Nextcloud...');
-
-								getDrawIOFromNextcloudXML(selected.name, url, user, pass, selected.remotePath).then(function(xml)
+								if (xml == null)
 								{
-									editorUi.spinner.stop();
+									editorUi.handleError({message: 'Failed to load selected file from Nextcloud.'});
+									return;
+								}
 
-									if (xml == null)
-									{
-										editorUi.handleError({message: 'Failed to load selected file from Nextcloud.'});
-										return;
-									}
-
-									try
-									{
-										// Load XML as a fresh document and clear modified flag.
-										editorUi.setCurrentFile(null);
-										editorUi.setFileData(xml);
-										editorUi.editor.modified = false;
-										editorUi.editor.setStatus('Loaded from Nextcloud successfully');
-									}
-									catch (e)
-									{
-										editorUi.handleError({message: 'Loaded file is not a valid draw.io diagram: ' + e.message});
-									}
-								}).catch(function(error)
+								try
 								{
-									editorUi.spinner.stop();
-									editorUi.handleError({message: 'Error: ' + error.message});
-								});
-							};
-
-							// Protect unsaved local changes before replacing current diagram.
-							if (editorUi.editor.modified)
+									// Load XML as a fresh document and clear modified flag.
+									editorUi.setCurrentFile(null);
+									editorUi.setFileData(xml);
+									editorUi.editor.modified = false;
+									editorUi.editor.setStatus('Loaded from Nextcloud successfully');
+								}
+								catch (e)
+								{
+									editorUi.handleError({message: 'Loaded file is not a valid draw.io diagram: ' + e.message});
+								}
+							}).catch(function(error)
 							{
-								editorUi.confirm(mxResources.get('allChangesLost'), null, performLoad,
-									mxResources.get('cancel'), mxResources.get('discardChanges'));
-							}
-							else
-							{
-								performLoad();
-							}
+								editorUi.spinner.stop();
+								editorUi.handleError({message: 'Error: ' + error.message});
+							});
 						};
 
-						var listDlg = new CustomDialog(editorUi, listDiv, loadSelected);
-						editorUi.showDialog(listDlg.container, 480, 360, true, false);
-						select.focus();
-					}).catch(function(error)
-					{
-						editorUi.spinner.stop();
-						editorUi.handleError({message: 'Error loading file list: ' + error.message});
-					});
-				});
+						// Protect unsaved local changes before replacing current diagram.
+						if (editorUi.editor.modified)
+						{
+							editorUi.confirm(mxResources.get('allChangesLost'), null, performLoad,
+								mxResources.get('cancel'), mxResources.get('discardChanges'));
+						}
+						else
+						{
+							performLoad();
+						}
+					};
 
-				editorUi.showDialog(dlg.container, 420, 250, true, false);
-				urlInput.focus();
+					var listDlg = new CustomDialog(editorUi, listDiv, loadSelected);
+					editorUi.showDialog(listDlg.container, 480, 360, true, false);
+					select.focus();
+				}).catch(function(error)
+				{
+					editorUi.spinner.stop();
+					editorUi.handleError({message: 'Error loading file list: ' + error.message});
+				});
 			});
 
-			// ====== end of changes by SE	======
+			editorUi.showDialog(dlg.container, 420, 250, true, false);
+			urlInput.focus();
+		});
+
+		// ====== end of changes by SE	======
 
 		editorUi.actions.addAction('keyboardShortcuts...', function()
 		{
