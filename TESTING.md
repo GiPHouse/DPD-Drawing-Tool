@@ -182,6 +182,7 @@ npm run test:watch
 
 ```bash
 cd tests/unit
+npm install
 npm run test:coverage
 # Open tests/unit/coverage/index.html for the line-by-line HTML report
 cd ../..
