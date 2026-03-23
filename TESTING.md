@@ -27,14 +27,14 @@ This document is the single source of truth for the testing strategy of the DPD 
 The project follows a **test pyramid** approach: many fast, isolated unit tests at the base; fewer, slower browser tests in the middle; and a small number of full-stack integration tests at the top. This keeps local feedback quick (unit tests finish in under 2 seconds) while still verifying real browser and server behaviour where it matters.
 
 The order of confidence levels, from highest to lowest, is:
+DPD rule is added, a corresponding unit test is expected to accompany it. E2E tests are written in advance as stubs (using `test.skip`) and activated once the feature is merged, so the test suite always reflects the current state of the product.
 
+---
 1. A unit test passing means the plugin logic is correct in isolation.
 2. A Playwright UI test passing means the browser renders the feature as designed.
 3. A Playwright integration test passing means the entire stack — draw.io, Nextcloud, and Caddy — works end to end.
 
-Whenever a bug is fixed or a new DPD rule is added, a corresponding unit test is expected to accompany it. E2E tests are written in advance as stubs (using `test.skip`) and activated once the feature is merged, so the test suite always reflects the current state of the product.
-
----
+Whenever a bug is fixed or a new 
 
 ## Technology choices
 
@@ -99,11 +99,11 @@ The version pinned is **`@playwright/test` ^1.44**, which includes the Locator A
 
 ## Test layers at a glance
 
-| Layer | Tool | What it covers | Browser / server needed | Runs in CI on |
-|---|---|---|---|---|
-| Unit | Jest 29 | DPD plugin logic (`dpd.js`) in isolation | No | Every push |
-| E2E UI | Playwright | Plugin init, NOLAI customisations, canvas events | draw.io Docker only | Every push |
-| Integration | Playwright | Nextcloud file operations (save, load, delete, share) | Full Docker stack | PRs → `main` and pushes to `main` |
+| Layer       | Tool       | What it covers                                        | Browser / server needed | Runs in CI on                     |
+|---          |---         |---                                                    |---                      |---                                |
+| Unit        | Jest 29    | DPD plugin logic (`dpd.js`) in isolation              | No                      | Every push                        |
+| E2E UI      | Playwright | Plugin init, NOLAI customisations, canvas events      | draw.io Docker only     | Every push                        |
+| Integration | Playwright | Nextcloud file operations (save, load, delete, share) | Full Docker stack       | PRs → `main` and pushes to `main` |
 
 ---
 
@@ -142,6 +142,7 @@ The version pinned is **`@playwright/test` ^1.44**, which includes the Locator A
     │       ├── plugin-init.spec.js    # Plugin init + NOLAI UI customisations
     │       ├── dpd-rules.spec.js      # DPD rule enforcement on the canvas
     │       └── file-operations.spec.js # Nextcloud save / load / delete / share
+      │       ├── stack-smoke.spec.js    # API health checks: Caddy HTTPS, WebDAV auth, CORS
     │
     ├── manual/                        # Human-verified test records (historical reference)
     │   ├── PLUGIN_DEMO_TEST.md        # Manual walk-through of plugin events
@@ -230,7 +231,7 @@ bash setup_merged.sh
 
 # Then move into the e2e directory and run the integration spec
 cd tests/e2e
-INTEGRATION=1 npx playwright test specs/file-operations.spec.js --project=chromium
+INTEGRATION=1 npx playwright test specs/stack-smoke.spec.js specs/file-operations.spec.js --project=chromium
 cd ../..
 ```
 
@@ -242,15 +243,15 @@ cd ../..
 
 Jest runs each test file in a worker process with a fresh `jsdom` DOM environment. Before any test file loads, `setup.js` (configured via `setupFilesAfterEnv`) runs and sets the following globals on `window` / `global`:
 
-| Global | What it provides |
-|---|---|
-| `mxEvent` | Object with a `CHANGE` constant that the plugin registers listeners against |
-| `createMockModel()` | Factory returning a mock graph model with `addListener`, `isVertex`, `isEdge`, `getTerminal`, and a `fireChange(changes)` helper |
-| `createMockGraph(model)` | Factory wrapping a model in a minimal `{ model }` graph object |
-| `createMockCell({ isVertex, isEdge, id })` | Factory returning a mock cell with `getAttribute`/`setAttribute` spies |
-| `Draw.loadPlugin(fn)` | Captures the plugin function passed by the plugin file at module level |
-| `Draw.runPlugin(ui)` | Executes the captured plugin function with a controlled `ui` object |
-| `alert` | `jest.fn()` — records calls without opening a browser dialog |
+| Global                                     | What it provides                                                                                                                 |
+|---                                         |---                                                                                                                               |
+| `mxEvent`                                  | Object with a `CHANGE` constant that the plugin registers listeners against                                                      |
+| `createMockModel()`                        | Factory returning a mock graph model with `addListener`, `isVertex`, `isEdge`, `getTerminal`, and a `fireChange(changes)` helper |
+| `createMockGraph(model)`                   | Factory wrapping a model in a minimal `{ model }` graph object                                                                   |
+| `createMockCell({ isVertex, isEdge, id })` | Factory returning a mock cell with `getAttribute`/`setAttribute` spies                                                           |
+| `Draw.loadPlugin(fn)`                      | Captures the plugin function passed by the plugin file at module level                                                           |
+| `Draw.runPlugin(ui)`                       | Executes the captured plugin function with a controlled `ui` object                                                              |
+| `alert`                                    | `jest.fn()` — records calls without opening a browser dialog                                                                     |
 
 ### Loading the plugin in a test
 
@@ -353,7 +354,9 @@ grep -r "test.skip" tests/e2e/specs/
 
 ### What they cover
 
-`file-operations.spec.js` exercises the complete file management workflow against a real Nextcloud instance: saving a diagram, listing files, loading, deleting, sharing, and restoring a previous version.
+`stack-smoke.spec.js` runs first and makes API-level assertions (no browser) that Nextcloud is reachable through Caddy over HTTPS, WebDAV authentication works, and Caddy returns the correct CORS headers for the draw.io origin.
+
+`file-operations.spec.js` then exercises the full file management workflow: saving a diagram, listing files, loading, deleting, sharing, and restoring a previous version.
 
 ### Skipping locally
 
