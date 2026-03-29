@@ -45,17 +45,27 @@ async function clickFileMenuAction(page, actionLabelRegex) {
     .filter({ hasText: /^file$/i })
     .first();
 
-  await fileMenu.click();
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    try {
+      await fileMenu.click({ force: true, timeout: 4_000 });
 
-  const popup = page.locator('.mxPopupMenu').last();
-  await expect(popup).toBeVisible({ timeout: 10_000 });
+      const popup = page.locator('.mxPopupMenu').last();
+      await expect(popup).toBeVisible({ timeout: 6_000 });
 
-  const actionItem = popup
-    .locator('.mxPopupMenuItem, tr, td, a, div')
-    .filter({ hasText: actionLabelRegex })
-    .first();
+      const actionItem = popup
+        .locator('.mxPopupMenuItem, tr, td, a, div')
+        .filter({ hasText: actionLabelRegex })
+        .first();
 
-  await actionItem.click();
+      await actionItem.click({ force: true, timeout: 4_000 });
+      return;
+    } catch {
+      await closeDialogs(page);
+      await page.waitForTimeout(400);
+    }
+  }
+
+  throw new Error(`Could not click File menu action matching ${actionLabelRegex}`);
 }
 
 async function waitVisible(locator, timeoutMs) {
@@ -68,13 +78,70 @@ async function waitVisible(locator, timeoutMs) {
 }
 
 async function fillNextcloudDialog(page, filename) {
-  await page.locator('tr', { hasText: 'Nextcloud Base URL:' }).locator('input').fill(NC_DAV_URL);
-  await page.locator('tr', { hasText: 'Username:' }).locator('input').fill(NC_USER);
-  await page.locator('tr', { hasText: 'Password:' }).locator('input').fill(NC_PASS);
-  await page.locator('tr', { hasText: 'Remote Path:' }).locator('input').fill('');
+  const filled = await page.evaluate(({ url, user, pass, remotePath, name }) => {
+    const dialogs = Array.from(document.querySelectorAll('.geDialog'));
+    let activeDialog = null;
 
-  if (filename != null) {
-    await page.locator('tr', { hasText: 'Filename:' }).locator('input').fill(filename);
+    for (let i = dialogs.length - 1; i >= 0; i -= 1) {
+      const dlg = dialogs[i];
+      if (dlg.offsetParent !== null) {
+        activeDialog = dlg;
+        break;
+      }
+    }
+
+    if (activeDialog == null) {
+      return false;
+    }
+
+    const fillByLabel = (label, value) => {
+      const labelCell = Array.from(activeDialog.querySelectorAll('td')).find((td) =>
+        (td.textContent || '').trim() === label
+      );
+
+      if (!labelCell || !labelCell.parentElement) {
+        return false;
+      }
+
+      const input = labelCell.parentElement.querySelector('input');
+      if (!input) {
+        return false;
+      }
+
+      input.focus();
+      input.value = '';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.value = value;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    };
+
+    const baseFilled =
+      fillByLabel('Nextcloud Base URL:', url) &&
+      fillByLabel('Username:', user) &&
+      fillByLabel('Password:', pass) &&
+      fillByLabel('Remote Path:', remotePath);
+
+    if (!baseFilled) {
+      return false;
+    }
+
+    if (name != null) {
+      return fillByLabel('Filename:', name);
+    }
+
+    return true;
+  }, {
+    url: NC_DAV_URL,
+    user: NC_USER,
+    pass: NC_PASS,
+    remotePath: '',
+    name: filename,
+  });
+
+  if (!filled) {
+    throw new Error('Could not fill fields in active Nextcloud dialog');
   }
 }
 
@@ -84,7 +151,24 @@ async function openMyFilesList(page) {
   await fillNextcloudDialog(page, null);
   await clickTopmostOkButton(page);
 
-  await expect(page.getByText('Select a .drawio file to load')).toBeVisible({ timeout: 12_000 });
+  const listTitle = page.getByText('Select a .drawio file to load');
+  const emptyMessage = page.getByText('No .drawio files found in Nextcloud.');
+
+  const deadline = Date.now() + 20_000;
+
+  while (Date.now() < deadline) {
+    if (await listTitle.isVisible().catch(() => false)) {
+      return 'list';
+    }
+
+    if (await emptyMessage.isVisible().catch(() => false)) {
+      return 'empty';
+    }
+
+    await page.waitForTimeout(250);
+  }
+
+  throw new Error('My Files result dialog did not appear');
 }
 
 async function closeDialogs(page) {
@@ -119,9 +203,15 @@ async function clickTopmostOkButton(page) {
   }
 }
 
-async function assertFileAppearsInMyFiles(page, filename, maxAttempts = 3) {
+async function assertFileAppearsInMyFiles(page, filename, maxAttempts = 8) {
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    await openMyFilesList(page);
+    const state = await openMyFilesList(page);
+
+    if (state === 'empty') {
+      await closeDialogs(page);
+      await page.waitForTimeout(1500);
+      continue;
+    }
 
     const option = page.locator('select option', { hasText: filename }).first();
 
@@ -131,7 +221,7 @@ async function assertFileAppearsInMyFiles(page, filename, maxAttempts = 3) {
     }
 
     await closeDialogs(page);
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(1500);
   }
 
   throw new Error(`File ${filename} did not appear in My Files list`);
