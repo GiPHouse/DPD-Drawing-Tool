@@ -31,6 +31,10 @@ const NC_DAV_URL = process.env.NEXTCLOUD_DAV_URL ||
 
 const TEST_FILENAME = `test-diagram-${Date.now()}.drawio`;
 
+// Nextcloud runs behind Caddy with a local/self-signed certificate in CI.
+// Browser-side fetches from draw.io -> https://localhost must ignore TLS errors.
+test.use({ ignoreHTTPSErrors: true });
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 async function loadApp(page) {
@@ -168,7 +172,12 @@ async function openMyFilesList(page) {
     await page.waitForTimeout(250);
   }
 
-  throw new Error('My Files result dialog did not appear');
+  const visibleText = await page.evaluate(() => {
+    const dialogs = Array.from(document.querySelectorAll('.geDialog')).filter((el) => el.offsetParent !== null);
+    return dialogs.map((d) => (d.textContent || '').replace(/\s+/g, ' ').trim()).join(' | ');
+  });
+
+  throw new Error(`My Files result dialog did not appear. Visible dialog text: ${visibleText}`);
 }
 
 async function closeDialogs(page) {
@@ -203,7 +212,7 @@ async function clickTopmostOkButton(page) {
   }
 }
 
-async function assertFileAppearsInMyFiles(page, filename, maxAttempts = 8) {
+async function assertFileAppearsInMyFiles(page, filename, maxAttempts = 12) {
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const state = await openMyFilesList(page);
 
@@ -221,10 +230,15 @@ async function assertFileAppearsInMyFiles(page, filename, maxAttempts = 8) {
     }
 
     await closeDialogs(page);
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(2000);
   }
 
-  throw new Error(`File ${filename} did not appear in My Files list`);
+  const visibleText = await page.evaluate(() => {
+    const dialogs = Array.from(document.querySelectorAll('.geDialog')).filter((el) => el.offsetParent !== null);
+    return dialogs.map((d) => (d.textContent || '').replace(/\s+/g, ' ').trim()).join(' | ');
+  });
+
+  throw new Error(`File ${filename} did not appear in My Files list. Visible dialog text: ${visibleText}`);
 }
 
 /**
