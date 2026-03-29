@@ -39,45 +39,6 @@ async function loadApp(page) {
   await page.waitForSelector('#geInfo', { state: 'detached', timeout: 60_000 });
 }
 
-async function runEditorAction(page, actionName) {
-  return page.evaluate((name) => {
-    const candidates = [];
-
-    const addCandidate = (obj) => {
-      if (obj != null) {
-        candidates.push(obj);
-      }
-    };
-
-    addCandidate(window.ui);
-    addCandidate(window.editorUi);
-    addCandidate(window.app);
-
-    for (const key of Object.getOwnPropertyNames(window)) {
-      try {
-        addCandidate(window[key]);
-      } catch (e) {
-        // Ignore globals with throwing getters.
-      }
-    }
-
-    for (const candidate of candidates) {
-      const maybeUi = candidate && candidate.actions ? candidate : candidate && candidate.editorUi;
-
-      if (maybeUi && maybeUi.actions && typeof maybeUi.actions.get === 'function') {
-        const action = maybeUi.actions.get(name);
-
-        if (action && typeof action.funct === 'function') {
-          action.funct();
-          return true;
-        }
-      }
-    }
-
-    return false;
-  }, actionName);
-}
-
 async function clickFileMenuAction(page, actionLabelRegex) {
   const fileMenu = page
     .locator('a.geItem, button.geItem, .geMenubar a, .geMenubar button')
@@ -97,11 +58,12 @@ async function clickFileMenuAction(page, actionLabelRegex) {
   await actionItem.click();
 }
 
-async function openDialogViaActionOrMenu(page, actionName, menuRegex) {
-  const executed = await runEditorAction(page, actionName);
-
-  if (!executed) {
-    await clickFileMenuAction(page, menuRegex);
+async function waitVisible(locator, timeoutMs) {
+  try {
+    await locator.waitFor({ state: 'visible', timeout: timeoutMs });
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -117,20 +79,12 @@ async function fillNextcloudDialog(page, filename) {
 }
 
 async function openMyFilesList(page) {
+  await closeDialogs(page);
   await openLoadDialog(page);
   await fillNextcloudDialog(page, null);
-  await page.locator('button.gePrimaryBtn').filter({ hasText: /^ok$/i }).click();
+  await clickTopmostOkButton(page);
 
-  const listTitle = page.getByText('Select a .drawio file to load');
-  const noFilesMessage = page.getByText('No .drawio files found in Nextcloud.');
-
-  try {
-    await listTitle.waitFor({ state: 'visible', timeout: 10_000 });
-    return 'list';
-  } catch {
-    await noFilesMessage.waitFor({ state: 'visible', timeout: 10_000 });
-    return 'empty';
-  }
+  await expect(page.getByText('Select a .drawio file to load')).toBeVisible({ timeout: 12_000 });
 }
 
 async function closeDialogs(page) {
@@ -138,25 +92,49 @@ async function closeDialogs(page) {
   await page.keyboard.press('Escape').catch(() => {});
 }
 
-async function waitForFileInMyFilesList(page, filename, timeoutMs = 30_000) {
-  const deadline = Date.now() + timeoutMs;
+async function clickTopmostOkButton(page) {
+  const clicked = await page.evaluate(() => {
+    const buttons = Array.from(document.querySelectorAll('button.gePrimaryBtn'));
 
-  while (Date.now() < deadline) {
-    const state = await openMyFilesList(page);
+    for (let i = buttons.length - 1; i >= 0; i -= 1) {
+      const btn = buttons[i];
+      const rect = btn.getBoundingClientRect();
+      const style = window.getComputedStyle(btn);
+      const text = (btn.textContent || '').trim();
 
-    if (state === 'list') {
-      const option = page.locator('select option', { hasText: filename }).first();
+      const visible = rect.width > 0 && rect.height > 0 &&
+        style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
 
-      if (await option.count() > 0) {
-        return;
+      if (visible && /^ok$/i.test(text)) {
+        btn.click();
+        return true;
       }
     }
 
+    return false;
+  });
+
+  if (!clicked) {
+    throw new Error('Unable to click topmost OK button in dialog');
+  }
+}
+
+async function assertFileAppearsInMyFiles(page, filename, maxAttempts = 3) {
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    await openMyFilesList(page);
+
+    const option = page.locator('select option', { hasText: filename }).first();
+
+    if (await option.count() > 0) {
+      await expect(option).toBeVisible({ timeout: 5_000 });
+      return;
+    }
+
     await closeDialogs(page);
-    await page.waitForTimeout(1200);
+    await page.waitForTimeout(1000);
   }
 
-  throw new Error(`Timed out waiting for ${filename} to appear in My Files list`);
+  throw new Error(`File ${filename} did not appear in My Files list`);
 }
 
 /**
@@ -165,7 +143,18 @@ async function waitForFileInMyFilesList(page, filename, timeoutMs = 30_000) {
  *       save button / menu item in the custom NOLAI toolbar.
  */
 async function openSaveDialog(page) {
-  await openDialogViaActionOrMenu(page, 'saveToNextcloud', /save\s*to\s*nextcloud|saveToNextcloud/i);
+  const title = page.getByText('Save diagram to Nextcloud');
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await closeDialogs(page);
+    await clickFileMenuAction(page, /^saveToNextcloud$|save\s*to\s*nextcloud/i);
+
+    if (await waitVisible(title, 4_000)) {
+      return;
+    }
+  }
+
+  throw new Error('Could not open Save diagram to Nextcloud dialog');
 }
 
 /**
@@ -173,7 +162,18 @@ async function openSaveDialog(page) {
  * TODO: Update selector once issue #100 UI is merged.
  */
 async function openLoadDialog(page) {
-  await openDialogViaActionOrMenu(page, 'My Files', /my\s*files/i);
+  const title = page.getByText('Load diagram from Nextcloud');
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await closeDialogs(page);
+    await clickFileMenuAction(page, /^my\s*files$/i);
+
+    if (await waitVisible(title, 4_000)) {
+      return;
+    }
+  }
+
+  throw new Error('Could not open Load diagram from Nextcloud dialog');
 }
 
 // ── Save ─────────────────────────────────────────────────────────────────────
@@ -188,6 +188,8 @@ test.describe('Save file to Nextcloud', () => {
   });
 
   test('diagram can be saved with a filename and appears in Nextcloud', async ({ page }) => {
+    test.setTimeout(90_000);
+
     test.skip(
       !process.env.CI && !process.env.INTEGRATION,
       'Skipped locally — run with INTEGRATION=1 or in CI'
@@ -198,8 +200,8 @@ test.describe('Save file to Nextcloud', () => {
 
     await fillNextcloudDialog(page, TEST_FILENAME);
 
-    await page.locator('button.gePrimaryBtn').filter({ hasText: /^ok$/i }).click();
-    await waitForFileInMyFilesList(page, TEST_FILENAME);
+    await clickTopmostOkButton(page);
+    await assertFileAppearsInMyFiles(page, TEST_FILENAME);
   });
 });
 
@@ -215,6 +217,8 @@ test.describe('Load file from Nextcloud', () => {
   });
 
   test('a previously saved file appears in the load dialog', async ({ page }) => {
+    test.setTimeout(90_000);
+
     test.skip(
       !process.env.CI && !process.env.INTEGRATION,
       'Skipped locally — run with INTEGRATION=1 or in CI'
@@ -225,8 +229,8 @@ test.describe('Load file from Nextcloud', () => {
     await loadApp(page);
     await openSaveDialog(page);
     await fillNextcloudDialog(page, fixtureName);
-    await page.locator('button.gePrimaryBtn').filter({ hasText: /^ok$/i }).click();
-    await waitForFileInMyFilesList(page, fixtureName);
+    await clickTopmostOkButton(page);
+    await assertFileAppearsInMyFiles(page, fixtureName);
   });
 });
 
