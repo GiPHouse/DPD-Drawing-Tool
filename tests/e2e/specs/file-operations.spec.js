@@ -24,6 +24,10 @@ const { test, expect } = require('@playwright/test');
 const NC_URL  = process.env.NEXTCLOUD_URL  || 'https://localhost';
 const NC_USER = process.env.NEXTCLOUD_USER || 'admin';
 const NC_PASS = process.env.NEXTCLOUD_PASS || 'admin';
+const NC_DAV_URL = process.env.NEXTCLOUD_DAV_URL ||
+  (NC_URL.includes('/remote.php/dav/')
+    ? NC_URL
+    : `${NC_URL}/remote.php/dav/files/${encodeURIComponent(NC_USER)}/`);
 
 const TEST_FILENAME = `test-diagram-${Date.now()}.drawio`;
 
@@ -102,7 +106,7 @@ async function openDialogViaActionOrMenu(page, actionName, menuRegex) {
 }
 
 async function fillNextcloudDialog(page, filename) {
-  await page.locator('tr', { hasText: 'Nextcloud Base URL:' }).locator('input').fill(NC_URL);
+  await page.locator('tr', { hasText: 'Nextcloud Base URL:' }).locator('input').fill(NC_DAV_URL);
   await page.locator('tr', { hasText: 'Username:' }).locator('input').fill(NC_USER);
   await page.locator('tr', { hasText: 'Password:' }).locator('input').fill(NC_PASS);
   await page.locator('tr', { hasText: 'Remote Path:' }).locator('input').fill('');
@@ -112,48 +116,47 @@ async function fillNextcloudDialog(page, filename) {
   }
 }
 
-async function waitForFileOnNextcloud(request, filename, timeoutMs = 30_000) {
-  const deadline = Date.now() + timeoutMs;
-  const encodedUser = encodeURIComponent(NC_USER);
-  const encodedFile = encodeURIComponent(filename);
-  const fileUrl = `${NC_URL}/remote.php/dav/files/${encodedUser}/${encodedFile}`;
+async function openMyFilesList(page) {
+  await openLoadDialog(page);
+  await fillNextcloudDialog(page, null);
+  await page.locator('button.gePrimaryBtn').filter({ hasText: /^ok$/i }).click();
 
-  while (Date.now() < deadline) {
-    const response = await request.fetch(fileUrl, {
-      method: 'HEAD',
-      headers: {
-        Authorization: `Basic ${Buffer.from(`${NC_USER}:${NC_PASS}`).toString('base64')}`,
-      },
-      ignoreHTTPSErrors: true,
-    });
+  const listTitle = page.getByText('Select a .drawio file to load');
+  const noFilesMessage = page.getByText('No .drawio files found in Nextcloud.');
 
-    if (response.status() === 200) {
-      return;
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+  try {
+    await listTitle.waitFor({ state: 'visible', timeout: 10_000 });
+    return 'list';
+  } catch {
+    await noFilesMessage.waitFor({ state: 'visible', timeout: 10_000 });
+    return 'empty';
   }
-
-  throw new Error(`Timed out waiting for ${filename} to appear in Nextcloud`);
 }
 
-async function uploadFixtureDrawio(request, filename) {
-  const encodedUser = encodeURIComponent(NC_USER);
-  const encodedFile = encodeURIComponent(filename);
-  const fileUrl = `${NC_URL}/remote.php/dav/files/${encodedUser}/${encodedFile}`;
-  const xml = '<mxfile host="app.diagrams.net"><diagram id="test" name="Page-1"><mxGraphModel/></diagram></mxfile>';
+async function closeDialogs(page) {
+  await page.keyboard.press('Escape').catch(() => {});
+  await page.keyboard.press('Escape').catch(() => {});
+}
 
-  const response = await request.fetch(fileUrl, {
-    method: 'PUT',
-    headers: {
-      Authorization: `Basic ${Buffer.from(`${NC_USER}:${NC_PASS}`).toString('base64')}`,
-      'Content-Type': 'application/xml; charset=utf-8',
-    },
-    data: xml,
-    ignoreHTTPSErrors: true,
-  });
+async function waitForFileInMyFilesList(page, filename, timeoutMs = 30_000) {
+  const deadline = Date.now() + timeoutMs;
 
-  expect([201, 204]).toContain(response.status());
+  while (Date.now() < deadline) {
+    const state = await openMyFilesList(page);
+
+    if (state === 'list') {
+      const option = page.locator('select option', { hasText: filename }).first();
+
+      if (await option.count() > 0) {
+        return;
+      }
+    }
+
+    await closeDialogs(page);
+    await page.waitForTimeout(1200);
+  }
+
+  throw new Error(`Timed out waiting for ${filename} to appear in My Files list`);
 }
 
 /**
@@ -184,7 +187,7 @@ test.describe('Save file to Nextcloud', () => {
     await expect(page.locator('tr', { hasText: 'Filename:' }).locator('input')).toBeVisible();
   });
 
-  test('diagram can be saved with a filename and appears in Nextcloud', async ({ page, request }) => {
+  test('diagram can be saved with a filename and appears in Nextcloud', async ({ page }) => {
     test.skip(
       !process.env.CI && !process.env.INTEGRATION,
       'Skipped locally — run with INTEGRATION=1 or in CI'
@@ -196,7 +199,7 @@ test.describe('Save file to Nextcloud', () => {
     await fillNextcloudDialog(page, TEST_FILENAME);
 
     await page.locator('button.gePrimaryBtn').filter({ hasText: /^ok$/i }).click();
-    await waitForFileOnNextcloud(request, TEST_FILENAME);
+    await waitForFileInMyFilesList(page, TEST_FILENAME);
   });
 });
 
@@ -211,22 +214,19 @@ test.describe('Load file from Nextcloud', () => {
     await expect(page.locator('tr', { hasText: 'Nextcloud Base URL:' }).locator('input')).toBeVisible();
   });
 
-  test('a previously saved file appears in the load dialog', async ({ page, request }) => {
+  test('a previously saved file appears in the load dialog', async ({ page }) => {
     test.skip(
       !process.env.CI && !process.env.INTEGRATION,
       'Skipped locally — run with INTEGRATION=1 or in CI'
     );
 
     const fixtureName = `load-fixture-${Date.now()}.drawio`;
-    await uploadFixtureDrawio(request, fixtureName);
 
     await loadApp(page);
-    await openLoadDialog(page);
-    await fillNextcloudDialog(page, null);
-
+    await openSaveDialog(page);
+    await fillNextcloudDialog(page, fixtureName);
     await page.locator('button.gePrimaryBtn').filter({ hasText: /^ok$/i }).click();
-    await expect(page.getByText('Select a .drawio file to load')).toBeVisible({ timeout: 20_000 });
-    await expect(page.locator('select option', { hasText: fixtureName })).toBeVisible();
+    await waitForFileInMyFilesList(page, fixtureName);
   });
 });
 
