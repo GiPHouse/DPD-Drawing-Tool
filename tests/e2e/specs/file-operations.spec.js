@@ -35,16 +35,96 @@ async function loadApp(page) {
   await page.waitForSelector('.geEditor', { timeout: 20_000 });
 }
 
+async function runEditorAction(page, actionName) {
+  const actionFound = await page.evaluate((name) => {
+    // Find an EditorUi-like object that exposes actions.get(name).funct().
+    for (const key of Object.keys(window)) {
+      const candidate = window[key];
+
+      if (
+        candidate &&
+        candidate.actions &&
+        typeof candidate.actions.get === 'function'
+      ) {
+        const action = candidate.actions.get(name);
+
+        if (action && typeof action.funct === 'function') {
+          action.funct();
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }, actionName);
+
+  if (!actionFound) {
+    throw new Error(`Unable to locate editor action: ${actionName}`);
+  }
+}
+
+async function fillNextcloudDialog(page, filename) {
+  await page.locator('tr', { hasText: 'Nextcloud Base URL:' }).locator('input').fill(NC_URL);
+  await page.locator('tr', { hasText: 'Username:' }).locator('input').fill(NC_USER);
+  await page.locator('tr', { hasText: 'Password:' }).locator('input').fill(NC_PASS);
+  await page.locator('tr', { hasText: 'Remote Path:' }).locator('input').fill('');
+
+  if (filename != null) {
+    await page.locator('tr', { hasText: 'Filename:' }).locator('input').fill(filename);
+  }
+}
+
+async function waitForFileOnNextcloud(request, filename, timeoutMs = 30_000) {
+  const deadline = Date.now() + timeoutMs;
+  const encodedUser = encodeURIComponent(NC_USER);
+  const encodedFile = encodeURIComponent(filename);
+  const fileUrl = `${NC_URL}/remote.php/dav/files/${encodedUser}/${encodedFile}`;
+
+  while (Date.now() < deadline) {
+    const response = await request.fetch(fileUrl, {
+      method: 'HEAD',
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${NC_USER}:${NC_PASS}`).toString('base64')}`,
+      },
+      ignoreHTTPSErrors: true,
+    });
+
+    if (response.status() === 200) {
+      return;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+
+  throw new Error(`Timed out waiting for ${filename} to appear in Nextcloud`);
+}
+
+async function uploadFixtureDrawio(request, filename) {
+  const encodedUser = encodeURIComponent(NC_USER);
+  const encodedFile = encodeURIComponent(filename);
+  const fileUrl = `${NC_URL}/remote.php/dav/files/${encodedUser}/${encodedFile}`;
+  const xml = '<mxfile host="app.diagrams.net"><diagram id="test" name="Page-1"><mxGraphModel/></diagram></mxfile>';
+
+  const response = await request.fetch(fileUrl, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Basic ${Buffer.from(`${NC_USER}:${NC_PASS}`).toString('base64')}`,
+      'Content-Type': 'application/xml; charset=utf-8',
+    },
+    data: xml,
+    ignoreHTTPSErrors: true,
+  });
+
+  expect([201, 204]).toContain(response.status());
+}
+
 /**
  * Opens the Save File dialog in the app.
  * TODO: Update selector once issue #98 UI is merged — look for the actual
  *       save button / menu item in the custom NOLAI toolbar.
  */
 async function openSaveDialog(page) {
-  // Try the File menu first, then fall back to a direct button
-  const fileMenu = page.locator('[data-testid="file-menu"], .geMenubar button').first();
-  await fileMenu.click();
-  await page.getByRole('menuitem', { name: /save/i }).first().click();
+  await runEditorAction(page, 'saveToNextcloud');
 }
 
 /**
@@ -52,23 +132,18 @@ async function openSaveDialog(page) {
  * TODO: Update selector once issue #100 UI is merged.
  */
 async function openLoadDialog(page) {
-  const fileMenu = page.locator('[data-testid="file-menu"], .geMenubar button').first();
-  await fileMenu.click();
-  await page.getByRole('menuitem', { name: /open|load/i }).first().click();
+  await runEditorAction(page, 'My Files');
 }
 
 // ── Save ─────────────────────────────────────────────────────────────────────
 
 test.describe('Save file to Nextcloud', () => {
   test('save dialog opens when clicking Save', async ({ page }) => {
-    test.skip(true, 'Awaiting issue #98 — Save UI implementation');
-
     await loadApp(page);
     await openSaveDialog(page);
 
-    // TODO: Replace with the actual save dialog selector from issue #98
-    const dialog = page.locator('[data-testid="save-dialog"], .geSaveDialog, [role="dialog"]').first();
-    await expect(dialog).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText('Save diagram to Nextcloud')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('tr', { hasText: 'Filename:' }).locator('input')).toBeVisible();
   });
 
   test('diagram can be saved with a filename and appears in Nextcloud', async ({ page, request }) => {
@@ -80,24 +155,10 @@ test.describe('Save file to Nextcloud', () => {
     await loadApp(page);
     await openSaveDialog(page);
 
-    // TODO: fill in the filename input and confirm save
-    // const filenameInput = page.locator('[data-testid="save-filename-input"]');
-    // await filenameInput.fill(TEST_FILENAME);
-    // await page.getByRole('button', { name: /save/i }).click();
+    await fillNextcloudDialog(page, TEST_FILENAME);
 
-    test.skip(true, 'Awaiting issue #98 — Save UI implementation');
-
-    // Verify the file exists in Nextcloud via WebDAV
-    const response = await request.head(
-      `${NC_URL}/remote.php/dav/files/${NC_USER}/${TEST_FILENAME}`,
-      {
-        headers: {
-          Authorization: `Basic ${Buffer.from(`${NC_USER}:${NC_PASS}`).toString('base64')}`,
-        },
-        ignoreHTTPSErrors: true,
-      }
-    );
-    expect(response.status()).toBe(200);
+    await page.locator('button.gePrimaryBtn').filter({ hasText: /^ok$/i }).click();
+    await waitForFileOnNextcloud(request, TEST_FILENAME);
   });
 });
 
@@ -105,19 +166,29 @@ test.describe('Save file to Nextcloud', () => {
 
 test.describe('Load file from Nextcloud', () => {
   test('load dialog opens when clicking Open', async ({ page }) => {
-    test.skip(true, 'Awaiting issue #100 — Load UI implementation');
-
     await loadApp(page);
     await openLoadDialog(page);
 
-    // TODO: Replace with the actual load dialog selector from issue #100
-    const dialog = page.locator('[data-testid="load-dialog"], .geLoadDialog, [role="dialog"]').first();
-    await expect(dialog).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText('Load diagram from Nextcloud')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('tr', { hasText: 'Nextcloud Base URL:' }).locator('input')).toBeVisible();
   });
 
-  test('a previously saved file appears in the load dialog', async ({ page }) => {
-    test.skip(true, 'Awaiting issue #100 — Load UI implementation');
-    // TODO: pre-upload a fixture .drawio file via WebDAV, then assert it appears in the list
+  test('a previously saved file appears in the load dialog', async ({ page, request }) => {
+    test.skip(
+      !process.env.CI && !process.env.INTEGRATION,
+      'Skipped locally — run with INTEGRATION=1 or in CI'
+    );
+
+    const fixtureName = `load-fixture-${Date.now()}.drawio`;
+    await uploadFixtureDrawio(request, fixtureName);
+
+    await loadApp(page);
+    await openLoadDialog(page);
+    await fillNextcloudDialog(page, null);
+
+    await page.locator('button.gePrimaryBtn').filter({ hasText: /^ok$/i }).click();
+    await expect(page.getByText('Select a .drawio file to load')).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator('select option', { hasText: fixtureName })).toBeVisible();
   });
 });
 
