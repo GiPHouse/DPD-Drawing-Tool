@@ -31,22 +31,37 @@ const TEST_FILENAME = `test-diagram-${Date.now()}.drawio`;
 
 async function loadApp(page) {
   page.on('dialog', (dialog) => dialog.dismiss());
-  await page.goto('/');
-  await page.waitForSelector('.geEditor', { timeout: 20_000 });
+  await page.goto('/?atlas=1');
+  await page.waitForSelector('#geInfo', { state: 'detached', timeout: 60_000 });
 }
 
 async function runEditorAction(page, actionName) {
-  const actionFound = await page.evaluate((name) => {
-    // Find an EditorUi-like object that exposes actions.get(name).funct().
-    for (const key of Object.keys(window)) {
-      const candidate = window[key];
+  return page.evaluate((name) => {
+    const candidates = [];
 
-      if (
-        candidate &&
-        candidate.actions &&
-        typeof candidate.actions.get === 'function'
-      ) {
-        const action = candidate.actions.get(name);
+    const addCandidate = (obj) => {
+      if (obj != null) {
+        candidates.push(obj);
+      }
+    };
+
+    addCandidate(window.ui);
+    addCandidate(window.editorUi);
+    addCandidate(window.app);
+
+    for (const key of Object.getOwnPropertyNames(window)) {
+      try {
+        addCandidate(window[key]);
+      } catch (e) {
+        // Ignore globals with throwing getters.
+      }
+    }
+
+    for (const candidate of candidates) {
+      const maybeUi = candidate && candidate.actions ? candidate : candidate && candidate.editorUi;
+
+      if (maybeUi && maybeUi.actions && typeof maybeUi.actions.get === 'function') {
+        const action = maybeUi.actions.get(name);
 
         if (action && typeof action.funct === 'function') {
           action.funct();
@@ -57,9 +72,32 @@ async function runEditorAction(page, actionName) {
 
     return false;
   }, actionName);
+}
 
-  if (!actionFound) {
-    throw new Error(`Unable to locate editor action: ${actionName}`);
+async function clickFileMenuAction(page, actionLabelRegex) {
+  const fileMenu = page
+    .locator('a.geItem, button.geItem, .geMenubar a, .geMenubar button')
+    .filter({ hasText: /^file$/i })
+    .first();
+
+  await fileMenu.click();
+
+  const popup = page.locator('.mxPopupMenu').last();
+  await expect(popup).toBeVisible({ timeout: 10_000 });
+
+  const actionItem = popup
+    .locator('.mxPopupMenuItem, tr, td, a, div')
+    .filter({ hasText: actionLabelRegex })
+    .first();
+
+  await actionItem.click();
+}
+
+async function openDialogViaActionOrMenu(page, actionName, menuRegex) {
+  const executed = await runEditorAction(page, actionName);
+
+  if (!executed) {
+    await clickFileMenuAction(page, menuRegex);
   }
 }
 
@@ -124,7 +162,7 @@ async function uploadFixtureDrawio(request, filename) {
  *       save button / menu item in the custom NOLAI toolbar.
  */
 async function openSaveDialog(page) {
-  await runEditorAction(page, 'saveToNextcloud');
+  await openDialogViaActionOrMenu(page, 'saveToNextcloud', /save\s*to\s*nextcloud|saveToNextcloud/i);
 }
 
 /**
@@ -132,7 +170,7 @@ async function openSaveDialog(page) {
  * TODO: Update selector once issue #100 UI is merged.
  */
 async function openLoadDialog(page) {
-  await runEditorAction(page, 'My Files');
+  await openDialogViaActionOrMenu(page, 'My Files', /my\s*files/i);
 }
 
 // ── Save ─────────────────────────────────────────────────────────────────────
