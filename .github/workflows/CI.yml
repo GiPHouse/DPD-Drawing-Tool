@@ -77,23 +77,11 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps
 
-      - name: Build and start Docker stack
-        run: docker compose -f "$GITHUB_WORKSPACE/docker-compose.yml" up -d --build
-
-      - name: Install and configure Nextcloud
+      - name: Generate and start integration stack
         working-directory: .
         run: |
-          docker exec --user www-data -w /var/www/html nextcloud-main php occ maintenance:install \
-            --database "mysql" \
-            --database-name "nextcloud" \
-            --database-user "nextcloud" \
-            --database-pass "nextcloudpass" \
-            --database-host "db" \
-            --admin-user "admin" \
-            --admin-pass "admin" || true
-          docker exec --user www-data nextcloud-main php occ config:system:set trusted_domains 1 --value=localhost
-          docker exec --user www-data nextcloud-main php occ config:system:set overwriteprotocol --value="https"
-          docker exec --user www-data nextcloud-main php occ config:system:set overwritehost --value="localhost"
+          chmod +x ./setup_merged.sh
+          ./setup_merged.sh
 
       - name: Wait for draw.io and Nextcloud
         run: |
@@ -107,7 +95,9 @@ jobs:
             sleep 5
           done
           echo "Services did not become ready in time"
-          docker compose -f "$GITHUB_WORKSPACE/docker-compose.yml" ps
+          if [ -f "$GITHUB_WORKSPACE/docker-compose.yml" ]; then
+            docker compose -f "$GITHUB_WORKSPACE/docker-compose.yml" ps
+          fi
           exit 1
 
       - name: Run Playwright tests
@@ -128,8 +118,14 @@ jobs:
 
       - name: Dump Docker logs on failure
         if: failure()
-        run: docker compose -f "$GITHUB_WORKSPACE/docker-compose.yml" logs --no-color
+        run: |
+          if [ -f "$GITHUB_WORKSPACE/docker-compose.yml" ]; then
+            docker compose -f "$GITHUB_WORKSPACE/docker-compose.yml" logs --no-color
+          fi
 
       - name: Stop Docker stack
         if: always()
-        run: docker compose -f "$GITHUB_WORKSPACE/docker-compose.yml" down -v
+        run: |
+          if [ -f "$GITHUB_WORKSPACE/docker-compose.yml" ]; then
+            docker compose -f "$GITHUB_WORKSPACE/docker-compose.yml" down -v
+          fi
