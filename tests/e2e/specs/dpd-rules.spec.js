@@ -74,10 +74,14 @@ async function dropShapeOnCanvas(page, targetX, targetY) {
   const firstShape = page.locator('.geSidebar .geItem').first();
   await firstShape.waitFor({ state: 'visible', timeout: 10_000 });
 
-  const canvas = page.locator('.geEditor canvas').first();
-  const canvasBox = await canvas.boundingBox();
+  // On CI (especially Firefox), draw.io may render the graph as SVG rather
+  // than canvas. The diagram container is the most stable drag/drop target.
+  const diagramContainer = page.locator('.geDiagramContainer').first();
+  await diagramContainer.waitFor({ state: 'visible', timeout: 20_000 });
 
-  await firstShape.dragTo(canvas, {
+  const canvasBox = await diagramContainer.boundingBox();
+
+  await firstShape.dragTo(diagramContainer, {
     targetPosition: {
       x: targetX - canvasBox.x,
       y: targetY - canvasBox.y,

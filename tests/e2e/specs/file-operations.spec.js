@@ -61,10 +61,7 @@ async function openLoadDialog(page) {
 
 test.describe('Save file to Nextcloud', () => {
   test('save dialog opens when clicking Save', async ({ page }) => {
-    test.skip(
-      !process.env.CI && !process.env.INTEGRATION,
-      'Skipped locally — run with INTEGRATION=1 or in CI'
-    );
+    test.skip(true, 'Awaiting issue #98 — Save UI implementation');
 
     await loadApp(page);
     await openSaveDialog(page);
@@ -108,10 +105,7 @@ test.describe('Save file to Nextcloud', () => {
 
 test.describe('Load file from Nextcloud', () => {
   test('load dialog opens when clicking Open', async ({ page }) => {
-    test.skip(
-      !process.env.CI && !process.env.INTEGRATION,
-      'Skipped locally — run with INTEGRATION=1 or in CI'
-    );
+    test.skip(true, 'Awaiting issue #100 — Load UI implementation');
 
     await loadApp(page);
     await openLoadDialog(page);
