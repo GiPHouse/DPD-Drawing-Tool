@@ -862,6 +862,7 @@
 
 		editorUi.actions.addAction('saveToNextcloud', function()
 		{
+			// Get filename and ensure that it is a valid file
 			var currentFile = editorUi.getCurrentFile();
 			var filename = (currentFile != null && currentFile.getTitle() != null) ?
 				currentFile.getTitle() : editorUi.defaultFilename;
@@ -874,14 +875,17 @@
 			var xmlContent = editorUi.getFileData(true);
 			var nolaiColor = '#008f89';
 
+			// Main container for dialog UI
 			var div = document.createElement('div');
 			div.style.cssText = 'padding: 20px; font-family: Helvetica, Arial, sans-serif; color: #333;';
 
+			// The title for the dialog
 			var title = document.createElement('h2');
 			title.innerHTML = 'Save diagram to Nextcloud';
 			title.style.cssText = 'margin: 0 0 15px 0; color: ' + nolaiColor + '; font-size: 18px; border-bottom: 2px solid ' + nolaiColor + '; padding-bottom: 10px;';
 			div.appendChild(title);
 
+			// Helper function to create a labeled input field
 			function createField(label, type, defaultValue, placeholder) 
 			{
 				var group = document.createElement('div');
@@ -915,6 +919,7 @@
 				return input
 			}
 			
+			// Creating the input fields
 			var urlInput = createField('Server URL', 'text', 'https://localhost/remote.php/dav/files/admin/', 'Enter WebDAV URL');
 			var userInput = createField('Username', 'text', 'admin', 'Nextcloud username');
 			var passInput = createField('Password', 'password', 'admin', 'Nextcloud password');
@@ -936,6 +941,7 @@
 			row.appendChild(filenameInput.parentNode);
 			div.appendChild(row);
 
+			// Dialog logic
 			var dlg = new CustomDialog(editorUi, div, function()
 			{
 				var url = urlInput.value;
@@ -971,6 +977,7 @@
 				}
 			});
 
+			// Styling the OK button for saving files.
 			dlg.okButton.innerHTML = 'Save Diagram';
     		dlg.okButton.style.backgroundColor = nolaiColor;
 			dlg.okButton.style.backgroundImage = 'none';
@@ -981,41 +988,60 @@
 		});
 	
 		// ======	NOLAI - {- Backend -} /Sprint 1/ Task 92	=====
+		// ======   NOLAI - {- Frontend -} /Sprint 2/ Task 100  =====
 		editorUi.actions.addAction('loadFromNextcloud', function()
 		{
-			var div = document.createElement('div');
-			div.style.padding = '10px';
+			var nolaiColor = '#008f89';
 
-			var title = document.createElement('p');
+			// Main container for dialog UI
+			var div = document.createElement('div');
+			div.style.cssText = 'padding: 20px; font-family: Helvetica, Arial, sans-serif; color: #333;';
+
+			// The title for the dialog
+			var title = document.createElement('h2');
 			title.innerHTML = 'Load diagram from Nextcloud';
+			title.style.cssText = 'margin: 0 0 15px 0; color: ' + nolaiColor + '; font-size: 18px; border-bottom: 2px solid ' + nolaiColor + '; padding-bottom: 10px;';
 			div.appendChild(title);
 
-			var table = document.createElement('table');
-
-			// Helper to create one label/input row and return the created input element.
-			function addRow(label, type, defaultValue)
+			// Helper function to create a labeled input field
+			function createField(label, type, defaultValue, placeholder)
 			{
-				var tr = document.createElement('tr');
-				var td1 = document.createElement('td');
-				td1.innerHTML = label;
-				var td2 = document.createElement('td');
+				var group = document.createElement('div');
+				group.style.marginBottom = '12px';
+
+				var lbl = document.createElement('label');
+				lbl.innerHTML = label;
+				lbl.style.cssText = 'display: block; font-size: 12px; font-weight: bold; margin-bottom: 4px; color: #666;';
+
 				var input = document.createElement('input');
 				input.type = type;
 				input.value = defaultValue;
-				input.style.width = '300px';
-				td2.appendChild(input);
-				tr.appendChild(td1);
-				tr.appendChild(td2);
-				table.appendChild(tr);
-				return input;
+				input.placeholder = placeholder || '';
+				input.style.cssText = 'width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; outline: none; font-size: 14px;';
+
+				input.onfocus = function()
+				{
+					this.style.borderColor = nolaiColor;
+					this.style.boxShadow = '0 0 3px ' + nolaiColor; 
+				};
+
+				input.onblur = function()
+				{
+					this.style.borderColor = '#ccc';
+					this.style.boxShadow = 'none'
+				};
+
+				group.appendChild(lbl);
+				group.appendChild(input);
+				div.appendChild(group);
+				return input
 			}
 
-			var urlInput = addRow('Nextcloud Base URL:', 'text', 'https://localhost/remote.php/dav/files/admin/');
-			var userInput = addRow('Username:', 'text', 'admin');
-			var passInput = addRow('Password:', 'password', 'admin');
-			var pathInput = addRow('Remote Path:', 'text', '');
-
-			div.appendChild(table);
+			// Creating the input fields
+			var urlInput = createField('Server URL', 'text', 'https://localhost/remote.php/dav/files/admin/', 'Enter WebDAV URL');
+			var userInput = createField('Username:', 'text', 'admin', 'Nextcloud username');
+			var passInput = createField('Password:', 'password', 'admin', 'Nextcloud password');
+			var pathInput = createField('Remote Path:', 'text', '', 'e.g. /Diagrams');
 
 			// When user confirms: fetch available .drawio files from Nextcloud.
 			var dlg = new CustomDialog(editorUi, div, function()
@@ -1047,17 +1073,19 @@
 
 					// Build second UI containing selectable file list.
 					var listDiv = document.createElement('div');
-					listDiv.style.padding = '10px';
+					listDiv.style.cssText = 'padding: 20px; font-family: Helvetica, Arial, sans-serif;';
 
-					var listTitle = document.createElement('p');
-					listTitle.innerHTML = 'Select a .drawio file to load';
+					var listTitle = document.createElement('h3');
+					listTitle.innerHTML = 'Select a diagram';
+					listTitle.style.cssText = 'margin: 0 0 15px 0; color: ' + nolaiColor + '; font-size: 18px; border-bottom: 2px solid ' + nolaiColor + '; padding-bottom: 10px;';
 					listDiv.appendChild(listTitle);
 
 					var select = document.createElement('select');
-					select.style.width = '420px';
-					select.style.height = '220px';
+					select.style.cssText = 'width: 100%; height: 220px; padding: 5px;';
 					select.size = 12;
 
+					// PREVIEW PART ----- Everything in comments can be removed if we don't want preview or if it doesn't work
+					/*
 					for (var i = 0; i < files.length; i++)
 					{
 						// var option = document.createElement('option');
@@ -1082,6 +1110,16 @@
 						option.text = files[i].displayPath;
 						select.appendChild(option);
 					}
+					*/
+
+					// List all file options
+					files.forEach(function(file, i)
+					{
+						var option = document.createElement('option');
+						option.value = i;
+						option.text = file.displayPath;
+						select.appendChild(option);
+					});
 
 					listDiv.appendChild(select);
 
@@ -1142,7 +1180,14 @@
 					};
 
 					var listDlg = new CustomDialog(editorUi, listDiv, loadSelected);
-					editorUi.showDialog(listDlg.container, 480, 360, true, false);
+
+					// Add OK-button to load the diagram selected
+					listDlg.okButton.innerHTML = 'Load Diagram';
+					listDlg.okButton.style.backgroundColor = nolaiColor;
+					listDlg.okButton.style.color = '#fff';
+					listDlg.okButton.style.backgroundImage = 'none';
+
+					editorUi.showDialog(listDlg.container, 480, 420, true, false);
 					select.focus();
 				}).catch(function(error)
 				{
@@ -1151,7 +1196,13 @@
 				});
 			});
 
-			editorUi.showDialog(dlg.container, 420, 250, true, false);
+			// Add OK-button to show all saved files
+			dlg.okButton.innerHTML = 'Fetch Files';
+			dlg.okButton.style.backgroundColor = nolaiColor;
+			dlg.okButton.style.color = '#fff';
+			dlg.okButton.style.backgroundImage = 'none';
+
+			editorUi.showDialog(dlg.container, 450, 420, true, true);
 			urlInput.focus();
 		});
 
