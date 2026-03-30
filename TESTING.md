@@ -34,8 +34,6 @@ DPD rule is added, a corresponding unit test is expected to accompany it. E2E te
 2. A Playwright UI test passing means the browser renders the feature as designed.
 3. A Playwright integration test passing means the entire stack — draw.io, Nextcloud, and Caddy — works end to end.
 
-Whenever a bug is fixed or a new 
-
 ## Technology choices
 
 ### Why Jest for unit tests?
