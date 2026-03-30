@@ -858,6 +858,7 @@
 			*
 		*/
 		// ======	NOLAI - {- Backend -} /Sprint 1/ Task 16	=====
+		// ======   NOLAI - {- Frontend -} /Sprint 2/ Task 98   =====
 
 		editorUi.actions.addAction('saveToNextcloud', function()
 		{
@@ -871,43 +872,70 @@
 			}
 			
 			var xmlContent = editorUi.getFileData(true);
-			
-			// Create form elements
+			var nolaiColor = '#008f89';
+
 			var div = document.createElement('div');
-			div.style.padding = '10px';
-			
-			var title = document.createElement('p');
+			div.style.cssText = 'padding: 20px; font-family: Helvetica, Arial, sans-serif; color: #333;';
+
+			var title = document.createElement('h2');
 			title.innerHTML = 'Save diagram to Nextcloud';
+			title.style.cssText = 'margin: 0 0 15px 0; color: ' + nolaiColor + '; font-size: 18px; border-bottom: 2px solid ' + nolaiColor + '; padding-bottom: 10px;';
 			div.appendChild(title);
-			
-			var table = document.createElement('table');
-			
-			// Helper addRow function to create input row 
-			function addRow(label, type, defaultValue)
+
+			function createField(label, type, defaultValue, placeholder) 
 			{
-				var tr = document.createElement('tr');
-				var td1 = document.createElement('td');
-				td1.innerHTML = label;
-				var td2 = document.createElement('td');
+				var group = document.createElement('div');
+				group.style.marginBottom = '12px';
+
+				var lbl = document.createElement('label');
+				lbl.innerHTML = label;
+				lbl.style.cssText = 'display: block; font-size: 12px; font-weight: bold; margin-bottom: 4px; color: #666;';
+
 				var input = document.createElement('input');
 				input.type = type;
 				input.value = defaultValue;
-				input.style.width = '300px';
-				td2.appendChild(input);
-				tr.appendChild(td1);
-				tr.appendChild(td2);
-				table.appendChild(tr);
-				return input;
+				input.placeholder = placeholder || '';
+				input.style.cssText = 'width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; outline: none; font-size: 14px;';
+
+				input.onfocus = function()
+				{
+					this.style.borderColor = nolaiColor;
+					this.style.boxShadow = '0 0 3px ' + nolaiColor; 
+				};
+
+				input.onblur = function()
+				{
+					this.style.borderColor = '#ccc';
+					this.style.boxShadow = 'none'
+				};
+
+				group.appendChild(lbl);
+				group.appendChild(input);
+				div.appendChild(group);
+				return input
 			}
 			
-			var urlInput = addRow('Nextcloud Base URL:', 'text', 'https://localhost/remote.php/dav/files/admin/');
-			var userInput = addRow('Username:', 'text', 'admin');
-			var passInput = addRow('Password:', 'password', 'admin');
-			var pathInput = addRow('Remote Path:', 'text', '');
-			var filenameInput = addRow('Filename:', 'text', filename);
+			var urlInput = createField('Server URL', 'text', 'https://localhost/remote.php/dav/files/admin/', 'Enter WebDAV URL');
+			var userInput = createField('Username', 'text', 'admin', 'Nextcloud username');
+			var passInput = createField('Password', 'password', 'admin', 'Nextcloud password');
+
+			var row = document.createElement('div');
+			row.style.display = 'flex';
+			row.style.gap = '10px';
+
+			var pathCol = document.createElement('div'); 
+			pathCol.style.flex = '1';
 			
-			div.appendChild(table);
-			
+			var fileCol = document.createElement('div');
+			fileCol.style.flex = '2';
+
+			var pathInput = createField('Remote Path', 'text', '', 'e.g. /Diagrams');
+			var filenameInput = createField('Filename', 'text', filename, 'file.drawio');
+
+			row.appendChild(pathInput.parentNode);
+			row.appendChild(filenameInput.parentNode);
+			div.appendChild(row);
+
 			var dlg = new CustomDialog(editorUi, div, function()
 			{
 				var url = urlInput.value;
@@ -943,8 +971,13 @@
 				}
 			});
 
-			editorUi.showDialog(dlg.container, 420, 280, true, false);
-			urlInput.focus();
+			dlg.okButton.innerHTML = 'Save Diagram';
+    		dlg.okButton.style.backgroundColor = nolaiColor;
+			dlg.okButton.style.backgroundImage = 'none';
+			dlg.okButton.style.color = '#fff';
+
+			editorUi.showDialog(dlg.container, 450, 420, true, true);
+			filenameInput.focus();
 		});
 	
 		// ======	NOLAI - {- Backend -} /Sprint 1/ Task 92	=====
@@ -5230,7 +5263,6 @@
 				}
 				
 				menu.addSeparator(parent);
-				editorUi.menus.addMenuItems(menu, ['saveToNextcloud', 'loadFromNextcloud'], parent);
 
 				if (!mxClient.IS_CHROMEAPP && !EditorUi.isElectronApp &&
 					file != null && (file.constructor != LocalFile ||
@@ -5419,9 +5451,6 @@
 				}
 				
 				menu.addSeparator(parent);
-				// ======	NOLAI - {- Backend -} /Sprint 1/ Task 16	=====
-				this.addMenuItems(menu, ['saveToNextcloud', 'loadFromNextcloud'], parent);
-				// ====== end of changes by SE	======
 
 				if (!editorUi.isOffline())
 				{
@@ -5462,6 +5491,14 @@
 				this.addMenuItems(menu, ['-', 'close']);
 			}
 		})));
+
+		// ======	NOLAI - {- Frontend -} /Sprint 2/ Task 98 and Task 100	=====
+		this.put('Nextcloud', new Menu(mxUtils.bind(this, function(menu, parent)
+		{
+			this.addMenuItems(menu, ['saveToNextcloud', 'loadFromNextcloud'], parent);
+		})));
+		// ====== end of changes by SE	======
+
 		
 		//Replace the default font family menu
 		this.put('fontFamily', new Menu(mxUtils.bind(this, function(menu, parent)
