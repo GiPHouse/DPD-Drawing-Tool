@@ -43,10 +43,10 @@ async function loadApp(page) {
   await page.waitForSelector('#geInfo', { state: 'detached', timeout: 60_000 });
 }
 
-async function clickFileMenuAction(page, actionLabelRegex) {
+async function clickNextcloudMenuAction(page, actionLabelRegex) {
   const fileMenu = page
     .locator('a.geItem, button.geItem, .geMenubar a, .geMenubar button')
-    .filter({ hasText: /^file$/i })
+    .filter({ hasText: /^nextcloud$/i })
     .first();
 
   for (let attempt = 0; attempt < 4; attempt += 1) {
@@ -251,7 +251,7 @@ async function openSaveDialog(page) {
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
     await closeDialogs(page);
-    await clickFileMenuAction(page, /^saveToNextcloud$|save\s*to\s*nextcloud/i);
+    await clickNextcloudMenuAction(page, /^saveToNextcloud$|save\s*to\s*nextcloud/i);
 
     if (await waitVisible(title, 4_000)) {
       return;
@@ -270,7 +270,7 @@ async function openLoadDialog(page) {
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
     await closeDialogs(page);
-    await clickFileMenuAction(page, /^my\s*files$/i);
+    await clickNextcloudMenuAction(page, /^loadFromNextcloud$|load\s*from\s*nextcloud/i);
 
     if (await waitVisible(title, 4_000)) {
       return;
