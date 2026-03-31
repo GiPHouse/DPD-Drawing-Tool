@@ -247,7 +247,7 @@ async function assertFileAppearsInMyFiles(page, filename, maxAttempts = 12) {
  *       save button / menu item in the custom NOLAI toolbar.
  */
 async function openSaveDialog(page) {
-  const title = page.getByText('Save diagram to Nextcloud');
+  const title = page.getByText('Save to Nextcloud');
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
     await closeDialogs(page);
@@ -266,7 +266,7 @@ async function openSaveDialog(page) {
  * TODO: Update selector once issue #100 UI is merged.
  */
 async function openLoadDialog(page) {
-  const title = page.getByText('Load diagram from Nextcloud');
+  const title = page.getByText('Load from Nextcloud');
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
     await closeDialogs(page);
