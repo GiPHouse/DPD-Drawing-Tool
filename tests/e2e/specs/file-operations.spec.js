@@ -247,7 +247,7 @@ async function assertFileAppearsInMyFiles(page, filename, maxAttempts = 12) {
  *       save button / menu item in the custom NOLAI toolbar.
  */
 async function openSaveDialog(page) {
-  const title = page.getByText('Save to Nextcloud');
+  const title = page.getByText('Save diagram');
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
     await closeDialogs(page);
@@ -266,7 +266,7 @@ async function openSaveDialog(page) {
  * TODO: Update selector once issue #100 UI is merged.
  */
 async function openLoadDialog(page) {
-  const title = page.getByText('Load from Nextcloud');
+  const title = page.getByText('Fetch files');
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
     await closeDialogs(page);
@@ -287,7 +287,7 @@ test.describe('Save file to Nextcloud', () => {
     await loadApp(page);
     await openSaveDialog(page);
 
-    await expect(page.getByText('Save diagram to Nextcloud')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText('Save diagram')).toBeVisible({ timeout: 10_000 });
     await expect(page.locator('tr', { hasText: 'Filename:' }).locator('input')).toBeVisible();
   });
 
@@ -316,7 +316,7 @@ test.describe('Load file from Nextcloud', () => {
     await loadApp(page);
     await openLoadDialog(page);
 
-    await expect(page.getByText('Load diagram from Nextcloud')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText('Fetch files')).toBeVisible({ timeout: 10_000 });
     await expect(page.locator('tr', { hasText: 'Nextcloud Base URL:' }).locator('input')).toBeVisible();
   });
 
