@@ -5139,7 +5139,7 @@
 			
 			if (urlParams['noFileMenu'] != '1')
 			{
-				editorUi.menus.addMenuItems(menu, ['saveToNextcloud', 'loadFromNextcloud'], parent);
+				editorUi.menus.addMenuItems(menu, ['saveToNextcloud', 'My Files'], parent);
 			}
 	
 			if (Editor.currentTheme != 'simple' && Editor.currentTheme != 'min')
@@ -5288,7 +5288,7 @@
 					}
 					else
 					{
-						this.addMenuItems(menu, ['saveToNextcloud', 'loadFromNextcloud'], parent);
+						this.addMenuItems(menu, ['saveToNextcloud', 'My Files'], parent);
 						
 						if (urlParams['saveAndExit'] == '1')
 						{
@@ -5537,6 +5537,17 @@
 				if (!mxClient.IS_IOS || !navigator.standalone)
 				{
 					this.addMenuItems(menu, ['print'], parent);
+				}
+				
+				menu.addSeparator(parent);
+				this.addSubmenu('exportAs', menu, parent);
+
+				if (urlParams['noDevice'] != '1')
+				{
+					menu.addItem(mxResources.get('device') + '...', null, function()
+					{
+						editorUi.importLocalFile(true);
+					}, parent);
 				}
 
 				this.addMenuItems(menu, ['-', 'close']);
