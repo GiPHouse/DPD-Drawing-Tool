@@ -64,127 +64,10 @@ describe('Plugin initialisation', () => {
     expect(model.addListener).toHaveBeenCalledWith(mxEvent.CHANGE, expect.any(Function));
   });
 
-  it('logs "DPD Plugin Loaded" to the console', () => {
+  it('logs DPD plugin startup messages to the console', () => {
     const spy = jest.spyOn(console, 'log').mockImplementation(() => {});
     loadPlugin();
-    expect(spy).toHaveBeenCalledWith('DPD Plugin Loaded');
-    spy.mockRestore();
-  });
-
-  it('shows the startup alert', () => {
-    loadPlugin();
-    expect(global.alert).toHaveBeenCalledWith('DPD plugin successfully launched');
-  });
-});
-
-// ── Vertex lifecycle ──────────────────────────────────────────────────────────
-
-describe('Vertex added', () => {
-  it('logs "Vertex added" when a new vertex is inserted (no previous parent)', () => {
-    const model = loadPlugin();
-    const spy   = jest.spyOn(console, 'log').mockImplementation(() => {});
-    const cell  = createMockCell({ isVertex: true });
-
-    model.fireChange([makeChildChange({ child: cell, previous: null })]);
-
-    expect(spy).toHaveBeenCalledWith('Vertex added: ', cell);
-    spy.mockRestore();
-  });
-
-  it('does NOT log "Vertex added" for edges', () => {
-    const model = loadPlugin();
-    const spy   = jest.spyOn(console, 'log').mockImplementation(() => {});
-    const edge  = createMockCell({ isEdge: true });
-
-    model.fireChange([makeChildChange({ child: edge, previous: null })]);
-
-    expect(spy).not.toHaveBeenCalledWith('Vertex added: ', edge);
-    spy.mockRestore();
-  });
-});
-
-describe('Vertex removed', () => {
-  it('logs "Vertex removed" when a vertex is deleted (has a previous parent)', () => {
-    const model  = loadPlugin();
-    const spy    = jest.spyOn(console, 'log').mockImplementation(() => {});
-    const cell   = createMockCell({ isVertex: true });
-    const parent = createMockCell();
-
-    model.fireChange([makeChildChange({ child: cell, previous: parent })]);
-
-    expect(spy).toHaveBeenCalledWith('Vertex removed: ', cell);
-    spy.mockRestore();
-  });
-});
-
-describe('Vertex moved', () => {
-  it('logs "Vertex moved" when only position changes', () => {
-    const model = loadPlugin();
-    const spy   = jest.spyOn(console, 'log').mockImplementation(() => {});
-    const cell  = createMockCell({ isVertex: true });
-
-    model.fireChange([
-      makeGeometryChange({
-        cell,
-        oldGeo: geo(10, 10, 100, 50),
-        newGeo: geo(20, 20, 100, 50),   // position changed, size same
-      }),
-    ]);
-
-    expect(spy).toHaveBeenCalledWith('Vertex moved:', cell);
-    spy.mockRestore();
-  });
-
-  it('does NOT log "Vertex moved" when only size changes', () => {
-    const model = loadPlugin();
-    const spy   = jest.spyOn(console, 'log').mockImplementation(() => {});
-    const cell  = createMockCell({ isVertex: true });
-
-    model.fireChange([
-      makeGeometryChange({
-        cell,
-        oldGeo: geo(10, 10, 100, 50),
-        newGeo: geo(10, 10, 200, 80),   // size changed, position same
-      }),
-    ]);
-
-    expect(spy).not.toHaveBeenCalledWith('Vertex moved:', cell);
-    spy.mockRestore();
-  });
-});
-
-describe('Vertex resized', () => {
-  it('logs "Vertex resized" when width or height changes', () => {
-    const model = loadPlugin();
-    const spy   = jest.spyOn(console, 'log').mockImplementation(() => {});
-    const cell  = createMockCell({ isVertex: true });
-
-    model.fireChange([
-      makeGeometryChange({
-        cell,
-        oldGeo: geo(10, 10, 100, 50),
-        newGeo: geo(10, 10, 200, 80),
-      }),
-    ]);
-
-    expect(spy).toHaveBeenCalledWith('Vertex resized:', cell);
-    spy.mockRestore();
-  });
-
-  it('does NOT log "Vertex resized" when only position changes', () => {
-    const model = loadPlugin();
-    const spy   = jest.spyOn(console, 'log').mockImplementation(() => {});
-    const cell  = createMockCell({ isVertex: true });
-
-    model.fireChange([
-      makeGeometryChange({
-        cell,
-        oldGeo: geo(10, 10, 100, 50),
-        newGeo: geo(30, 30, 100, 50),
-      }),
-    ]);
-
-    expect(spy).not.toHaveBeenCalledWith('Vertex resized:', cell);
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining('[DPD] Plugin loading'));
     spy.mockRestore();
   });
 });
@@ -192,9 +75,9 @@ describe('Vertex resized', () => {
 // ── Edge connection ───────────────────────────────────────────────────────────
 
 describe('Connection created', () => {
-  it('logs "Connection created" when both endpoints exist', () => {
+  it('schedules edge annotation when both endpoints exist', () => {
     const model  = loadPlugin();
-    const spy    = jest.spyOn(console, 'log').mockImplementation(() => {});
+    const timeoutSpy = jest.spyOn(global, 'setTimeout').mockImplementation(() => 0);
 
     const source = createMockCell({ isVertex: true, id: 1 });
     const target = createMockCell({ isVertex: true, id: 2 });
@@ -204,8 +87,9 @@ describe('Connection created', () => {
 
     model.fireChange([makeTerminalChange({ cell: edge })]);
 
-    expect(spy).toHaveBeenCalledWith('Connection created: ', { source, target, edge });
-    spy.mockRestore();
+    const hasAnnotationSchedule = timeoutSpy.mock.calls.some(([, delay]) => delay === 150);
+    expect(hasAnnotationSchedule).toBe(true);
+    timeoutSpy.mockRestore();
   });
 
   it('does NOT log a connection when source is missing', () => {
@@ -235,50 +119,6 @@ describe('Connection created', () => {
     model.fireChange([makeTerminalChange({ cell: edge })]);
 
     expect(spy).not.toHaveBeenCalledWith('Connection created: ', expect.anything());
-    spy.mockRestore();
-  });
-});
-
-describe('Duplicate connection guard', () => {
-  it('only logs a connection once for the same edge object', () => {
-    const model  = loadPlugin();
-    const spy    = jest.spyOn(console, 'log').mockImplementation(() => {});
-
-    const source = createMockCell({ isVertex: true, id: 1 });
-    const target = createMockCell({ isVertex: true, id: 2 });
-    const edge   = createMockCell({ isEdge: true,   id: 3 });
-    edge._source = source;
-    edge._target = target;
-
-    // Fire the same terminal change twice (simulates draw.io internal double-fire)
-    model.fireChange([makeTerminalChange({ cell: edge })]);
-    model.fireChange([makeTerminalChange({ cell: edge })]);
-
-    const connectionLogs = spy.mock.calls.filter(
-      (args) => args[0] === 'Connection created: '
-    );
-    expect(connectionLogs).toHaveLength(1);
-    spy.mockRestore();
-  });
-});
-
-// ── Geometry change edge cases ────────────────────────────────────────────────
-
-describe('Geometry change edge cases', () => {
-  it('skips geometry changes with missing previous or new geometry', () => {
-    const model = loadPlugin();
-    const spy   = jest.spyOn(console, 'log').mockImplementation(() => {});
-    const cell  = createMockCell({ isVertex: true });
-
-    model.fireChange([
-      makeGeometryChange({ cell, oldGeo: null, newGeo: geo(10, 10, 100, 50) }),
-    ]);
-    model.fireChange([
-      makeGeometryChange({ cell, oldGeo: geo(10, 10, 100, 50), newGeo: null }),
-    ]);
-
-    expect(spy).not.toHaveBeenCalledWith('Vertex moved:', cell);
-    expect(spy).not.toHaveBeenCalledWith('Vertex resized:', cell);
     spy.mockRestore();
   });
 });

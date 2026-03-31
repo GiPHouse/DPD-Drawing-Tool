@@ -3,5 +3,7 @@ caddy-root.crt
 /nextcloud_data/
 /nextcloud_db/
 /caddy_data/
+/coverage/
+/tests/unit/node_modules/
 Caddyfile
 docker-compose.yml
