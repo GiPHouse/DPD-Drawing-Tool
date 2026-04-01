@@ -288,7 +288,7 @@ test.describe('Save file to Nextcloud', () => {
     await openSaveDialog(page);
 
     await expect(page.getByText('Save diagram')).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator('tr', { hasText: 'Filename:' }).locator('input')).toBeVisible();
+    await expect(page.locator('div', { hasText: 'Filename:' }).locator('input')).toBeVisible();
   });
 
   test('diagram can be saved with a filename and appears in Nextcloud', async ({ page }) => {
@@ -317,7 +317,7 @@ test.describe('Load file from Nextcloud', () => {
     await openLoadDialog(page);
 
     await expect(page.getByText('Fetch files')).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator('tr', { hasText: 'Nextcloud Base URL:' }).locator('input')).toBeVisible();
+    await expect(page.locator('div', { hasText: 'Server URL:' }).locator('input')).toBeVisible();
   });
 
   test('a previously saved file appears in the load dialog', async ({ page }) => {
