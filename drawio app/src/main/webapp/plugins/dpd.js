@@ -503,25 +503,27 @@ Draw.loadPlugin(function (ui) {
   const loggedAddedVertices = new WeakSet();
   const loggedMovedVertices = new WeakSet();
 
-  graph.addListener(mxEvent.CELLS_ADDED, function (sender, evt) {
-    const cells = evt.getProperty('cells') || [];
-    cells.forEach(cell => {
-      if (cell && model.isVertex(cell) && !loggedAddedVertices.has(cell)) {
-        loggedAddedVertices.add(cell);
-        console.log('Vertex added:', cell.id || '(no id)');
-      }
+  if (typeof graph.addListener === 'function') {
+    graph.addListener(mxEvent.CELLS_ADDED, function (sender, evt) {
+      const cells = evt.getProperty('cells') || [];
+      cells.forEach(cell => {
+        if (cell && model.isVertex(cell) && !loggedAddedVertices.has(cell)) {
+          loggedAddedVertices.add(cell);
+          console.log('Vertex added:', cell.id || '(no id)');
+        }
+      });
     });
-  });
 
-  graph.addListener(mxEvent.CELLS_MOVED, function (sender, evt) {
-    const cells = evt.getProperty('cells') || [];
-    cells.forEach(cell => {
-      if (cell && model.isVertex(cell) && !loggedMovedVertices.has(cell)) {
-        loggedMovedVertices.add(cell);
-        console.log('Vertex moved:', cell.id || '(no id)');
-      }
+    graph.addListener(mxEvent.CELLS_MOVED, function (sender, evt) {
+      const cells = evt.getProperty('cells') || [];
+      cells.forEach(cell => {
+        if (cell && model.isVertex(cell) && !loggedMovedVertices.has(cell)) {
+          loggedMovedVertices.add(cell);
+          console.log('Vertex moved:', cell.id || '(no id)');
+        }
+      });
     });
-  });
+  }
 
   model.addListener(mxEvent.CHANGE, function (sender, evt) {
     const edit = evt.getProperty('edit');
