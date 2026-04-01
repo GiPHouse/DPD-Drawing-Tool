@@ -500,12 +500,50 @@ Draw.loadPlugin(function (ui) {
   // Auto-show annotation dialog on new connections 
 
   const annotatedEdges = new WeakSet();
+  const loggedAddedVertices = new WeakSet();
+  const loggedMovedVertices = new WeakSet();
+
+  graph.addListener(mxEvent.CELLS_ADDED, function (sender, evt) {
+    const cells = evt.getProperty('cells') || [];
+    cells.forEach(cell => {
+      if (cell && model.isVertex(cell) && !loggedAddedVertices.has(cell)) {
+        loggedAddedVertices.add(cell);
+        console.log('Vertex added:', cell.id || '(no id)');
+      }
+    });
+  });
+
+  graph.addListener(mxEvent.CELLS_MOVED, function (sender, evt) {
+    const cells = evt.getProperty('cells') || [];
+    cells.forEach(cell => {
+      if (cell && model.isVertex(cell) && !loggedMovedVertices.has(cell)) {
+        loggedMovedVertices.add(cell);
+        console.log('Vertex moved:', cell.id || '(no id)');
+      }
+    });
+  });
 
   model.addListener(mxEvent.CHANGE, function (sender, evt) {
     const edit = evt.getProperty('edit');
     if (!edit || !edit.changes) return;
 
     edit.changes.forEach(change => {
+      if (change.constructor.name === 'mxChildChange') {
+        const vertex = change.child;
+        if (vertex && model.isVertex(vertex) && change.parent && !loggedAddedVertices.has(vertex)) {
+          loggedAddedVertices.add(vertex);
+          console.log('Vertex added:', vertex.id || '(no id)');
+        }
+      }
+
+      if (change.constructor.name === 'mxGeometryChange') {
+        const vertex = change.cell;
+        if (vertex && model.isVertex(vertex) && !loggedMovedVertices.has(vertex)) {
+          loggedMovedVertices.add(vertex);
+          console.log('Vertex moved:', vertex.id || '(no id)');
+        }
+      }
+
       if (change.constructor.name === 'mxTerminalChange') {
         const edge = change.cell;
         if (!model.isEdge(edge)) return;
@@ -571,5 +609,6 @@ Draw.loadPlugin(function (ui) {
   // Fallback: also try after a short delay in case the app shell renders late
   setTimeout(injectValidateButton, 1500);
 
+  console.log('DPD Plugin Loaded');
   console.log('[DPD] Plugin loaded — 15 rules active (R-S1–4, R-I1–5, R-L1–2, R-P1–4)');
 });
