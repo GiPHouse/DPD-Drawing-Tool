@@ -989,7 +989,7 @@
 	
 		// ======	NOLAI - {- Backend -} /Sprint 1/ Task 92	=====
 		// ======   NOLAI - {- Frontend -} /Sprint 2/ Task 100  =====
-		editorUi.actions.addAction('loadFromNextcloud', function()
+		editorUi.actions.addAction('My Files', function()
 		{
 			var nolaiColor = '#008f89';
 
@@ -1052,7 +1052,7 @@
 				var path = pathInput.value;
 
 				// Check if Nextcloud helper functions are loaded.
-				if (typeof listDrawIOFilesInNextcloud !== 'function' || typeof getDrawIOFromNextcloudXML !== 'function')
+				if (typeof listDrawIOFilesInNextcloud !== 'function' || typeof getDrawIOFromNextcloudXML !== 'function' || typeof deleteFileInNextcloud !== 'function')
 				{
 					editorUi.handleError({message: 'NextcloudFile.js is not loaded'});
 					return;
@@ -1151,8 +1151,7 @@
 								try
 								{
 									// Load XML as a fresh document and clear modified flag.
-									editorUi.setCurrentFile(null);
-									editorUi.setFileData(xml);
+									editorUi.fileLoaded(new LocalFile(editorUi, xml, selected.name, true), true);
 									editorUi.editor.modified = false;
 									editorUi.editor.setStatus('Loaded from Nextcloud successfully');
 								}
@@ -1178,6 +1177,69 @@
 							performLoad();
 						}
 					};
+
+					// ======	NOLAI - {- Backend -} /Sprint 2/ Task 117	=====
+					// ======	NOLAI - {- Frontend -} /Sprint 2/ Task 108	=====
+					var deleteSelected = function()
+					{
+						if (select.selectedIndex < 0)
+						{
+							editorUi.handleError({message: 'Please select a file to delete.'});
+							return;
+						}
+
+						var selected = files[parseInt(select.value, 10)];
+
+						editorUi.confirm('Are you sure you want to delete "' + selected.displayPath + '"?', null, function()
+						{
+							editorUi.spinner.spin(document.body, 'Deleting file from Nextcloud...');
+
+							deleteFileInNextcloud(url, user, pass, selected.remotePath, selected.name).then(function(success)
+							{
+								editorUi.spinner.stop();
+
+								if (!success)
+								{
+									editorUi.handleError({message: 'Failed to delete selected file from Nextcloud.'});
+									return;
+								}
+
+								files.splice(select.selectedIndex, 1);
+								select.remove(select.selectedIndex);
+
+								if (files.length == 0)
+								{
+									editorUi.hideDialog();
+									editorUi.editor.setStatus('Deleted from Nextcloud successfully');
+									return;
+								}
+
+								if (select.selectedIndex < 0)
+								{
+									select.selectedIndex = 0;
+								}
+
+								editorUi.editor.setStatus('Deleted from Nextcloud successfully');
+							}).catch(function(error)
+							{
+								editorUi.spinner.stop();
+								editorUi.handleError({message: 'Error deleting file: ' + error.message});
+							});
+						}, mxResources.get('cancel'), 'Delete');
+					};
+
+					var buttonRow = document.createElement('div');
+					buttonRow.style.cssText = 'display: flex; justify-content: space-between; margin-top: 15px;';
+
+					var deleteBtn = document.createElement('button');
+					deleteBtn.innerHTML = 'Delete';
+					deleteBtn.style.cssText = 'padding: 8px 12px; border: none; border-radius: 4px; background-color: #e74c3c; color: white; cursor: pointer;';
+					deleteBtn.onclick = deleteSelected;
+					deleteBtn.onmouseover = function() { this.style.opacity = '0.85';};
+					deleteBtn.onmouseout = function() { this.style.opacity = '1';};
+
+					buttonRow.appendChild(deleteBtn);
+					listDiv.appendChild(buttonRow);
 
 					var listDlg = new CustomDialog(editorUi, listDiv, loadSelected);
 
@@ -5557,7 +5619,7 @@
 		// ======	NOLAI - {- Frontend -} /Sprint 2/ Task 98 and Task 100	=====
 		this.put('Nextcloud', new Menu(mxUtils.bind(this, function(menu, parent)
 		{
-			this.addMenuItems(menu, ['saveToNextcloud', 'loadFromNextcloud'], parent);
+			this.addMenuItems(menu, ['saveToNextcloud', 'My Files'], parent);
 		})));
 		// ====== end of changes by SE	======
 
