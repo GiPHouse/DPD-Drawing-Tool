@@ -19,6 +19,27 @@ Draw.loadPlugin(function (ui) {
     return;
   }
 
+  function pushConsoleViolation(rule, msg, severity, details) {
+    if (ui != null && ui.dpdConsole != null && typeof ui.dpdConsole.addViolation === 'function') {
+      ui.dpdConsole.addViolation(rule, msg, severity || 'error', details || {});
+    }
+  }
+
+  function syncConsoleViolations(violations) {
+    if (ui == null || ui.dpdConsole == null ||
+      typeof ui.dpdConsole.clear !== 'function' ||
+      typeof ui.dpdConsole.addViolation !== 'function') {
+      return;
+    }
+
+    ui.dpdConsole.clear();
+
+    for (let i = 0; i < violations.length; i++) {
+      const v = violations[i];
+      ui.dpdConsole.addViolation(v.rule, v.msg, v.severity, {});
+    }
+  }
+
   // Ordered lattices
 
   const IDENT_ORDER = [
@@ -138,6 +159,10 @@ Draw.loadPlugin(function (ui) {
       const tt = getComponentType(target);
 
       if (st === 'data_store' && tt === 'data_store') {
+        pushConsoleViolation('R-S1', 'Data stores cannot connect directly to each other. A process must mediate the flow.', 'error', {
+          sourceType: st,
+          targetType: tt,
+        });
         alert(
           'R-S1 Error: Data stores cannot connect directly to each other.\n' +
           'A process must mediate any flow between two stores.'
@@ -146,6 +171,10 @@ Draw.loadPlugin(function (ui) {
       }
 
       if (st === 'external_entity' && tt === 'external_entity') {
+        pushConsoleViolation('R-S2', 'External entities cannot connect directly to each other.', 'error', {
+          sourceType: st,
+          targetType: tt,
+        });
         alert('R-S2 Error: External entities cannot connect directly to each other.');
         return false;
       }
@@ -154,6 +183,10 @@ Draw.loadPlugin(function (ui) {
         (st === 'data_store' && tt === 'external_entity') ||
         (st === 'external_entity' && tt === 'data_store')
       ) {
+        pushConsoleViolation('R-S3', 'Data stores cannot connect directly to external entities. At least one end must be a process.', 'error', {
+          sourceType: st,
+          targetType: tt,
+        });
         alert(
           'R-S3 Error: Data stores cannot connect directly to external entities.\n' +
           'At least one end of every flow must be a process.'
@@ -442,6 +475,7 @@ Draw.loadPlugin(function (ui) {
     });
 
     showValidationResults(violations);
+    syncConsoleViolations(violations);
   }
 
   // Validation results dialog

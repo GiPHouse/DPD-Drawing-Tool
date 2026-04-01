@@ -11270,6 +11270,30 @@
 		
 		editorUiCreateUi.apply(this, arguments);
 
+			if (this.format != null && this.formatContainer != null &&
+				typeof DPDConsole !== 'undefined' && this.dpdConsole == null)
+			{
+				var formatTop = document.createElement('div');
+				formatTop.style.cssText = 'position: relative; flex: 1 1 50%; min-height: 0; overflow: auto;';
+
+				var consoleBottom = document.createElement('div');
+				consoleBottom.style.cssText = 'position: relative; flex: 1 1 50%; min-height: 120px;';
+
+				this.formatContainer.innerHTML = '';
+				this.formatContainer.style.display = 'flex';
+				this.formatContainer.style.flexDirection = 'column';
+				this.formatContainer.style.minHeight = '0';
+
+				this.formatContainer.appendChild(formatTop);
+				this.formatContainer.appendChild(consoleBottom);
+
+				// Rebind format to the top half so its refresh lifecycle doesn't wipe the console.
+				this.format.container = formatTop;
+				this.format.refresh();
+
+				this.dpdConsole = new DPDConsole(this, consoleBottom);
+			}
+
 		if (Editor.isSettingsEnabled())
 		{
 			this.doSetSketchMode((mxSettings.settings.sketchMode != null && urlParams['rough'] == null &&
