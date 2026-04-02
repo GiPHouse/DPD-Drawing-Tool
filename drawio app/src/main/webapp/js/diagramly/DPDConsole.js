@@ -34,13 +34,14 @@ var DPDConsole = function(editorUi, container)
  */
 DPDConsole.prototype.init = function()
 {
-	this.container.style.cssText = `
-		display: flex;
-		flex-direction: column;
-		height: 100%;
-		border-top: 1px solid var(--border-color);
-		background-color: var(--ge-panel-color);
-	`;
+	// Keep layout properties (flex basis/size) from parent and only set console-specific styles.
+	this.container.style.display = 'flex';
+	this.container.style.flexDirection = 'column';
+	this.container.style.minHeight = '0';
+	this.container.style.height = '100%';
+	this.container.style.overflow = 'hidden';
+	this.container.style.borderTop = '1px solid light-dark(var(--border-color), var(--dark-border-color))';
+	this.container.style.backgroundColor = 'light-dark(var(--ge-panel-color), var(--ge-dark-panel-color))';
 
 	// Header with title and clear button
 	this.createHeader();
@@ -60,8 +61,8 @@ DPDConsole.prototype.createHeader = function()
 	var header = document.createElement('div');
 	header.style.cssText = `
 		padding: 8px 12px;
-		background-color: light-dark(#f5f5f5, #2a2a2a);
-		border-bottom: 1px solid var(--border-color);
+		background-color: light-dark(var(--ge-panel-color), var(--ge-dark-panel-color));
+		border-bottom: 1px solid light-dark(var(--border-color), var(--dark-border-color));
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
@@ -73,7 +74,7 @@ DPDConsole.prototype.createHeader = function()
 	title.style.cssText = `
 		font-weight: 600;
 		font-size: 12px;
-		color: var(--text-color);
+		color: light-dark(var(--text-color), var(--dark-text-color));
 		text-transform: uppercase;
 		letter-spacing: 0.5px;
 	`;
@@ -94,7 +95,7 @@ DPDConsole.prototype.createHeader = function()
 	clearBtn.style.cssText = `
 		background: none;
 		border: none;
-		color: var(--text-color);
+		color: light-dark(var(--text-color), var(--dark-text-color));
 		cursor: pointer;
 		font-size: 14px;
 		padding: 2px 4px;
@@ -128,18 +129,18 @@ DPDConsole.prototype.createConsoleArea = function()
 		overflow-y: auto;
 		overflow-x: hidden;
 		padding: 8px;
-		background-color: var(--ge-panel-color);
+		background-color: light-dark(var(--ge-panel-color), var(--ge-dark-panel-color));
 		font-family: 'Courier New', monospace;
 		font-size: 11px;
 		line-height: 1.4;
-		color: var(--text-color);
+		color: light-dark(var(--text-color), var(--dark-text-color));
 	`;
 	
 	// Empty state message
 	var emptyMsg = document.createElement('div');
 	emptyMsg.id = 'dpdEmptyMessage';
 	emptyMsg.style.cssText = `
-		color: var(--text-color);
+		color: light-dark(var(--text-color), var(--dark-text-color));
 		opacity: 0.5;
 		text-align: center;
 		padding: 20px 10px;
@@ -160,10 +161,10 @@ DPDConsole.prototype.createFooter = function()
 	this.footer = document.createElement('div');
 	this.footer.style.cssText = `
 		padding: 6px 12px;
-		background-color: light-dark(#fafafa, #252525);
-		border-top: 1px solid var(--border-color);
+		background-color: light-dark(var(--ge-panel-color), var(--ge-dark-panel-color));
+		border-top: 1px solid light-dark(var(--border-color), var(--dark-border-color));
 		font-size: 11px;
-		color: var(--text-color);
+		color: light-dark(var(--text-color), var(--dark-text-color));
 		opacity: 0.7;
 		display: flex;
 		justify-content: space-between;
@@ -233,8 +234,8 @@ DPDConsole.prototype.createViolationEntry = function(violation)
 	entry.style.cssText = `
 		margin-bottom: 8px;
 		padding: 6px 8px;
-		border-left: 3px solid ${violation.severity === 'error' ? '#ff4444' : '#ffaa00'};
-		background-color: light-dark(#f9f9f9, #1f1f1f);
+		border-left: 3px solid ${violation.severity === 'error' ? 'light-dark(#d93025, #ff8a80)' : 'light-dark(#e37400, #ffb74d)'};
+		background-color: ${violation.severity === 'error' ? 'light-dark(#fff5f5, #2b1f1f)' : 'light-dark(#fff8e6, #2f2a1e)'};
 		border-radius: 2px;
 		word-wrap: break-word;
 		transition: background-color 0.2s;
@@ -244,23 +245,25 @@ DPDConsole.prototype.createViolationEntry = function(violation)
 	entry.onmouseover = function()
 	{
 		entry.style.backgroundColor = violation.severity === 'error' ? 
-			'light-dark(#ffe6e6, #3a1f1f)' : 'light-dark(#fff5e6, #3a2f1f)';
+			'light-dark(#ffeaea, #332525)' : 'light-dark(#fff2db, #353022)';
 	};
 	entry.onmouseout = function()
 	{
-		entry.style.backgroundColor = 'light-dark(#f9f9f9, #1f1f1f)';
+		entry.style.backgroundColor = violation.severity === 'error' ?
+			'light-dark(#fff5f5, #2b1f1f)' : 'light-dark(#fff8e6, #2f2a1e)';
 	};
 	
 	// Rule name (bold)
 	var ruleName = document.createElement('strong');
-	ruleName.style.color = violation.severity === 'error' ? '#ff4444' : '#ffaa00';
+	ruleName.style.color = violation.severity === 'error' ?
+		'light-dark(#b3261e, #ff8a80)' : 'light-dark(#b06000, #ffcc80)';
 	ruleName.textContent = violation.ruleName;
 	entry.appendChild(ruleName);
 	
 	// Message
 	var msgSpan = document.createElement('span');
 	msgSpan.textContent = ': ' + violation.message;
-	msgSpan.style.color = 'var(--text-color)';
+	msgSpan.style.color = 'light-dark(var(--text-color), var(--dark-text-color))';
 	entry.appendChild(msgSpan);
 	
 	// Timestamp
@@ -282,7 +285,7 @@ DPDConsole.prototype.createViolationEntry = function(violation)
 		var detailsBtn = document.createElement('div');
 		detailsBtn.style.cssText = `
 			font-size: 9px;
-			color: #0066cc;
+			color: light-dark(var(--accent-text-color), var(--dark-accent-text-color));
 			cursor: pointer;
 			margin-top: 4px;
 			user-select: none;
@@ -294,8 +297,9 @@ DPDConsole.prototype.createViolationEntry = function(violation)
 			display: none;
 			margin-top: 4px;
 			padding: 4px;
-			background-color: var(--ge-panel-color);
-			border: 1px solid var(--border-color);
+			background-color: light-dark(var(--ge-panel-color), var(--ge-dark-panel-color));
+			border: 1px solid light-dark(var(--border-color), var(--dark-border-color));
+			color: light-dark(var(--text-color), var(--dark-text-color));
 			border-radius: 2px;
 			font-size: 10px;
 		`;
@@ -354,7 +358,7 @@ DPDConsole.prototype.clear = function()
 	var emptyMsg = document.createElement('div');
 	emptyMsg.id = 'dpdEmptyMessage';
 	emptyMsg.style.cssText = `
-		color: var(--text-color);
+		color: light-dark(var(--text-color), var(--dark-text-color));
 		opacity: 0.5;
 		text-align: center;
 		padding: 20px 10px;

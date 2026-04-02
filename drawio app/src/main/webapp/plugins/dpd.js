@@ -292,8 +292,8 @@ Draw.loadPlugin(function (ui) {
       setEdgeProps(edge, { identifiability: ident, linkability: link, pseudonymity: pseudo, data_labels: labels });
       ui.hideDialog();
 
-      // Run validation immediately so the user sees any rule issues
-      setTimeout(validateGraph, 50);
+      // Auto-validate silently after annotation save: update console without opening modal.
+      setTimeout(function() { validateGraph(false); }, 50);
     };
 
     btnRow.appendChild(cancelBtn);
@@ -318,7 +318,11 @@ Draw.loadPlugin(function (ui) {
     return { edges, vertices };
   }
 
-  function validateGraph() {
+  function validateGraph(showDialog) {
+    if (showDialog == null) {
+      showDialog = true;
+    }
+
     const violations = [];
     const { edges } = collectAllCells();
 
@@ -477,7 +481,9 @@ Draw.loadPlugin(function (ui) {
       }
     });
 
-    showValidationResults(violations);
+    if (showDialog) {
+      showValidationResults(violations);
+    }
     syncConsoleViolations(violations);
   }
 
