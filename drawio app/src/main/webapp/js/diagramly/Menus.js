@@ -487,17 +487,17 @@
 			{
 				var cell = graph.getSelectionCell();
 				var state = graph.view.getState(cell);
-				
+
 				if (state != null && state.shape != null && state.shape.stencil != null)
 				{
-			    	var dlg = new EditShapeDialog(editorUi, cell, mxResources.get('editShape'));
+					var dlg = new EditShapeDialog(editorUi, cell, mxResources.get('editShape'));
 					editorUi.showDialog(dlg.container, 640, 480, true, false,
 						null, null, null, new mxRectangle(0, 0, 300, 200));
 					dlg.init();
 				}
 			}
 		}));
-		
+
 		editorUi.actions.addAction('revisionHistory...', function()
 		{
 			if (!editorUi.isRevisionHistorySupported())
@@ -3715,7 +3715,306 @@
 				
 				if (file != null)
 				{
-					file.share();
+					var allPeople = [];
+					var selectedPeople = {};
+
+					var div = document.createElement('div');
+					div.style.padding = '10px';
+
+					var title = document.createElement('p');
+					title.style.margin = '0 0 6px 0';
+					title.style.fontWeight = 'bold';
+					title.innerHTML = 'Share with colleagues';
+					div.appendChild(title);
+
+					var subtitle = document.createElement('div');
+					subtitle.style.marginBottom = '10px';
+					subtitle.style.color = '#666';
+					subtitle.innerHTML = 'Select one or more people from the Nextcloud company list.';
+					div.appendChild(subtitle);
+
+					var controls = document.createElement('div');
+					controls.style.display = 'flex';
+					controls.style.gap = '8px';
+					controls.style.marginBottom = '10px';
+
+					var searchInput = document.createElement('input');
+					searchInput.type = 'text';
+					searchInput.placeholder = 'Search colleague by name or email';
+					searchInput.style.flex = '1';
+					controls.appendChild(searchInput);
+
+					var refreshBtn = document.createElement('button');
+					refreshBtn.className = 'geBtn';
+					refreshBtn.innerHTML = 'Reload';
+					controls.appendChild(refreshBtn);
+
+					div.appendChild(controls);
+
+					var listContainer = document.createElement('div');
+					listContainer.style.border = '1px solid #d3d3d3';
+					listContainer.style.borderRadius = '4px';
+					listContainer.style.height = '230px';
+					listContainer.style.overflow = 'auto';
+					listContainer.style.padding = '6px';
+					div.appendChild(listContainer);
+
+					var summary = document.createElement('div');
+					summary.style.marginTop = '8px';
+					summary.style.fontSize = '12px';
+					div.appendChild(summary);
+
+					var status = document.createElement('div');
+					status.style.marginTop = '6px';
+					status.style.fontSize = '12px';
+					status.style.color = '#666';
+					div.appendChild(status);
+
+					var hint = document.createElement('div');
+					hint.style.marginTop = '10px';
+					hint.style.fontSize = '11px';
+					hint.style.color = '#888';
+					hint.innerHTML = 'This is UI-only. Selected recipients are prepared for backend integration.';
+					div.appendChild(hint);
+
+					function normalizePeople(raw)
+					{
+						var result = [];
+						var seen = {};
+
+						if (raw == null)
+						{
+							return result;
+						}
+
+						for (var i = 0; i < raw.length; i++)
+						{
+							var item = raw[i];
+							var email = null;
+							var name = null;
+
+							if (typeof item === 'string')
+							{
+								email = item;
+								name = item;
+							}
+							else if (item != null)
+							{
+								email = item.email || item.mail || item.userId || item.id || '';
+								name = item.displayName || item.name || item.label || email;
+							}
+
+							email = mxUtils.trim(String(email || ''));
+							name = mxUtils.trim(String(name || email));
+
+							if (email.length == 0)
+							{
+								continue;
+							}
+
+							var key = email.toLowerCase();
+
+							if (!seen[key])
+							{
+								seen[key] = true;
+								result.push({name: name, email: email});
+							}
+						}
+
+						result.sort(function(a, b)
+						{
+							return a.name.localeCompare(b.name);
+						});
+
+						return result;
+					}
+
+					function getSelectedRecipients()
+					{
+						var recipients = [];
+
+						for (var email in selectedPeople)
+						{
+							if (selectedPeople[email])
+							{
+								recipients.push(email);
+							}
+						}
+
+						recipients.sort();
+						return recipients;
+					}
+
+					function updateSummary()
+					{
+						var selected = getSelectedRecipients();
+						summary.innerHTML = selected.length + ' colleague(s) selected';
+					}
+
+					function renderList(filterText)
+					{
+						while (listContainer.firstChild != null)
+						{
+							listContainer.removeChild(listContainer.firstChild);
+						}
+
+						var filter = mxUtils.trim(String(filterText || '')).toLowerCase();
+						var shown = 0;
+
+						for (var i = 0; i < allPeople.length; i++)
+						{
+							var person = allPeople[i];
+							var haystack = (person.name + ' ' + person.email).toLowerCase();
+
+							if (filter.length > 0 && haystack.indexOf(filter) < 0)
+							{
+								continue;
+							}
+
+							shown++;
+
+							var row = document.createElement('label');
+							row.style.display = 'flex';
+							row.style.alignItems = 'flex-start';
+							row.style.gap = '8px';
+							row.style.padding = '6px';
+							row.style.borderRadius = '3px';
+
+							var checkbox = document.createElement('input');
+							checkbox.type = 'checkbox';
+							checkbox.checked = !!selectedPeople[person.email];
+							checkbox.style.marginTop = '3px';
+							row.appendChild(checkbox);
+
+							var textWrap = document.createElement('div');
+							textWrap.style.display = 'flex';
+							textWrap.style.flexDirection = 'column';
+
+							var nameEl = document.createElement('span');
+							mxUtils.write(nameEl, person.name);
+							textWrap.appendChild(nameEl);
+
+							var emailEl = document.createElement('span');
+							emailEl.style.color = '#666';
+							emailEl.style.fontSize = '12px';
+							mxUtils.write(emailEl, person.email);
+							textWrap.appendChild(emailEl);
+
+							row.appendChild(textWrap);
+							listContainer.appendChild(row);
+
+							(function(email, cb)
+							{
+								mxEvent.addListener(cb, 'change', function()
+								{
+									selectedPeople[email] = cb.checked;
+									updateSummary();
+								});
+							})(person.email, checkbox);
+						}
+
+						if (shown == 0)
+						{
+							var empty = document.createElement('div');
+							empty.style.padding = '6px';
+							empty.style.color = '#666';
+							empty.innerHTML = 'No colleagues found for this search.';
+							listContainer.appendChild(empty);
+						}
+
+						updateSummary();
+					}
+
+					function setPeople(raw)
+					{
+						allPeople = normalizePeople(raw || []);
+						renderList(searchInput.value);
+
+						if (allPeople.length > 0)
+						{
+							status.innerHTML = 'Loaded ' + allPeople.length + ' colleague(s) from company list.';
+						}
+						else
+						{
+							status.innerHTML = 'No company users available. Connect backend provider to load users.';
+						}
+					}
+
+					function loadCompanyPeople()
+					{
+						status.innerHTML = 'Loading company colleagues...';
+
+						var source = null;
+
+						if (typeof window.getNextcloudCompanyUsers === 'function')
+						{
+							try
+							{
+								source = window.getNextcloudCompanyUsers();
+							}
+							catch (e)
+							{
+								source = [];
+							}
+						}
+						else if (window.NEXTCLOUD_COMPANY_USERS != null)
+						{
+							source = window.NEXTCLOUD_COMPANY_USERS;
+						}
+						else
+						{
+							source = [];
+						}
+
+						if (source != null && typeof source.then === 'function')
+						{
+							source.then(function(users)
+							{
+								setPeople(users);
+							}).catch(function()
+							{
+								setPeople([]);
+							});
+						}
+						else
+						{
+							setPeople(source);
+						}
+					}
+
+					mxEvent.addListener(searchInput, 'input', function()
+					{
+						renderList(searchInput.value);
+					});
+
+					mxEvent.addListener(refreshBtn, 'click', function(evt)
+					{
+						mxEvent.consume(evt);
+						loadCompanyPeople();
+					});
+
+					var shareDlg = new CustomDialog(editorUi, div, function()
+					{
+						var recipients = getSelectedRecipients();
+
+						if (recipients.length == 0)
+						{
+							editorUi.handleError({message: 'Please select at least one colleague.'});
+							return;
+						}
+
+						window.pendingNextcloudShareRequest = {
+							fileName: (file.getTitle != null) ? file.getTitle() : editorUi.defaultFilename,
+							recipients: recipients,
+							timestamp: new Date().toISOString()
+						};
+
+						editorUi.editor.setStatus('Share request prepared for ' + recipients.length + ' colleague(s).');
+					}, null, mxResources.get('share'));
+
+					editorUi.showDialog(shareDlg.container, 540, 460, true, false);
+					searchInput.focus();
+					loadCompanyPeople();
 				}
 			}
 			catch (e)

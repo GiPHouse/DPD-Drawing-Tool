@@ -13,6 +13,8 @@ global.createMockCell = ({ isVertex = false, isEdge = false, id = 1 } = {}) => (
   id,
   _isVertex: isVertex,
   _isEdge: isEdge,
+  parent: null,
+  _children: [],
   value: null,
   style: '',
   getAttribute: jest.fn((key) => null),
@@ -22,14 +24,31 @@ global.createMockCell = ({ isVertex = false, isEdge = false, id = 1 } = {}) => (
 // ── Minimal mxGraph model factory ────────────────────────────────────────────
 global.createMockModel = () => {
   const listeners = {};
+  const root = {
+    id: '0',
+    _children: [],
+    parent: null,
+  };
+
   return {
     _listeners: listeners,
+    _root: root,
     addListener: jest.fn((event, callback) => {
       listeners[event] = callback;
     }),
     isVertex: jest.fn((cell) => cell && cell._isVertex === true),
     isEdge: jest.fn((cell) => cell && cell._isEdge === true),
     getTerminal: jest.fn((edge, isSource) => isSource ? edge._source : edge._target),
+    getValue: jest.fn((cell) => (cell ? cell.value : null)),
+    setValue: jest.fn((cell, value) => {
+      if (cell) cell.value = value;
+    }),
+    getParent: jest.fn((cell) => (cell ? cell.parent : null)),
+    getRoot: jest.fn(() => root),
+    getChildCount: jest.fn((cell) => ((cell && cell._children) ? cell._children.length : 0)),
+    getChildAt: jest.fn((cell, index) => ((cell && cell._children) ? cell._children[index] : null)),
+    beginUpdate: jest.fn(),
+    endUpdate: jest.fn(),
 
     // Helper used in tests to fire a synthetic CHANGE event
     fireChange: function (changes) {
@@ -47,6 +66,10 @@ global.createMockModel = () => {
 // ── Minimal graph factory ─────────────────────────────────────────────────────
 global.createMockGraph = (model) => ({
   getModel: jest.fn(() => model),
+  isValidConnection: jest.fn(() => true),
+  popupMenuHandler: {
+    factoryMethod: jest.fn(() => null),
+  },
 });
 
 // ── Draw.loadPlugin shim ──────────────────────────────────────────────────────
