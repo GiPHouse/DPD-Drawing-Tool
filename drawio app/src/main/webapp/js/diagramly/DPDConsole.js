@@ -1,9 +1,15 @@
+/* 
+
++--------------------------------------------------------+
+| This file contains modified code by SE team,           |
+| refer to keywords: 'NOLAI'                             |
+| Task 112, Sprint 2                                     |
++--------------------------------------------------------+
+
+ */
 /**
- * Copyright (c) 2006-2026, JGraph Holdings Ltd
- * DPD Rule Violation Console
- * 
- * Provides a persistent console in the right sidebar for displaying DPD rule violations.
- * Integrates with draw.io's format panel system for seamless UI integration.
+ * Creates a console in the right sidebar for displaying DPD rule violations.
+ * Integrates with draw.io's existing sidebar panels
  */
 
 /**
@@ -359,28 +365,4 @@ DPDConsole.prototype.clear = function()
 	this.logArea.appendChild(emptyMsg);
 	
 	this.updateStats();
-};
-
-/**
- * Get all violations (useful for filtering/exporting)
- */
-DPDConsole.prototype.getViolations = function()
-{
-	return this.violations.slice(); // Return copy
-};
-
-/**
- * Get violations filtered by severity
- */
-DPDConsole.prototype.getViolationsBySeverity = function(severity)
-{
-	return this.violations.filter(function(v) { return v.severity === severity; });
-};
-
-/**
- * Get violations filtered by rule name
- */
-DPDConsole.prototype.getViolationsByRule = function(ruleName)
-{
-	return this.violations.filter(function(v) { return v.ruleName === ruleName; });
 };

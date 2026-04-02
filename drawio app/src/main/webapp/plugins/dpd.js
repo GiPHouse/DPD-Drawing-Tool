@@ -18,6 +18,7 @@ Draw.loadPlugin(function (ui) {
     console.error('[DPD] Graph not available');
     return;
   }
+ // DPD Console implementation, task 112, sprint 2
 
   function pushConsoleViolation(rule, msg, severity, details) {
     if (ui != null && ui.dpdConsole != null && typeof ui.dpdConsole.addViolation === 'function') {
@@ -40,6 +41,8 @@ Draw.loadPlugin(function (ui) {
     }
   }
 
+  // end DPD Console implementation, task 112, sprint 2
+  
   // Ordered lattices
 
   const IDENT_ORDER = [

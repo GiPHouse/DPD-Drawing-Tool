@@ -11267,7 +11267,7 @@
 
 			this.formatWidth = mxSettings.getFormatWidth();
 		}
-		
+		// SE team: sprint 2 - task 112 - adds console to format panel
 		editorUiCreateUi.apply(this, arguments);
 
 			if (this.format != null && this.formatContainer != null &&
