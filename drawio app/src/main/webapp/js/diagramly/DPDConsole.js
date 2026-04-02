@@ -1,6 +1,4 @@
-/* 
-
-+--------------------------------------------------------+
+/* +--------------------------------------------------------+
 | This file contains modified code by SE team,           |
 | refer to keywords: 'NOLAI'                             |
 | Task 112, Sprint 2                                     |
@@ -15,8 +13,7 @@
 /**
  * DPD Console Constructor
  * Creates a violation log console that appears in the right sidebar
- * 
- * @param {EditorUi} editorUi - The editor UI instance
+ * * @param {EditorUi} editorUi - The editor UI instance
  * @param {HTMLElement} container - The container element for the console
  */
 var DPDConsole = function(editorUi, container)
@@ -48,10 +45,14 @@ DPDConsole.prototype.init = function()
 	this.container.style.cssText = `
 		display: flex;
 		flex-direction: column;
-		height: 100%;
-		border-top: 1px solid light-dark(var(--border-color), var(--dark-border-color));
+		min-height: 100px;
+		height: 250px; /* Default starting height */
+		overflow: hidden;
 		background-color: light-dark(var(--ge-panel-color), var(--ge-dark-panel-color));
 	`;
+
+	// --- NEW: Custom Top Resizer ---
+	this.createResizer();
 
 	// Header with title and clear button
 	this.createHeader();
@@ -61,6 +62,54 @@ DPDConsole.prototype.init = function()
 	
 	// Footer with stats
 	this.createFooter();
+};
+
+/**
+ * --- NEW: Create a draggable splitter at the top of the panel ---
+ */
+DPDConsole.prototype.createResizer = function()
+{
+	var resizer = document.createElement('div');
+	resizer.style.cssText = `
+		height: 4px;
+		cursor: ns-resize;
+		flex-shrink: 0;
+		background-color: light-dark(var(--border-color), var(--dark-border-color));
+		transition: background-color 0.2s;
+	`;
+	
+	// Visual feedback on hover
+	resizer.onmouseover = function() { resizer.style.backgroundColor = '#1565c0'; };
+	resizer.onmouseout = function() { resizer.style.backgroundColor = 'light-dark(var(--border-color), var(--dark-border-color))'; };
+
+	var startY, startHeight;
+	var container = this.container;
+
+	var doDrag = function(e) {
+		// Moving mouse UP decreases e.clientY, which means we ADD to the height
+		var newHeight = startHeight - (e.clientY - startY);
+		if (newHeight >= 100) { // Enforce min-height
+			container.style.height = newHeight + 'px';
+		}
+	};
+
+	var stopDrag = function(e) {
+		document.removeEventListener('mousemove', doDrag);
+		document.removeEventListener('mouseup', stopDrag);
+		document.body.style.cursor = ''; // Restore default cursor
+	};
+
+	resizer.addEventListener('mousedown', function(e) {
+		e.preventDefault(); // Prevent text selection while dragging
+		startY = e.clientY;
+		startHeight = parseInt(window.getComputedStyle(container).height, 10);
+		
+		document.addEventListener('mousemove', doDrag);
+		document.addEventListener('mouseup', stopDrag);
+		document.body.style.cursor = 'ns-resize'; // Force cursor while dragging across the page
+	});
+
+	this.container.appendChild(resizer);
 };
 
 /**
@@ -98,12 +147,7 @@ DPDConsole.prototype.createHeader = function()
 		gap: 4px;
 	`;
 
-	// NOLAI: "Highlights" toggle button — always visible so users can discover it
-	// without needing to run validation first.
-	// OFF state (default): outlined pill, muted colour.
-	// ON state: filled pill with orange accent, full opacity.
-	// Clicking when OFF triggers a fresh validateGraph(); clicking when ON clears
-	// highlights but keeps sidebar entries.
+	// NOLAI: "Highlights" toggle button
 	var toggleBtn = document.createElement('button');
 	toggleBtn.title = 'Run validation and show highlights on the diagram';
 	toggleBtn.textContent = 'Highlights';
@@ -229,52 +273,38 @@ DPDConsole.prototype.createFooter = function()
 
 /**
  * Add a violation to the console
- * 
- * @param {string} ruleName - Name of the DPD rule
- * @param {string} message - Violation description
- * @param {string} severity - 'error' or 'warning'
- * @param {Object} details - Optional additional details {elementId, timestamp, etc}
  */
 DPDConsole.prototype.addViolation = function(ruleName, message, severity, details)
 {
 	severity = severity || 'error';
 	details = details || {};
 
-	// NOLAI: Assign the next sequential index BEFORE pushing so the violation
-	// object always knows its own display number (#1, #2 …).
 	this.indexCounter += 1;
 
 	var violation = {
 		ruleName: ruleName,
 		message: message,
 		severity: severity,
-		index: this.indexCounter, // 1-based, matches badge on the diagram edge
+		index: this.indexCounter,
 		timestamp: new Date(),
 		details: details
 	};
 	
 	this.violations.push(violation);
 	
-	// Keep only last N violations
 	if (this.violations.length > this.maxViolations)
 	{
 		this.violations.shift();
 	}
 	
-	// Clear empty message if this is first violation
 	var emptyMsg = this.logArea.querySelector('#dpdEmptyMessage');
 	if (emptyMsg && this.violations.length === 1)
 	{
 		emptyMsg.style.display = 'none';
 	}
 	
-	// Add violation entry to log
 	this.createViolationEntry(violation);
-	
-	// Update stats
 	this.updateStats();
-	
-	// Auto-scroll to bottom
 	this.logArea.scrollTop = this.logArea.scrollHeight;
 };
 
@@ -295,7 +325,6 @@ DPDConsole.prototype.createViolationEntry = function(violation)
 		transition: background-color 0.2s;
 	`;
 	
-	// Hover effect
 	entry.onmouseover = function()
 	{
 		entry.style.backgroundColor = violation.severity === 'error' ? 
@@ -306,12 +335,8 @@ DPDConsole.prototype.createViolationEntry = function(violation)
 		entry.style.backgroundColor = 'light-dark(#f9f9f9, #1f1f1f)';
 	};
 	
-	// NOLAI: Block layout — badge + rule name on one line, message on the next.
-	// Using block elements instead of flex avoids the min-width flex truncation
-	// bug that was causing text to overflow the sidebar panel.
 	var color = violation.severity === 'error' ? '#ff4444' : '#ffaa00';
 
-	// --- Row 1: index badge + rule name ---
 	var headerRow = document.createElement('div');
 	headerRow.style.cssText = 'margin-bottom:3px;';
 
@@ -337,7 +362,6 @@ DPDConsole.prototype.createViolationEntry = function(violation)
 
 	entry.appendChild(headerRow);
 
-	// --- Row 2: violation message, wraps freely as a block element ---
 	var msgDiv = document.createElement('div');
 	msgDiv.style.cssText = [
 		'color:light-dark(var(--text-color), var(--dark-text-color))',
@@ -350,8 +374,7 @@ DPDConsole.prototype.createViolationEntry = function(violation)
 	msgDiv.textContent = violation.message;
 	entry.appendChild(msgDiv);
 	
-	// Timestamp
-	if (this.editorUi.showTimestamps !== false) // Default to showing timestamps
+	if (this.editorUi.showTimestamps !== false) 
 	{
 		var timeSpan = document.createElement('div');
 		timeSpan.style.cssText = `
@@ -363,12 +386,9 @@ DPDConsole.prototype.createViolationEntry = function(violation)
 		entry.appendChild(timeSpan);
 	}
 	
-	// Details expansion (if details exist)
 	if (Object.keys(violation.details).length > 0)
 	{
 		var detailsBtn = document.createElement('div');
-		// NOLAI: Use light-dark() so the expand link is readable in both themes.
-		// #0066cc (blue) on white backgrounds; #6ab0ff (lighter blue) on dark panels.
 		detailsBtn.style.cssText = `
 			font-size: 9px;
 			color: light-dark(#0066cc, #6ab0ff);
@@ -433,10 +453,7 @@ DPDConsole.prototype.updateStats = function()
 };
 
 /**
- * NOLAI: Update the toggle button to reflect whether highlights are currently
- * visible on the diagram.
- *
- * @param {boolean} visible - true = highlights are showing, false = hidden
+ * NOLAI: Update the toggle button to reflect whether highlights are currently visible
  */
 DPDConsole.prototype.setHighlightToggleState = function(visible)
 {
@@ -444,7 +461,6 @@ DPDConsole.prototype.setHighlightToggleState = function(visible)
 
 	if (visible)
 	{
-		// ON — filled orange pill; editing is locked while this is active
 		this.toggleBtn.title      = 'Highlights active — diagram editing locked. Click to unlock.';
 		this.toggleBtn.style.background = '#ff8800';
 		this.toggleBtn.style.color      = '#fff';
@@ -454,7 +470,6 @@ DPDConsole.prototype.setHighlightToggleState = function(visible)
 	}
 	else
 	{
-		// OFF — outlined pill; clicking runs fresh validation
 		this.toggleBtn.title      = 'Run validation and show highlights';
 		this.toggleBtn.style.background  = 'none';
 		this.toggleBtn.style.color       = 'light-dark(var(--text-color), var(--dark-text-color))';
@@ -470,11 +485,8 @@ DPDConsole.prototype.setHighlightToggleState = function(visible)
 DPDConsole.prototype.clear = function()
 {
 	this.violations = [];
-	// NOLAI: Reset index counter so the next validation run restarts from #1.
 	this.indexCounter = 0;
 
-	// NOLAI: Reset toggle button to OFF state but keep it visible —
-	// the user can click it again to re-run validation.
 	if (this.toggleBtn)
 	{
 		this.setHighlightToggleState(false);
@@ -482,7 +494,6 @@ DPDConsole.prototype.clear = function()
 
 	this.logArea.innerHTML = '';
 
-	// Show empty message again
 	var emptyMsg = document.createElement('div');
 	emptyMsg.id = 'dpdEmptyMessage';
 	emptyMsg.style.cssText = `
@@ -498,8 +509,6 @@ DPDConsole.prototype.clear = function()
 
 	this.updateStats();
 
-	// NOLAI: Notify dpd.js so it can remove edge highlights from the diagram.
-	// The callback is set lazily by validateGraph() the first time it runs.
 	if (typeof this.onClear === 'function')
 	{
 		this.onClear();
