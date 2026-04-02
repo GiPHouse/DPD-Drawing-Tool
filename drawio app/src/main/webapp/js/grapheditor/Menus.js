@@ -38,7 +38,7 @@ Menus.prototype.defaultFontSize = '12';
 
 // NOLAI - Sprint 1 - this can be edited to customise toolbar
 // Menus.prototype.defaultMenuItems = ['file', 'edit', 'view', 'arrange', 'extras', 'help'];
-Menus.prototype.defaultMenuItems = ['file', 'edit', 'view', 'arrange', 'extras', 'Nextcloud'];
+Menus.prototype.defaultMenuItems = ['file', 'edit', 'view', 'arrange', 'extras'];
 
 /**
  * Adds the label menu items to the given menu and parent.

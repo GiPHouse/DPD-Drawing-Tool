@@ -860,7 +860,7 @@
 		// ======	NOLAI - {- Backend -} /Sprint 1/ Task 16	=====
 		// ======   NOLAI - {- Frontend -} /Sprint 2/ Task 98   =====
 
-		editorUi.actions.addAction('saveToNextcloud', function()
+		editorUi.actions.addAction('Save', function()
 		{
 			// Get filename and ensure that it is a valid file
 			var currentFile = editorUi.getCurrentFile();
@@ -4146,172 +4146,7 @@
 				this.addMenuItems(menu, ['-', 'createShape', 'editDiagram'], parent);
 			}
         })));
-        
-		this.put('openRecent', new Menu(function(menu, parent)
-		{
-			var recent = editorUi.getRecent();
-
-			if (recent != null)
-			{
-				for (var i = 0; i < recent.length; i++)
-				{
-					(function(entry)
-					{
-						var modeKey = entry.mode;
-						
-						// Google and oneDrive use different keys
-						if (modeKey == App.MODE_GOOGLE)
-						{
-							modeKey = 'googleDrive';
-						}
-						else if (modeKey == App.MODE_ONEDRIVE)
-						{
-							modeKey = 'oneDrive';
-						}
-						
-						menu.addItem(entry.title + ' (' + mxResources.get(modeKey) + ')', null, function()
-						{
-							editorUi.loadFile(entry.id);
-						}, parent);
-					})(recent[i]);
-				}
-
-				menu.addSeparator(parent);
-			}
-
-			menu.addItem(mxResources.get('reset'), null, function()
-			{
-				editorUi.resetRecent();
-			}, parent);
-		}));
-		
-		this.put('openFrom', new Menu(function(menu, parent)
-		{
-			if (editorUi.drive != null)
-			{
-				menu.addItem(mxResources.get('googleDrive') + '...', null, function()
-				{
-					editorUi.pickFile(App.MODE_GOOGLE);
-				}, parent);
-			}
-			else if (editorUi.isModeEnabled(App.MODE_GOOGLE))
-			{
-				menu.addItem(mxResources.get('googleDrive') + ' (' + mxResources.get('loading') + '...)', null, function()
-				{
-					// do nothing
-				}, parent, null, false);
-			}
-			
-			if (editorUi.isModeReady(App.MODE_ONEDRIVE))
-			{
-				menu.addItem(mxResources.get('oneDrive') + '...', null, function()
-				{
-					editorUi.pickFile(App.MODE_ONEDRIVE);
-				}, parent);
-			}
-			else if (editorUi.isModeEnabled(App.MODE_ONEDRIVE))
-			{
-				menu.addItem(mxResources.get('oneDrive') + ' (' + mxResources.get('loading') + '...)', null, function()
-				{
-					// do nothing
-				}, parent, null, false);
-			}
-
-			if (editorUi.isModeReady(App.MODE_DROPBOX))
-			{
-				menu.addItem(mxResources.get('dropbox') + '...', null, function()
-				{
-					editorUi.pickFile(App.MODE_DROPBOX);
-				}, parent);
-			}
-			else if (editorUi.isModeEnabled(App.MODE_DROPBOX))
-			{
-				menu.addItem(mxResources.get('dropbox') + ' (' + mxResources.get('loading') + '...)', null, function()
-				{
-					// do nothing
-				}, parent, null, false);
-			}
-
-			menu.addSeparator(parent);
-			
-			if (editorUi.isModeReady(App.MODE_GITHUB))
-			{
-				menu.addItem(mxResources.get('github') + '...', null, function()
-				{
-					editorUi.pickFile(App.MODE_GITHUB);
-				}, parent);
-			}
-			
-			if (editorUi.isModeReady(App.MODE_GITLAB))
-			{
-				menu.addItem(mxResources.get('gitlab') + '...', null, function()
-				{
-					editorUi.pickFile(App.MODE_GITLAB);
-				}, parent);
-			}
-
-			if (editorUi.isModeReady(App.MODE_TRELLO))
-			{
-				menu.addItem(mxResources.get('trello') + '...', null, function()
-				{
-					editorUi.pickFile(App.MODE_TRELLO);
-				}, parent);
-			}
-			else if (editorUi.isModeEnabled(App.MODE_TRELLO))
-			{
-				menu.addItem(mxResources.get('trello') + ' (' + mxResources.get('loading') + '...)', null, function()
-				{
-					// do nothing
-				}, parent, null, false);
-			}
-			
-			menu.addSeparator(parent);
-
-			if (isLocalStorage && urlParams['browser'] != '0')
-			{
-				menu.addItem(mxResources.get('browser') + '...', null, function()
-				{
-					editorUi.pickFile(App.MODE_BROWSER);
-				}, parent);
-			}
-			
-			//if (!mxClient.IS_IOS)
-			if (urlParams['noDevice'] != '1')
-			{
-				menu.addItem(mxResources.get('device') + '...', null, function()
-				{
-					editorUi.pickFile(App.MODE_DEVICE);
-				}, parent);
-			}
-
-			if (!editorUi.isOffline())
-			{
-				menu.addSeparator(parent);
-				
-				menu.addItem(mxResources.get('url') + '...', null, function()
-				{
-					var dlg = new FilenameDialog(editorUi, '', mxResources.get('open'), function(fileUrl)
-					{
-						if (fileUrl != null && fileUrl.length > 0)
-						{
-							if (editorUi.getCurrentFile() == null)
-							{
-								window.location.hash = '#U' + encodeURIComponent(fileUrl);
-							}
-							else
-							{
-								window.geOpenWindow(((mxClient.IS_CHROMEAPP) ?
-									'https://app.diagrams.net/' : 'https://' + location.host + '/') +
-									window.location.search + '#U' + encodeURIComponent(fileUrl));
-							}
-						}
-					}, mxResources.get('url'));
-					editorUi.showDialog(dlg.container, 300, 80, true, true);
-					dlg.init();
-				}, parent);
-			}
-		}));
-		
+	
 		if (Editor.enableCustomLibraries)
 		{
 			this.put('newLibrary', new Menu(function(menu, parent)
@@ -5149,7 +4984,6 @@
 			if (mxClient.IS_CHROMEAPP || EditorUi.isElectronApp)
 			{
 				editorUi.menus.addMenuItems(menu, ['new', 'open'], parent);
-				editorUi.menus.addSubmenu('openRecent', menu, parent);
 				editorUi.menus.addMenuItems(menu,
 					['-', 'synchronize', 'properties', '-',
 					'save', 'saveAs', '-'], parent);
@@ -5201,7 +5035,7 @@
 			
 			if (urlParams['noFileMenu'] != '1')
 			{
-				editorUi.menus.addMenuItems(menu, ['saveToNextcloud', 'My Files'], parent);
+				editorUi.menus.addMenuItems(menu, ['Save', 'My Files'], parent);
 			}
 	
 			if (Editor.currentTheme != 'simple' && Editor.currentTheme != 'min')
@@ -5350,7 +5184,7 @@
 					}
 					else
 					{
-						this.addMenuItems(menu, ['saveToNextcloud', 'My Files'], parent);
+						this.addMenuItems(menu, ['Save', 'My Files'], parent);
 						
 						if (urlParams['saveAndExit'] == '1')
 						{
@@ -5368,12 +5202,6 @@
 			{
 				var file = editorUi.getCurrentFile();
 				editorUi.menus.addMenuItems(menu, ['new'], parent);
-				editorUi.menus.addSubmenu('openFrom', menu, parent);
-
-				if (isLocalStorage)
-				{
-					this.addSubmenu('openRecent', menu, parent);
-				}
 				
 				menu.addSeparator(parent);
 
@@ -5498,14 +5326,11 @@
 				{
 					this.addMenuItems(menu, ['new'], parent);
 				}
-				
-				this.addSubmenu('openFrom', menu, parent);
-
-				if (isLocalStorage)
-				{
-					this.addSubmenu('openRecent', menu, parent);
-				}
-				
+				// ======	NOLAI - {- Frontend -} /Sprint 2/ Task 98 and Task 100	=====
+				menu.addSeparator(parent);
+				this.addMenuItems(menu, ['Save', 'My Files'], parent);
+				// ====== end of changes by SE	======
+			
 				if (file != null && file.constructor == DriveFile)
 				{
 					this.addMenuItems(menu, ['new', '-', 'rename', 'makeCopy',
@@ -5615,15 +5440,7 @@
 				this.addMenuItems(menu, ['-', 'close']);
 			}
 		})));
-
-		// ======	NOLAI - {- Frontend -} /Sprint 2/ Task 98 and Task 100	=====
-		this.put('Nextcloud', new Menu(mxUtils.bind(this, function(menu, parent)
-		{
-			this.addMenuItems(menu, ['saveToNextcloud', 'My Files'], parent);
-		})));
-		// ====== end of changes by SE	======
-
-		
+	
 		//Replace the default font family menu
 		this.put('fontFamily', new Menu(mxUtils.bind(this, function(menu, parent)
 		{

@@ -43,10 +43,10 @@ async function loadApp(page) {
   await page.waitForSelector('#geInfo', { state: 'detached', timeout: 60_000 });
 }
 
-async function clickNextcloudMenuAction(page, actionLabelRegex) {
+async function clickFileMenuAction(page, actionLabelRegex) {
   const fileMenu = page
     .locator('a.geItem, button.geItem, .geMenubar a, .geMenubar button')
-    .filter({ hasText: /^nextcloud$/i })
+    .filter({ hasText: /^file$/i })
     .first();
 
   for (let attempt = 0; attempt < 4; attempt += 1) {
@@ -247,18 +247,18 @@ async function assertFileAppearsInMyFiles(page, filename, maxAttempts = 12) {
  *       save button / menu item in the custom NOLAI toolbar.
  */
 async function openSaveDialog(page) {
-  const title = page.getByText('Save diagram');
+  const title = page.getByText('Save Diagram');
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
     await closeDialogs(page);
-    await clickNextcloudMenuAction(page, /^saveToNextcloud$|save\s*to\s*nextcloud/i);
+    await clickFileMenuAction(page, /^save/i);
 
     if (await waitVisible(title, 4_000)) {
       return;
     }
   }
 
-  throw new Error('Could not open Save diagram to Nextcloud dialog');
+  throw new Error('Could not open Save Diagram to Nextcloud dialog');
 }
 
 /**
@@ -266,11 +266,11 @@ async function openSaveDialog(page) {
  * TODO: Update selector once issue #100 UI is merged.
  */
 async function openLoadDialog(page) {
-  const title = page.getByText('Fetch files');
+  const title = page.getByText('Fetch Files');
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
     await closeDialogs(page);
-    await clickNextcloudMenuAction(page, /^loadFromNextcloud$|load\s*from\s*nextcloud/i);
+    await clickFileMenuAction(page, /^myfiles$|my\s*files/i);
 
     if (await waitVisible(title, 4_000)) {
       return;
@@ -287,7 +287,7 @@ test.describe('Save file to Nextcloud', () => {
     await loadApp(page);
     await openSaveDialog(page);
 
-    await expect(page.getByText('Save diagram')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText('Save Diagram')).toBeVisible({ timeout: 10_000 });
     await expect(page.locator('div', { hasText: 'Filename:' }).locator('input')).toBeVisible();
   });
 
@@ -316,8 +316,8 @@ test.describe('Load file from Nextcloud', () => {
     await loadApp(page);
     await openLoadDialog(page);
 
-    await expect(page.getByText('Fetch files')).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator('div', { hasText: 'Server URL:' }).locator('input')).toBeVisible();
+    await expect(page.getByText('Fetch Files')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('div', { hasText: 'Username:' }).locator('input')).toBeVisible();
   });
 
   test('a previously saved file appears in the load dialog', async ({ page }) => {
