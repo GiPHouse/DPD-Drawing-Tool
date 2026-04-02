@@ -98,16 +98,9 @@ async function fillNextcloudDialog(page, filename) {
       return false;
     }
 
-    const fillByLabel = (label, value) => {
-      const labelCell = Array.from(activeDialog.querySelectorAll('td')).find((td) =>
-        (td.textContent || '').trim() === label
-      );
+    const fillByPlaceholder = (placeholder, value) => {
+      const input = activeDialog.querySelector(`input[placeholder="${placeholder}"]`);
 
-      if (!labelCell || !labelCell.parentElement) {
-        return false;
-      }
-
-      const input = labelCell.parentElement.querySelector('input');
       if (!input) {
         return false;
       }
@@ -122,17 +115,17 @@ async function fillNextcloudDialog(page, filename) {
     };
 
     const baseFilled =
-      fillByLabel('Nextcloud Base URL:', url) &&
-      fillByLabel('Username:', user) &&
-      fillByLabel('Password:', pass) &&
-      fillByLabel('Remote Path:', remotePath);
+      fillByPlaceholder('Enter WebDAV URL', url) &&
+      fillByPlaceholder('Nextcloud username', user) &&
+      fillByPlaceholder('Nextcloud password', pass) &&
+      fillByPlaceholder('e.g. /Diagrams', remotePath);
 
     if (!baseFilled) {
       return false;
     }
 
     if (name != null) {
-      return fillByLabel('Filename:', name);
+      return fillByPlaceholder('file.drawio', name);
     }
 
     return true;
@@ -156,12 +149,16 @@ async function openMyFilesList(page) {
   await clickTopmostOkButton(page);
 
   const listTitle = page.getByText('Select a .drawio file to load');
+  const listTitleAlt = page.getByText('Select a diagram');
   const emptyMessage = page.getByText('No .drawio files found in Nextcloud.');
 
   const deadline = Date.now() + 20_000;
 
   while (Date.now() < deadline) {
-    if (await listTitle.isVisible().catch(() => false)) {
+    if (
+      await listTitle.isVisible().catch(() => false) ||
+      await listTitleAlt.isVisible().catch(() => false)
+    ) {
       return 'list';
     }
 
@@ -247,7 +244,7 @@ async function assertFileAppearsInMyFiles(page, filename, maxAttempts = 12) {
  *       save button / menu item in the custom NOLAI toolbar.
  */
 async function openSaveDialog(page) {
-  const title = page.getByText('Save Diagram');
+  const title = page.getByRole('heading', { name: /save diagram to nextcloud/i });
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
     await closeDialogs(page);
@@ -266,7 +263,7 @@ async function openSaveDialog(page) {
  * TODO: Update selector once issue #100 UI is merged.
  */
 async function openLoadDialog(page) {
-  const title = page.getByText('Fetch Files');
+  const title = page.getByRole('heading', { name: /load diagram from nextcloud/i });
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
     await closeDialogs(page);
@@ -287,8 +284,9 @@ test.describe('Save file to Nextcloud', () => {
     await loadApp(page);
     await openSaveDialog(page);
 
-    await expect(page.getByText('Save Diagram')).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator('div', { hasText: 'Filename:' }).locator('input')).toBeVisible();
+    const saveDialog = page.locator('.geDialog:visible').last();
+    await expect(saveDialog.getByRole('heading', { name: /save diagram to nextcloud/i })).toBeVisible({ timeout: 10_000 });
+    await expect(saveDialog.locator('input[placeholder="file.drawio"]')).toBeVisible();
   });
 
   test('diagram can be saved with a filename and appears in Nextcloud', async ({ page }) => {
@@ -316,8 +314,9 @@ test.describe('Load file from Nextcloud', () => {
     await loadApp(page);
     await openLoadDialog(page);
 
-    await expect(page.getByText('Fetch Files')).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator('div', { hasText: 'Username:' }).locator('input')).toBeVisible();
+    const loadDialog = page.locator('.geDialog:visible').last();
+    await expect(loadDialog.getByRole('heading', { name: /load diagram from nextcloud/i })).toBeVisible({ timeout: 10_000 });
+    await expect(loadDialog.locator('input[placeholder="Nextcloud username"]')).toBeVisible();
   });
 
   test('a previously saved file appears in the load dialog', async ({ page }) => {
