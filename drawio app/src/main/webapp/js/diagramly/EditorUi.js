@@ -11274,15 +11274,17 @@
 				typeof DPDConsole !== 'undefined' && this.dpdConsole == null)
 			{
 				var formatTop = document.createElement('div');
-				formatTop.style.cssText = 'position: relative; flex: 1 1 50%; min-height: 0; overflow: auto;';
+				formatTop.style.cssText = 'position: relative; flex: 0 0 65%; min-height: 0; overflow: auto;';
 
 				var consoleBottom = document.createElement('div');
-				consoleBottom.style.cssText = 'position: relative; flex: 1 1 50%; min-height: 120px;';
+				consoleBottom.style.cssText = 'position: relative; flex: 0 0 35%; min-height: 0; overflow: hidden;';
 
 				this.formatContainer.innerHTML = '';
 				this.formatContainer.style.display = 'flex';
 				this.formatContainer.style.flexDirection = 'column';
 				this.formatContainer.style.minHeight = '0';
+				this.formatContainer.style.height = '100%';
+				this.formatContainer.style.overflow = 'hidden';
 
 				this.formatContainer.appendChild(formatTop);
 				this.formatContainer.appendChild(consoleBottom);

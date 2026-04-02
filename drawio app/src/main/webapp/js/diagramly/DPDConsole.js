@@ -318,8 +318,8 @@ DPDConsole.prototype.createViolationEntry = function(violation)
 	entry.style.cssText = `
 		margin-bottom: 8px;
 		padding: 6px 8px;
-		border-left: 3px solid ${violation.severity === 'error' ? '#ff4444' : '#ffaa00'};
-		background-color: light-dark(#f9f9f9, #1f1f1f);
+		border-left: 3px solid ${violation.severity === 'error' ? 'light-dark(#d93025, #ff8a80)' : 'light-dark(#e37400, #ffb74d)'};
+		background-color: ${violation.severity === 'error' ? 'light-dark(#fff5f5, #2b1f1f)' : 'light-dark(#fff8e6, #2f2a1e)'};
 		border-radius: 2px;
 		box-sizing: border-box;
 		transition: background-color 0.2s;
@@ -328,11 +328,12 @@ DPDConsole.prototype.createViolationEntry = function(violation)
 	entry.onmouseover = function()
 	{
 		entry.style.backgroundColor = violation.severity === 'error' ? 
-			'light-dark(#ffe6e6, #3a1f1f)' : 'light-dark(#fff5e6, #3a2f1f)';
+			'light-dark(#ffeaea, #332525)' : 'light-dark(#fff2db, #353022)';
 	};
 	entry.onmouseout = function()
 	{
-		entry.style.backgroundColor = 'light-dark(#f9f9f9, #1f1f1f)';
+		entry.style.backgroundColor = violation.severity === 'error' ?
+			'light-dark(#fff5f5, #2b1f1f)' : 'light-dark(#fff8e6, #2f2a1e)';
 	};
 	
 	var color = violation.severity === 'error' ? '#ff4444' : '#ffaa00';
