@@ -3372,9 +3372,29 @@ App.prototype.start = function()
 					if (urlParams['demo'] == '1')
 					{
 						var prev = Editor.useLocalStorage;
-						this.createFile(this.defaultFilename, null,
-							null, null, null, null, null, true);
-						Editor.useLocalStorage = prev;
+						this.editor.loadUrl(TEMPLATE_PATH + '/templateLegend.drawio', mxUtils.bind(this, function(xml)
+						{
+							this.createFile(this.defaultFilename, xml,
+								null, null, mxUtils.bind(this, function()
+								{
+									if (!this.editor.chromeless || this.editor.editable)
+									{
+										this.actions.get('fitWindow').funct();
+									}
+								}), null, null, true);
+							Editor.useLocalStorage = prev;
+						}), mxUtils.bind(this, function()
+						{
+							this.createFile(this.defaultFilename, null,
+								null, null, mxUtils.bind(this, function()
+								{
+									if (!this.editor.chromeless || this.editor.editable)
+									{
+										this.actions.get('fitWindow').funct();
+									}
+								}), null, null, true);
+							Editor.useLocalStorage = prev;
+						}));
 					}
 					else
 					{
@@ -3434,8 +3454,27 @@ App.prototype.start = function()
 							}
 							else
 							{
-								this.createFile(this.defaultFilename, this.getFileData(),
-									null, null, null, null, null, true);
+								this.editor.loadUrl(TEMPLATE_PATH + '/templateLegend.drawio', mxUtils.bind(this, function(xml)
+								{
+									this.createFile(this.defaultFilename, xml,
+										null, null, mxUtils.bind(this, function()
+										{
+											if (!this.editor.chromeless || this.editor.editable)
+											{
+												this.actions.get('fitWindow').funct();
+											}
+										}), null, null, true);
+								}), mxUtils.bind(this, function()
+								{
+									this.createFile(this.defaultFilename, this.getFileData(),
+										null, null, mxUtils.bind(this, function()
+										{
+											if (!this.editor.chromeless || this.editor.editable)
+											{
+												this.actions.get('fitWindow').funct();
+											}
+										}), null, null, true);
+								}));
 							}
 						}
 					}

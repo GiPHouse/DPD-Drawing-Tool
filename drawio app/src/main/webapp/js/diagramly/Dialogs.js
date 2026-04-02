@@ -258,9 +258,29 @@ var StorageDialog = function(editorUi, fn, rowLimit)
 	{
 		editorUi.hideDialog();
 		var prev = Editor.useLocalStorage;
-		editorUi.createFile(editorUi.defaultFilename,
-			null, null, null, null, null, null, true);
-		Editor.useLocalStorage = prev;
+		editorUi.editor.loadUrl(TEMPLATE_PATH + '/templateLegend.drawio', function(xml)
+		{
+			editorUi.createFile(editorUi.defaultFilename,
+				xml, null, null, function()
+				{
+					if (!editorUi.editor.chromeless || editorUi.editor.editable)
+					{
+						editorUi.actions.get('fitWindow').funct();
+					}
+				}, null, null, true);
+			Editor.useLocalStorage = prev;
+		}, function()
+		{
+			editorUi.createFile(editorUi.defaultFilename,
+				null, null, null, function()
+				{
+					if (!editorUi.editor.chromeless || editorUi.editor.editable)
+					{
+						editorUi.actions.get('fitWindow').funct();
+					}
+				}, null, null, true);
+			Editor.useLocalStorage = prev;
+		});
 	});
 	
 	// Checks if Google Drive is missing after a 5 sec delay
@@ -2905,6 +2925,11 @@ var NewDialog = function(editorUi, compact, showName, callback, createOnly, canc
 						editorUi.createFile(filename, templateXml, (templateLibs != null &&
 							templateLibs.length > 0) ? templateLibs : null, mode, function()
 						{
+							if (!editorUi.editor.chromeless || editorUi.editor.editable)
+							{
+								editorUi.actions.get('fitWindow').funct();
+							}
+
 							if (!insertWasPressed)
 							{
 								editorUi.hideDialog();
@@ -2985,7 +3010,6 @@ var NewDialog = function(editorUi, compact, showName, callback, createOnly, canc
 
 		tmplSearchInput.focus();
 	});
-	
 	mxEvent.addListener(tmplSearchInput, 'keydown', mxUtils.bind(this, function(evt)
 	{
 		if (evt.keyCode == 13 /* Enter */)
@@ -3550,7 +3574,7 @@ var NewDialog = function(editorUi, compact, showName, callback, createOnly, canc
 	var currentEntry = null, lastEntry = null;
 
 	// Adds local basic templates
-	categories['basic'] = noBlank? [] : [{title: 'blankDiagram'}];
+	categories['basic'] = noBlank? [] : [{title: 'blankDiagram', url: 'templateLegend.drawio'}];
 	var templates = categories['basic'];
 
 	if (Editor.enableAi &&
