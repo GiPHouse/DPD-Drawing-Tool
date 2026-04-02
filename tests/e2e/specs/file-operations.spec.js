@@ -195,7 +195,7 @@ async function clickTopmostOkButton(page) {
       const visible = rect.width > 0 && rect.height > 0 &&
         style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
 
-      if (visible && /^ok$/i.test(text)) {
+      if (visible && /^(save diagram|ok|open|fetch files)$/i.test(text)) {
         btn.click();
         return true;
       }
