@@ -45,14 +45,12 @@ DPDConsole.prototype.init = function()
 	this.container.style.cssText = `
 		display: flex;
 		flex-direction: column;
-		min-height: 100px;
-		height: 250px; /* Default starting height */
-		overflow: hidden;
+		height: 100%;
+		min-height: 0; /* CRITICAL: Allows flex child to trigger scrolling */
+		overflow: hidden; /* CRITICAL: Passes overflow responsibility to the inner logArea */
+		border-top: 1px solid light-dark(var(--border-color), var(--dark-border-color));
 		background-color: light-dark(var(--ge-panel-color), var(--ge-dark-panel-color));
 	`;
-
-	// --- NEW: Custom Top Resizer ---
-	this.createResizer();
 
 	// Header with title and clear button
 	this.createHeader();
@@ -62,54 +60,6 @@ DPDConsole.prototype.init = function()
 	
 	// Footer with stats
 	this.createFooter();
-};
-
-/**
- * --- NEW: Create a draggable splitter at the top of the panel ---
- */
-DPDConsole.prototype.createResizer = function()
-{
-	var resizer = document.createElement('div');
-	resizer.style.cssText = `
-		height: 4px;
-		cursor: ns-resize;
-		flex-shrink: 0;
-		background-color: light-dark(var(--border-color), var(--dark-border-color));
-		transition: background-color 0.2s;
-	`;
-	
-	// Visual feedback on hover
-	resizer.onmouseover = function() { resizer.style.backgroundColor = '#1565c0'; };
-	resizer.onmouseout = function() { resizer.style.backgroundColor = 'light-dark(var(--border-color), var(--dark-border-color))'; };
-
-	var startY, startHeight;
-	var container = this.container;
-
-	var doDrag = function(e) {
-		// Moving mouse UP decreases e.clientY, which means we ADD to the height
-		var newHeight = startHeight - (e.clientY - startY);
-		if (newHeight >= 100) { // Enforce min-height
-			container.style.height = newHeight + 'px';
-		}
-	};
-
-	var stopDrag = function(e) {
-		document.removeEventListener('mousemove', doDrag);
-		document.removeEventListener('mouseup', stopDrag);
-		document.body.style.cursor = ''; // Restore default cursor
-	};
-
-	resizer.addEventListener('mousedown', function(e) {
-		e.preventDefault(); // Prevent text selection while dragging
-		startY = e.clientY;
-		startHeight = parseInt(window.getComputedStyle(container).height, 10);
-		
-		document.addEventListener('mousemove', doDrag);
-		document.addEventListener('mouseup', stopDrag);
-		document.body.style.cursor = 'ns-resize'; // Force cursor while dragging across the page
-	});
-
-	this.container.appendChild(resizer);
 };
 
 /**
@@ -318,8 +268,8 @@ DPDConsole.prototype.createViolationEntry = function(violation)
 	entry.style.cssText = `
 		margin-bottom: 8px;
 		padding: 6px 8px;
-		border-left: 3px solid ${violation.severity === 'error' ? 'light-dark(#d93025, #ff8a80)' : 'light-dark(#e37400, #ffb74d)'};
-		background-color: ${violation.severity === 'error' ? 'light-dark(#fff5f5, #2b1f1f)' : 'light-dark(#fff8e6, #2f2a1e)'};
+		border-left: 3px solid ${violation.severity === 'error' ? '#ff4444' : '#ffaa00'};
+		background-color: light-dark(#f9f9f9, #1f1f1f);
 		border-radius: 2px;
 		box-sizing: border-box;
 		transition: background-color 0.2s;
@@ -328,12 +278,11 @@ DPDConsole.prototype.createViolationEntry = function(violation)
 	entry.onmouseover = function()
 	{
 		entry.style.backgroundColor = violation.severity === 'error' ? 
-			'light-dark(#ffeaea, #332525)' : 'light-dark(#fff2db, #353022)';
+			'light-dark(#ffe6e6, #3a1f1f)' : 'light-dark(#fff5e6, #3a2f1f)';
 	};
 	entry.onmouseout = function()
 	{
-		entry.style.backgroundColor = violation.severity === 'error' ?
-			'light-dark(#fff5f5, #2b1f1f)' : 'light-dark(#fff8e6, #2f2a1e)';
+		entry.style.backgroundColor = 'light-dark(#f9f9f9, #1f1f1f)';
 	};
 	
 	var color = violation.severity === 'error' ? '#ff4444' : '#ffaa00';

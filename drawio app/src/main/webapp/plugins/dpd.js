@@ -40,8 +40,18 @@ Draw.loadPlugin(function (ui) {
   document.body.appendChild(warningBanner);
 
   function setEditLockState(locked) {
-    graph.setEnabled(!locked);
-    warningBanner.style.display = locked ? 'block' : 'none';
+    // Wrapped in a safe try-catch to prevent native draw.io bugs from crashing the plugin
+    try {
+      if (graph && typeof graph.setEnabled === 'function') {
+        graph.setEnabled(!locked);
+      }
+    } catch (e) {
+      console.warn('[DPD] Safely caught setEnabled error:', e);
+    }
+    
+    if (warningBanner) {
+      warningBanner.style.display = locked ? 'block' : 'none';
+    }
   }
   // ---------------------------------------------------
 
@@ -369,7 +379,7 @@ Draw.loadPlugin(function (ui) {
       ui.hideDialog();
 
       // Auto-validate silently after annotation save: update console without opening modal.
-      setTimeout(function() { validateGraph(false); }, 50);
+      setTimeout(function() { validateGraph(); }, 50);
     };
 
     btnRow.appendChild(cancelBtn);
