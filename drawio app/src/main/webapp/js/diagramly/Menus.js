@@ -1084,34 +1084,6 @@
 					select.style.cssText = 'width: 100%; height: 220px; padding: 5px;';
 					select.size = 12;
 
-					// PREVIEW PART ----- Everything in comments can be removed if we don't want preview or if it doesn't work
-					/*
-					for (var i = 0; i < files.length; i++)
-					{
-						// var option = document.createElement('option');
-						// option.value = i;
-						
-						// // Preview of the file
-						// var option_preview = document.createElement('svg');
-						// parser = new DOMParser();
-						// option_preview.xml = getDrawIOFromNextcloudXML(files[i].name, url, user, pass, files[i].remotePath);
-						
-						// // Title of the file
-						// var option_name = document.createElement('p');
-						// option_name.textContent = files[i].displayPath;
-
-						// // Append into the option
-						// option.appendChild(option_preview);
-						// option.appendChild(option_name);
-						// select.appendChild(option);
-
-						var option = document.createElement('option');
-						option.value = i;
-						option.text = files[i].displayPath;
-						select.appendChild(option);
-					}
-					*/
-
 					// List all file options
 					files.forEach(function(file, i)
 					{
