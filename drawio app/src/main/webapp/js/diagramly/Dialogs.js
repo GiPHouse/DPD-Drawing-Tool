@@ -258,6 +258,7 @@ var StorageDialog = function(editorUi, fn, rowLimit)
 	{
 		editorUi.hideDialog();
 		var prev = Editor.useLocalStorage;
+		// ======	NOLAI - {- Frontend -} /Sprint 2/ Task 109	======
 		editorUi.editor.loadUrl(TEMPLATE_PATH + '/templateLegend.drawio', function(xml)
 		{
 			editorUi.createFile(editorUi.defaultFilename,
@@ -281,6 +282,7 @@ var StorageDialog = function(editorUi, fn, rowLimit)
 				}, null, null, true);
 			Editor.useLocalStorage = prev;
 		});
+		// ====== end of changes by SE	======
 	});
 	
 	// Checks if Google Drive is missing after a 5 sec delay
@@ -2925,10 +2927,12 @@ var NewDialog = function(editorUi, compact, showName, callback, createOnly, canc
 						editorUi.createFile(filename, templateXml, (templateLibs != null &&
 							templateLibs.length > 0) ? templateLibs : null, mode, function()
 						{
+							// ======	NOLAI - {- Frontend -} /Sprint 2/ Task 109	======
 							if (!editorUi.editor.chromeless || editorUi.editor.editable)
 							{
 								editorUi.actions.get('fitWindow').funct();
 							}
+							// ====== end of changes by SE ======
 
 							if (!insertWasPressed)
 							{
@@ -3573,9 +3577,11 @@ var NewDialog = function(editorUi, compact, showName, callback, createOnly, canc
 	var customCatCount = 0, firstInitUi = true;
 	var currentEntry = null, lastEntry = null;
 
+	// ======	NOLAI - {- Frontend -} /Sprint 2/ Task 109	======
 	// Adds local basic templates
 	categories['basic'] = noBlank? [] : [{title: 'blankDiagram', url: 'templateLegend.drawio'}];
 	var templates = categories['basic'];
+	// ====== end of changes by SE ======
 
 	if (Editor.enableAi &&
 		editorUi.isExternalDataComms() &&

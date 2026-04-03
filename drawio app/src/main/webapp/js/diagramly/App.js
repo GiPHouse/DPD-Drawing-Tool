@@ -3371,6 +3371,7 @@ App.prototype.start = function()
 				{
 					if (urlParams['demo'] == '1')
 					{
+						// ======	NOLAI - {- Frontend -} /Sprint 2/ Task 109	======
 						var prev = Editor.useLocalStorage;
 						this.editor.loadUrl(TEMPLATE_PATH + '/templateLegend.drawio', mxUtils.bind(this, function(xml)
 						{
@@ -3395,6 +3396,7 @@ App.prototype.start = function()
 								}), null, null, true);
 							Editor.useLocalStorage = prev;
 						}));
+						// ====== end of changes by SE	======
 					}
 					else
 					{
@@ -3448,7 +3450,8 @@ App.prototype.start = function()
 									}
 								}));
 							}
-							else if (urlParams['splash'] != '0' || (urlParams['mode'] != null && !EditorUi.isElectronApp))
+							// ======	NOLAI - {- Frontend -} /Sprint 2/ Task 109	======
+							else if (urlParams['splash'] == '1' || (urlParams['mode'] != null && !EditorUi.isElectronApp))
 							{
 								this.loadFile();
 							}
@@ -3475,6 +3478,7 @@ App.prototype.start = function()
 											}
 										}), null, null, true);
 								}));
+								// ====== end of changes by SE	======
 							}
 						}
 					}
@@ -3943,27 +3947,55 @@ App.prototype.checkDrafts = function()
 					{
 						if (cancel)
 						{
-							if (urlParams['splash'] != '0')
+							// ======	NOLAI - {- Frontend -} /Sprint 2/ Task 109	======
+							if (urlParams['splash'] == '1')
 							{
 								this.loadFile();
 							}
 							else
 							{
-								this.createFile(this.defaultFilename, this.getFileData(),
-									null, null, null, null, null, true);
+								this.editor.loadUrl(TEMPLATE_PATH + '/templateLegend.drawio', mxUtils.bind(this, function(xml)
+								{
+									this.createFile(this.defaultFilename, xml,
+										null, null, mxUtils.bind(this, function()
+										{
+											if (!this.editor.chromeless || this.editor.editable)
+											{
+												this.actions.get('fitWindow').funct();
+											}
+										}), null, null, true);
+								}), mxUtils.bind(this, function()
+								{
+									this.createFile(this.defaultFilename, this.getFileData(),
+										null, null, null, null, null, true);
+								}));
 							}
 						}
 					}));
 					dlg.init();
 				}
-				else if (urlParams['splash'] != '0')
+				else if (urlParams['splash'] == '1')
 				{
 					this.loadFile();
 				}
 				else
 				{
-					this.createFile(this.defaultFilename, this.getFileData(),
-						null, null, null, null, null, true);
+					this.editor.loadUrl(TEMPLATE_PATH + '/templateLegend.drawio', mxUtils.bind(this, function(xml)
+					{
+						this.createFile(this.defaultFilename, xml,
+							null, null, mxUtils.bind(this, function()
+							{
+								if (!this.editor.chromeless || this.editor.editable)
+								{
+									this.actions.get('fitWindow').funct();
+								}
+							}), null, null, true);
+					}), mxUtils.bind(this, function()
+					{
+						this.createFile(this.defaultFilename, this.getFileData(),
+							null, null, null, null, null, true);
+					}));
+					// ====== end of changes by SE	======
 				}
 			}));
 		}), 0);
