@@ -1270,10 +1270,57 @@ EditorUi.prototype.createPage = function(name, id, node)
 	var doc = (this.fileNode != null) ? this.fileNode.ownerDocument : document;
 	var page = new DiagramPage(doc.createElement('diagram'), id);
 	page.setName((name != null) ? name : this.createPageName());
+
+	// ======	NOLAI - {- Backend -} /Sprint 2/ Task 99	======
+	if (node == null)
+	{
+		node = this.getTemplatePageNode();
+	}
+	// ====== end of changes by SE ======
+
 	this.initDiagramNode(page, node);
 	
 	return page;
 };
+
+// ======	NOLAI - {- Backend -} /Sprint 2/ Task 99	======
+/**
+ * Returns a cloned mxGraphModel node from the default template for new pages.
+ */
+EditorUi.prototype.getTemplatePageNode = function()
+{
+	if (this.templatePageNode == null)
+	{
+		try
+		{
+			var req = mxUtils.load(TEMPLATE_PATH + '/templateLegend.drawio');
+			var root = (req != null) ? req.getDocumentElement() : null;
+			var parsed = (root != null) ? this.editor.extractGraphModel(root, true) : null;
+
+			if (parsed != null && parsed.nodeName == 'mxfile')
+			{
+				var diagrams = parsed.getElementsByTagName('diagram');
+
+				if (diagrams.length > 0)
+				{
+					parsed = Editor.parseDiagramNode(diagrams[0]);
+				}
+			}
+
+			if (parsed != null && parsed.nodeName == 'mxGraphModel')
+			{
+				this.templatePageNode = parsed.cloneNode(true);
+			}
+		}
+		catch (e)
+		{
+			this.templatePageNode = null;
+		}
+	}
+
+	return (this.templatePageNode != null) ? this.templatePageNode.cloneNode(true) : null;
+};
+// ====== end of changes by SE ======
 
 /**
  * Returns a page name.
