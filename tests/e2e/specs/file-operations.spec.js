@@ -240,8 +240,6 @@ async function assertFileAppearsInMyFiles(page, filename, maxAttempts = 12) {
 
 /**
  * Opens the Save File dialog in the app.
- * TODO: Update selector once issue #98 UI is merged — look for the actual
- *       save button / menu item in the custom NOLAI toolbar.
  */
 async function openSaveDialog(page) {
   const title = page.getByRole('heading', { name: /save diagram to nextcloud/i });
@@ -260,7 +258,6 @@ async function openSaveDialog(page) {
 
 /**
  * Opens the Load File dialog in the app.
- * TODO: Update selector once issue #100 UI is merged.
  */
 async function openLoadDialog(page) {
   const title = page.getByRole('heading', { name: /load diagram from nextcloud/i });

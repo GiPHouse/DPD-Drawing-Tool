@@ -5329,7 +5329,7 @@
 						editorUi.getServiceName() == 'draw.io' &&
 						!editorUi.isOfflineApp() && file != null)
 					{
-						this.addMenuItems(menu, ['share', '-'], parent);
+						// this.addMenuItems(menu, ['share', '-'], parent);
 					}
 					
 					if (file != null && file.isRenamable())
@@ -5366,12 +5366,19 @@
 				{
 					menu.addSeparator(parent);
 					this.addSubmenu('embed', menu, parent);
-					this.addSubmenu('publish', menu, parent);
+
+					// ======   NOLAI - {- Frontend -} /Sprint 2/ Task 98   =====
+					// this.addSubmenu('publish', menu, parent); (This line was commented to avoid confusion and make a more streamlined UI)
+					// ====== end of changes by SE	======
 				}
 				
 				menu.addSeparator(parent);
-				this.addSubmenu('newLibrary', menu, parent);
-				this.addSubmenu('openLibraryFrom', menu, parent);
+
+				// ======   NOLAI - {- Frontend -} /Sprint 2/ Task 98   =====
+				// (These two lines were commented to avoid confusion and make a more streamlined UI):
+				// this.addSubmenu('newLibrary', menu, parent);
+				// this.addSubmenu('openLibraryFrom', menu, parent);
+				// ====== end of changes by SE	======
 				
 				if (editorUi.isRevisionHistorySupported())
 				{
