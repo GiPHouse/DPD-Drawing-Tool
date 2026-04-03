@@ -98,16 +98,9 @@ async function fillNextcloudDialog(page, filename) {
       return false;
     }
 
-    const fillByLabel = (label, value) => {
-      const labelCell = Array.from(activeDialog.querySelectorAll('td')).find((td) =>
-        (td.textContent || '').trim() === label
-      );
+    const fillByPlaceholder = (placeholder, value) => {
+      const input = activeDialog.querySelector(`input[placeholder="${placeholder}"]`);
 
-      if (!labelCell || !labelCell.parentElement) {
-        return false;
-      }
-
-      const input = labelCell.parentElement.querySelector('input');
       if (!input) {
         return false;
       }
@@ -122,17 +115,17 @@ async function fillNextcloudDialog(page, filename) {
     };
 
     const baseFilled =
-      fillByLabel('Nextcloud Base URL:', url) &&
-      fillByLabel('Username:', user) &&
-      fillByLabel('Password:', pass) &&
-      fillByLabel('Remote Path:', remotePath);
+      fillByPlaceholder('Enter WebDAV URL', url) &&
+      fillByPlaceholder('Nextcloud username', user) &&
+      fillByPlaceholder('Nextcloud password', pass) &&
+      fillByPlaceholder('e.g. /Diagrams', remotePath);
 
     if (!baseFilled) {
       return false;
     }
 
     if (name != null) {
-      return fillByLabel('Filename:', name);
+      return fillByPlaceholder('file.drawio', name);
     }
 
     return true;
@@ -156,12 +149,16 @@ async function openMyFilesList(page) {
   await clickTopmostOkButton(page);
 
   const listTitle = page.getByText('Select a .drawio file to load');
+  const listTitleAlt = page.getByText('Select a diagram');
   const emptyMessage = page.getByText('No .drawio files found in Nextcloud.');
 
   const deadline = Date.now() + 20_000;
 
   while (Date.now() < deadline) {
-    if (await listTitle.isVisible().catch(() => false)) {
+    if (
+      await listTitle.isVisible().catch(() => false) ||
+      await listTitleAlt.isVisible().catch(() => false)
+    ) {
       return 'list';
     }
 
@@ -198,7 +195,7 @@ async function clickTopmostOkButton(page) {
       const visible = rect.width > 0 && rect.height > 0 &&
         style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
 
-      if (visible && /^ok$/i.test(text)) {
+      if (visible && /^(save diagram|ok|open|fetch files)$/i.test(text)) {
         btn.click();
         return true;
       }
@@ -243,34 +240,31 @@ async function assertFileAppearsInMyFiles(page, filename, maxAttempts = 12) {
 
 /**
  * Opens the Save File dialog in the app.
- * TODO: Update selector once issue #98 UI is merged — look for the actual
- *       save button / menu item in the custom NOLAI toolbar.
  */
 async function openSaveDialog(page) {
-  const title = page.getByText('Save diagram to Nextcloud');
+  const title = page.getByRole('heading', { name: /save diagram to nextcloud/i });
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
     await closeDialogs(page);
-    await clickFileMenuAction(page, /^saveToNextcloud$|save\s*to\s*nextcloud/i);
+    await clickFileMenuAction(page, /^save/i);
 
     if (await waitVisible(title, 4_000)) {
       return;
     }
   }
 
-  throw new Error('Could not open Save diagram to Nextcloud dialog');
+  throw new Error('Could not open Save Diagram to Nextcloud dialog');
 }
 
 /**
  * Opens the Load File dialog in the app.
- * TODO: Update selector once issue #100 UI is merged.
  */
 async function openLoadDialog(page) {
-  const title = page.getByText('Load diagram from Nextcloud');
+  const title = page.getByRole('heading', { name: /load diagram from nextcloud/i });
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
     await closeDialogs(page);
-    await clickFileMenuAction(page, /^my\s*files$/i);
+    await clickFileMenuAction(page, /^myfiles$|my\s*files/i);
 
     if (await waitVisible(title, 4_000)) {
       return;
@@ -280,6 +274,48 @@ async function openLoadDialog(page) {
   throw new Error('Could not open Load diagram from Nextcloud dialog');
 }
 
+async function openDeleteConfirmDialog(page, filename) {
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    await openLoadDialog(page);
+    await fillNextcloudDialog(page, null);
+    await clickTopmostOkButton(page);
+
+    const select = page.locator('.geDialog:visible select').last();
+    await expect(select).toBeVisible({ timeout: 10_000});
+
+    const options = await select.locator('option').allTextContents();
+  
+    if (options.includes(filename)) {
+      await select.selectOption({ label: filename });
+      const deleteBtn = page.locator('.geDialog:visible button').filter({ hasText: /^delete$/i }).first();
+      await deleteBtn.click();
+      return;
+    }
+    
+    await closeDialogs(page);
+    await page.waitForTimeout(2000);
+  }
+
+  throw new Error (`Timeout: File ${filename} never appeared in the list.`);
+}
+
+async function clickConfirmDeleteButton(page) {
+  const clicked = await page.evaluate(() => {
+    const buttons = Array.from(document.querySelectorAll('button.gePrimaryBtn, .geDialog button'));
+    for (let i = buttons.length - 1; i >= 0; i-=1) {
+      const btn = buttons[i];
+      const text = (btn.textContent || '').trim();
+      if (/^delete$/i.test(text) && btn.offsetParent != null) {
+        btn.click();
+        return true;
+      }
+    }
+    return false
+  });
+  if (!clicked) throw new Error('Could not click the confirmation Delete button');
+}
+
 // ── Save ─────────────────────────────────────────────────────────────────────
 
 test.describe('Save file to Nextcloud', () => {
@@ -287,8 +323,9 @@ test.describe('Save file to Nextcloud', () => {
     await loadApp(page);
     await openSaveDialog(page);
 
-    await expect(page.getByText('Save diagram to Nextcloud')).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator('tr', { hasText: 'Filename:' }).locator('input')).toBeVisible();
+    const saveDialog = page.locator('.geDialog:visible').last();
+    await expect(saveDialog.getByRole('heading', { name: /save diagram to nextcloud/i })).toBeVisible({ timeout: 10_000 });
+    await expect(saveDialog.locator('input[placeholder="file.drawio"]')).toBeVisible();
   });
 
   test('diagram can be saved with a filename and appears in Nextcloud', async ({ page }) => {
@@ -316,8 +353,9 @@ test.describe('Load file from Nextcloud', () => {
     await loadApp(page);
     await openLoadDialog(page);
 
-    await expect(page.getByText('Load diagram from Nextcloud')).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator('tr', { hasText: 'Nextcloud Base URL:' }).locator('input')).toBeVisible();
+    const loadDialog = page.locator('.geDialog:visible').last();
+    await expect(loadDialog.getByRole('heading', { name: /load diagram from nextcloud/i })).toBeVisible({ timeout: 10_000 });
+    await expect(loadDialog.locator('input[placeholder="Nextcloud username"]')).toBeVisible();
   });
 
   test('a previously saved file appears in the load dialog', async ({ page }) => {
@@ -342,14 +380,50 @@ test.describe('Load file from Nextcloud', () => {
 
 test.describe('Delete file from Nextcloud', () => {
   test('delete button removes the file from the file list', async ({ page }) => {
-    test.skip(true, 'Awaiting issue #108 — Delete UI implementation');
-    // TODO: upload fixture file, open delete dialog, confirm deletion,
-    //       then verify the file is gone (404 via WebDAV)
+    test.setTimeout(90_000);
+    test.skip(
+      !process.env.CI && !process.env.INTEGRATION,
+      'Skipped locally — run with INTEGRATION=1 or in CI'
+    );
+
+    const deleteFixture = `delete-test-${Date.now()}.drawio`;
+
+    await loadApp(page);
+    await openSaveDialog(page);
+    await fillNextcloudDialog(page, deleteFixture);
+    await clickTopmostOkButton(page);
+    await assertFileAppearsInMyFiles(page, deleteFixture);
+    await closeDialogs(page);
+
+    await openDeleteConfirmDialog(page, deleteFixture);
+    await clickConfirmDeleteButton(page);
+
+    const option = page.locator('.geDialog:visible select option', {hasText: deleteFixture });
+    await expect(option).not.toBeVisible({ timeout: 5_000 });
   });
 
   test('deleting a file shows a confirmation prompt before proceeding', async ({ page }) => {
-    test.skip(true, 'Awaiting issue #108 — Delete UI implementation');
-    // TODO: open the delete dialog and assert a confirmation step exists
+    // test.skip(true, 'Awaiting issue #108 — Delete UI implementation');
+    test.skip(
+      !process.env.CI && !process.env.INTEGRATION,
+      'Skipped locally — run with INTEGRATION=1 or in CI'
+    );
+
+    const filename = `confirm-test-${Date.now()}.drawio`;
+
+    await loadApp(page);
+    await openSaveDialog(page);
+    await fillNextcloudDialog(page, filename);
+    await clickTopmostOkButton(page);
+    await closeDialogs(page);
+
+    await openDeleteConfirmDialog(page, filename);
+
+    const confirmDialog = page.locator('.geDialog:visible').last();
+    await expect(confirmDialog).toContainText(/are you sure you want to delete/i);
+    await expect(confirmDialog).toContainText(filename);
+
+    await page.keyboard.press('Escape');
   });
 });
 
