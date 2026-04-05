@@ -11296,6 +11296,8 @@
 				this.dpdConsole = new DPDConsole(this, consoleBottom);
 			}
 
+			// END OF CHANGES SE team: sprint 2 - task 112 - adds console to format panel #NOLAI
+
 		if (Editor.isSettingsEnabled())
 		{
 			this.doSetSketchMode((mxSettings.settings.sketchMode != null && urlParams['rough'] == null &&
