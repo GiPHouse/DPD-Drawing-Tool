@@ -19,6 +19,69 @@ Draw.loadPlugin(function (ui) {
     return;
   }
 
+  // --- NEW: Warning Banner & Lock State Management ---
+  const warningBanner = document.createElement('div');
+  warningBanner.style.cssText = [
+    'position: absolute',
+    'top: 40px',
+    'left: 50%',
+    'transform: translateX(-50%)',
+    'background-color: #ffaa00',
+    'color: #000',
+    'padding: 8px 16px',
+    'border-radius: 4px',
+    'font-weight: bold',
+    'font-family: Arial, sans-serif',
+    'font-size: 13px',
+    'z-index: 99999',
+    'display: none',
+    'box-shadow: 0 2px 6px rgba(0,0,0,0.3)',
+    'pointer-events: none' 
+  ].join(';');
+  warningBanner.innerHTML = '⚠ Diagram editing is locked while Highlights are active.';
+  document.body.appendChild(warningBanner);
+
+  function setEditLockState(locked) {
+    // Wrapped in a safe try-catch to prevent native draw.io bugs from crashing the plugin
+    try {
+      if (graph && typeof graph.setEnabled === 'function') {
+        graph.setEnabled(!locked);
+      }
+    } catch (e) {
+      console.warn('[DPD] Safely caught setEnabled error:', e);
+    }
+    
+    if (warningBanner) {
+      warningBanner.style.display = locked ? 'block' : 'none';
+    }
+  }
+  // ---------------------------------------------------
+
+ // DPD Console implementation, task 112, sprint 2
+
+  function pushConsoleViolation(rule, msg, severity, details) {
+    if (ui != null && ui.dpdConsole != null && typeof ui.dpdConsole.addViolation === 'function') {
+      ui.dpdConsole.addViolation(rule, msg, severity || 'error', details || {});
+    }
+  }
+
+  function syncConsoleViolations(violations) {
+    if (ui == null || ui.dpdConsole == null ||
+      typeof ui.dpdConsole.clear !== 'function' ||
+      typeof ui.dpdConsole.addViolation !== 'function') {
+      return;
+    }
+
+    ui.dpdConsole.clear();
+
+    for (let i = 0; i < violations.length; i++) {
+      const v = violations[i];
+      ui.dpdConsole.addViolation(v.rule, v.msg, v.severity, {});
+    }
+  }
+
+  // end DPD Console implementation, task 112, sprint 2
+  
   // Ordered lattices
 
   const IDENT_ORDER = [
@@ -113,15 +176,9 @@ Draw.loadPlugin(function (ui) {
       Object.entries(attrs).forEach(([k, v]) => {
         if (v !== null && v !== undefined) el.setAttribute(k, v);
       });
-      // Build a compact annotation label
-      const parts = [];
-      const ident = el.getAttribute('identifiability');
-      const link  = el.getAttribute('linkability');
-      const pseudo = el.getAttribute('pseudonymity');
-      if (ident)  parts.push(ident.replace(/_/g, ' '));
-      if (link)   parts.push(link.replace(/_/g, ' '));
-      if (pseudo && pseudo !== 'none') parts.push(pseudo.replace(/_/g, ' '));
-      el.setAttribute('label', parts.join('\n'));
+      // NOLAI: Keep the edge label empty — annotation details live in the sidebar
+      // and violation numbers are shown as badges on the arrow itself.
+      el.setAttribute('label', '');
       model.setValue(edge, el);
     } finally {
       model.endUpdate();
@@ -138,15 +195,18 @@ Draw.loadPlugin(function (ui) {
       const tt = getComponentType(target);
 
       if (st === 'data_store' && tt === 'data_store') {
-        alert(
-          'R-S1 Error: Data stores cannot connect directly to each other.\n' +
-          'A process must mediate any flow between two stores.'
-        );
+        pushConsoleViolation('R-S1', 'Data stores cannot connect directly to each other. A process must mediate the flow.', 'error', {
+          sourceType: st,
+          targetType: tt,
+        });
         return false;
       }
 
       if (st === 'external_entity' && tt === 'external_entity') {
-        alert('R-S2 Error: External entities cannot connect directly to each other.');
+        pushConsoleViolation('R-S2', 'External entities cannot connect directly to each other.', 'error', {
+          sourceType: st,
+          targetType: tt,
+        });
         return false;
       }
 
@@ -154,10 +214,10 @@ Draw.loadPlugin(function (ui) {
         (st === 'data_store' && tt === 'external_entity') ||
         (st === 'external_entity' && tt === 'data_store')
       ) {
-        alert(
-          'R-S3 Error: Data stores cannot connect directly to external entities.\n' +
-          'At least one end of every flow must be a process.'
-        );
+        pushConsoleViolation('R-S3', 'Data stores cannot connect directly to external entities. At least one end must be a process.', 'error', {
+          sourceType: st,
+          targetType: tt,
+        });
         return false;
       }
     }
@@ -170,34 +230,90 @@ Draw.loadPlugin(function (ui) {
   function showEdgeAnnotationDialog(edge) {
     const props = getEdgeProps(edge);
 
+    // --- NEW: Dynamic Theme Evaluation (Computed Fallback) ---
+    let isDark = false;
+
+    if (ui.theme === 'dark') {
+      isDark = true;
+    } else if (typeof ui.isDarkMode === 'function' && ui.isDarkMode()) {
+      isDark = true;
+    } else if (ui.editor && typeof ui.editor.isDarkMode === 'function' && ui.editor.isDarkMode()) {
+      isDark = true;
+    } else if (document.body.classList.contains('geDark') || 
+               document.documentElement.classList.contains('geDark') ||
+               document.documentElement.getAttribute('data-color-mode') === 'dark' ||
+               document.body.getAttribute('data-theme') === 'dark') {
+      isDark = true;
+    } else {
+      try {
+        const container = ui.container || document.body;
+        const bgColor = window.getComputedStyle(container).backgroundColor;
+        const match = bgColor.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+        if (match) {
+          const r = parseInt(match[1], 10);
+          const g = parseInt(match[2], 10);
+          const b = parseInt(match[3], 10);
+          const luminance = (0.299 * r + 0.587 * g + 0.114 * b);
+          isDark = luminance < 128; 
+        }
+      } catch (e) {
+        console.warn('[DPD] Could not compute background color for theme detection');
+      }
+    }
+
+    const bgColor = isDark ? 'var(--ge-dark-panel-color)' : 'var(--ge-panel-color)';
+    const textColor = isDark ? 'var(--dark-text-color)' : 'var(--text-color)';
+    const borderColor = isDark ? 'var(--dark-border-color)' : 'var(--border-color)';
+    // -------------------------------------
+
     const wrap = document.createElement('div');
     wrap.style.cssText = [
       'padding:20px',
       'min-width:340px',
       'font-family:Arial,sans-serif',
       'font-size:13px',
-      'color:#222',
+      `color:${textColor}`,
+      `background:${bgColor}`,
     ].join(';');
 
     function field(label, required, inputHtml) {
       return `
         <div style="margin-bottom:14px;">
-          <label style="display:block;font-weight:bold;margin-bottom:4px;">
-            ${label}${required ? ' <span style="color:#c00">*</span>' : ''}
+          <label style="display:block;font-weight:bold;margin-bottom:4px;
+                        color:${textColor};">
+            ${label}${required ? ' <span style="color:#e05050">*</span>' : ''}
           </label>
           ${inputHtml}
         </div>`;
     }
 
-    const selStyle = 'width:100%;padding:5px;font-size:12px;border:1px solid #bbb;border-radius:3px;';
-    const inpStyle = 'width:100%;padding:5px;font-size:12px;border:1px solid #bbb;border-radius:3px;box-sizing:border-box;';
+    const selStyle = [
+      'width:100%',
+      'padding:5px',
+      'font-size:12px',
+      `border:1px solid ${borderColor}`,
+      'border-radius:3px',
+      `background:${bgColor}`,
+      `color:${textColor}`,
+    ].join(';');
+
+    const inpStyle = [
+      'width:100%',
+      'padding:5px',
+      'font-size:12px',
+      `border:1px solid ${borderColor}`,
+      'border-radius:3px',
+      'box-sizing:border-box',
+      `background:${bgColor}`,
+      `color:${textColor}`,
+    ].join(';');
 
     function opt(val, label, cur) {
       return `<option value="${val}" ${cur === val ? 'selected' : ''}>${label}</option>`;
     }
 
     wrap.innerHTML = `
-      <h3 style="margin:0 0 16px;font-size:15px;border-bottom:1px solid #ddd;padding-bottom:8px;">
+      <h3 style="margin:0 0 16px;font-size:15px;border-bottom:1px solid ${borderColor};padding-bottom:8px;color:${textColor};">
         Annotate Data Flow
       </h3>
       ${field('Identifiability', true, `
@@ -221,12 +337,12 @@ Draw.loadPlugin(function (ui) {
           ${opt('strict_pseudonymous','Strict pseudonymous', props.pseudonymity)}
           ${opt('soft_pseudonymous',  'Soft pseudonymous',  props.pseudonymity)}
         </select>`)}
-      ${field('Data Labels <span style="font-weight:normal;color:#666;">(comma-separated)</span>', false, `
+      ${field('Data Labels <span style="font-weight:normal;opacity:0.6;">(comma-separated)</span>', false, `
         <input id="dpd-labels" type="text"
           value="${props.data_labels || ''}"
           placeholder="e.g. name, email, age"
           style="${inpStyle}" />`)}
-      <div id="dpd-err" style="color:#c00;font-size:12px;min-height:16px;margin-bottom:8px;"></div>
+      <div id="dpd-err" style="color:#e05050;font-size:12px;min-height:16px;margin-bottom:8px;"></div>
     `;
 
     const btnRow = document.createElement('div');
@@ -234,7 +350,15 @@ Draw.loadPlugin(function (ui) {
 
     const cancelBtn = document.createElement('button');
     cancelBtn.textContent = 'Cancel';
-    cancelBtn.style.cssText = 'padding:6px 18px;border:1px solid #bbb;border-radius:4px;background:#f5f5f5;cursor:pointer;font-size:13px;';
+    cancelBtn.style.cssText = [
+      'padding:6px 18px',
+      `border:1px solid ${borderColor}`,
+      'border-radius:4px',
+      `background:${bgColor}`,
+      `color:${textColor}`,
+      'cursor:pointer',
+      'font-size:13px',
+    ].join(';');
     cancelBtn.onclick = () => ui.hideDialog();
 
     const okBtn = document.createElement('button');
@@ -256,8 +380,8 @@ Draw.loadPlugin(function (ui) {
       setEdgeProps(edge, { identifiability: ident, linkability: link, pseudonymity: pseudo, data_labels: labels });
       ui.hideDialog();
 
-      // Run validation immediately so the user sees any rule issues
-      setTimeout(validateGraph, 50);
+      // Auto-validate silently after annotation save: update console without opening modal.
+      setTimeout(function() { validateGraph(); }, 50);
     };
 
     btnRow.appendChild(cancelBtn);
@@ -283,10 +407,24 @@ Draw.loadPlugin(function (ui) {
   }
 
   function validateGraph() {
+    clearViolationHighlights();
+
+    if (ui.dpdConsole && !ui.dpdConsole._clearHookSet) {
+      ui.dpdConsole._clearHookSet = true;
+
+      ui.dpdConsole.onClear = function() {
+        clearViolationHighlights();
+        lastViolations = [];
+        highlightsVisible = false;
+        setEditLockState(false);
+      };
+
+      ui.dpdConsole.onToggleHighlights = toggleHighlights;
+    }
+
     const violations = [];
     const { edges } = collectAllCells();
 
-    // Per-store incoming / outgoing identifiability ranks (for R-I5)
     const storeIn  = {}; // storeId -> [rank, …]
     const storeOut = {}; // storeId -> [rank, …]
 
@@ -303,13 +441,13 @@ Draw.loadPlugin(function (ui) {
 
       // R-S1
       if (st === 'data_store' && tt === 'data_store') {
-        violations.push({ rule: 'R-S1', severity: 'error',
+        violations.push({ rule: 'R-S1', severity: 'error', edge: edge,
           msg: 'Data stores cannot connect directly to each other. A process must mediate the flow.' });
       }
 
       // R-S2
       if (st === 'external_entity' && tt === 'external_entity') {
-        violations.push({ rule: 'R-S2', severity: 'error',
+        violations.push({ rule: 'R-S2', severity: 'error', edge: edge,
           msg: 'External entities cannot connect directly to each other.' });
       }
 
@@ -318,13 +456,13 @@ Draw.loadPlugin(function (ui) {
         (st === 'data_store' && tt === 'external_entity') ||
         (st === 'external_entity' && tt === 'data_store')
       ) {
-        violations.push({ rule: 'R-S3', severity: 'error',
+        violations.push({ rule: 'R-S3', severity: 'error', edge: edge,
           msg: 'Data stores cannot connect directly to external entities. At least one end must be a process.' });
       }
 
       // R-S4
       if (!props.identifiability) {
-        violations.push({ rule: 'R-S4', severity: 'warning',
+        violations.push({ rule: 'R-S4', severity: 'warning', edge: edge,
           msg: 'Data flow has no identifiability annotation. Double-click the edge to annotate it.' });
         return; // skip further checks — no data to work with
       }
@@ -338,7 +476,7 @@ Draw.loadPlugin(function (ui) {
       if (tt === 'process') {
         const maxIdent = getNodeProp(tgt, 'accepts_max_identifiability');
         if (maxIdent && identRank > (IDENT_RANK[maxIdent] ?? 99)) {
-          violations.push({ rule: 'R-I1', severity: 'error',
+          violations.push({ rule: 'R-I1', severity: 'error', edge: edge,
             msg: `Flow is "${props.identifiability}" but process only accepts "${maxIdent}" or lower.` });
         }
       }
@@ -347,7 +485,7 @@ Draw.loadPlugin(function (ui) {
       if (st === 'process') {
         const maxOut = getNodeProp(src, 'outputs_max_identifiability');
         if (maxOut && identRank > (IDENT_RANK[maxOut] ?? 99)) {
-          violations.push({ rule: 'R-I2', severity: 'error',
+          violations.push({ rule: 'R-I2', severity: 'error', edge: edge,
             msg: `Flow is "${props.identifiability}" but process should output "${maxOut}" or lower.` });
         }
       }
@@ -356,7 +494,7 @@ Draw.loadPlugin(function (ui) {
       if (tt === 'data_store') {
         const maxStore = getNodeProp(tgt, 'stores_max_identifiability');
         if (maxStore && identRank > (IDENT_RANK[maxStore] ?? 99)) {
-          violations.push({ rule: 'R-I3', severity: 'error',
+          violations.push({ rule: 'R-I3', severity: 'error', edge: edge,
             msg: `Store accepts at most "${maxStore}" but receives "${props.identifiability}".` });
         }
         // Accumulate for R-I5
@@ -369,7 +507,7 @@ Draw.loadPlugin(function (ui) {
         ['directly_identifiable', 'indirectly_identifiable'].includes(props.identifiability) &&
         ['unlinkable', 'locally_linkable'].includes(props.linkability)
       ) {
-        violations.push({ rule: 'R-I4', severity: 'warning',
+        violations.push({ rule: 'R-I4', severity: 'warning', edge: edge,
           msg: `Identifiable data ("${props.identifiability}") should be universally linkable.` });
       }
 
@@ -385,14 +523,14 @@ Draw.loadPlugin(function (ui) {
       if (tt === 'process') {
         const maxLink = getNodeProp(tgt, 'accepts_max_linkability');
         if (maxLink && linkRank > (LINK_RANK[maxLink] ?? 99)) {
-          violations.push({ rule: 'R-L1', severity: 'error',
+          violations.push({ rule: 'R-L1', severity: 'error', edge: edge,
             msg: `Flow is "${props.linkability}" but process only accepts "${maxLink}" or lower.` });
         }
       }
 
       // R-L2 – de-identified but universally linkable
       if (props.identifiability === 'de_identified' && props.linkability === 'universally_linkable') {
-        violations.push({ rule: 'R-L2', severity: 'warning',
+        violations.push({ rule: 'R-L2', severity: 'warning', edge: edge,
           msg: 'De-identified but universally linkable data can become identifiable if combined with other identifiable data.' });
       }
 
@@ -403,13 +541,13 @@ Draw.loadPlugin(function (ui) {
       if (pseudo !== 'none') {
         // R-P1 – pseudonymous data cannot be directly identifiable
         if (props.identifiability === 'directly_identifiable') {
-          violations.push({ rule: 'R-P1', severity: 'error',
+          violations.push({ rule: 'R-P1', severity: 'error', edge: edge,
             msg: 'Pseudonymous data cannot be directly identifiable.' });
         }
 
         // R-P2 – pseudonymous data must be locally linkable
         if (props.linkability !== 'locally_linkable') {
-          violations.push({ rule: 'R-P2', severity: 'error',
+          violations.push({ rule: 'R-P2', severity: 'error', edge: edge,
             msg: 'Pseudonymous data must be locally linkable (linked only by the pseudonym).' });
         }
 
@@ -418,13 +556,13 @@ Draw.loadPlugin(function (ui) {
           pseudo === 'strict_pseudonymous' &&
           !['de_identified', 'non_personal'].includes(props.identifiability)
         ) {
-          violations.push({ rule: 'R-P3', severity: 'error',
+          violations.push({ rule: 'R-P3', severity: 'error', edge: edge,
             msg: 'Strict pseudonymous data must be de-identified beyond the pseudonym.' });
         }
 
         // R-P4 – soft pseudonymous should be indirectly identifiable
         if (pseudo === 'soft_pseudonymous' && props.identifiability !== 'indirectly_identifiable') {
-          violations.push({ rule: 'R-P4', severity: 'warning',
+          violations.push({ rule: 'R-P4', severity: 'warning', edge: edge,
             msg: 'Soft pseudonymous data is expected to be indirectly identifiable.' });
         }
       }
@@ -441,7 +579,19 @@ Draw.loadPlugin(function (ui) {
       }
     });
 
-    showValidationResults(violations);
+    syncConsoleViolations(violations);
+    highlightViolatingEdges(violations);
+
+    lastViolations = violations;
+    highlightsVisible = violations.length > 0;
+    
+    if (ui.dpdConsole && typeof ui.dpdConsole.setHighlightToggleState === 'function') {
+      ui.dpdConsole.setHighlightToggleState(highlightsVisible);
+    }
+
+    if (highlightsVisible) {
+      setEditLockState(true);
+    }
   }
 
   // Validation results dialog
@@ -497,7 +647,110 @@ Draw.loadPlugin(function (ui) {
     ui.showDialog(wrap, 520, 500, true, true);
   }
 
-  // Auto-show annotation dialog on new connections 
+  const violationHighlightedEdges = new Map();
+  let lastViolations = [];
+  let highlightsVisible = false;
+
+  function toggleHighlights() {
+    if (highlightsVisible) {
+      clearViolationHighlights();
+      highlightsVisible = false;
+      setEditLockState(false);
+      if (ui.dpdConsole && typeof ui.dpdConsole.setHighlightToggleState === 'function') {
+        ui.dpdConsole.setHighlightToggleState(false);
+      }
+    } else {
+      validateGraph();
+      highlightsVisible = true;
+      setEditLockState(true);
+      if (ui.dpdConsole && typeof ui.dpdConsole.setHighlightToggleState === 'function') {
+        ui.dpdConsole.setHighlightToggleState(true);
+      }
+    }
+  }
+
+  function clearViolationHighlights() {
+    if (violationHighlightedEdges.size === 0) return;
+    model.beginUpdate();
+    try {
+      violationHighlightedEdges.forEach(function(originalStyle, edge) {
+        graph.setCellStyle(originalStyle, [edge]);
+        graph.removeCellOverlays(edge);
+      });
+    } finally {
+      model.endUpdate();
+    }
+    violationHighlightedEdges.clear();
+  }
+
+  function highlightViolatingEdges(violations) {
+    var edgeViolationMap = new Map();
+    violations.forEach(function(v, i) {
+      if (!v.edge) return;
+      if (!edgeViolationMap.has(v.edge)) {
+        edgeViolationMap.set(v.edge, { indices: [], hasError: false });
+      }
+      var entry = edgeViolationMap.get(v.edge);
+      entry.indices.push(i + 1);
+      if (v.severity === 'error') entry.hasError = true;
+    });
+
+    if (edgeViolationMap.size === 0) return;
+
+    model.beginUpdate();
+    try {
+      edgeViolationMap.forEach(function(info, edge) {
+        violationHighlightedEdges.set(edge, edge.style || '');
+
+        var color = info.hasError ? '#ff4444' : '#ffaa00';
+        var base = (edge.style || '')
+          .replace(/strokeColor=[^;]*(;|$)/g, '')
+          .replace(/strokeWidth=[^;]*(;|$)/g, '')
+          .replace(/;;+/g, ';')
+          .replace(/^;|;$/g, '');
+        var newStyle = (base ? base + ';' : '') +
+          'strokeColor=' + color + ';strokeWidth=4';
+        graph.setCellStyle(newStyle, [edge]);
+
+        var label = info.indices.join(',');
+        var badgeH = 28;
+        var badgeW = Math.max(36, label.length * 10 + 24);
+
+        var svg = [
+          '<svg xmlns="http://www.w3.org/2000/svg" width="' + badgeW + '" height="' + badgeH + '">',
+          '  <defs>',
+          '    <filter id="s" x="-25%" y="-25%" width="150%" height="150%">',
+          '      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="rgba(0,0,0,0.55)"/>',
+          '    </filter>',
+          '  </defs>',
+          '  <rect x="1" y="1" width="' + (badgeW - 2) + '" height="' + (badgeH - 2) + '"',
+          '    rx="6" ry="6" fill="' + color + '" stroke="white" stroke-width="2"',
+          '    filter="url(#s)" opacity="0.97"/>',
+          '  <text x="' + (badgeW / 2) + '" y="19" text-anchor="middle"',
+          '    fill="white" font-size="13" font-weight="bold"',
+          '    font-family="Arial,sans-serif" letter-spacing="0.5">' + label + '</text>',
+          '</svg>',
+        ].join('');
+
+        var dataUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+
+        var overlay = new mxCellOverlay(
+          new mxImage(dataUrl, badgeW, badgeH),
+          info.indices.map(function(n) { return '#' + n; }).join(', '),
+          mxConstants.ALIGN_CENTER,
+          mxConstants.ALIGN_MIDDLE,
+          new mxPoint(0, 0)
+        );
+
+        graph.removeCellOverlays(edge);
+        graph.addCellOverlay(edge, overlay);
+      });
+    } finally {
+      model.endUpdate();
+    }
+  }
+
+  // Auto-show annotation dialog on new connections
 
   const annotatedEdges = new WeakSet();
   const loggedAddedVertices = new WeakSet();
@@ -529,6 +782,14 @@ Draw.loadPlugin(function (ui) {
     const edit = evt.getProperty('edit');
     if (!edit || !edit.changes) return;
 
+    const hasRootChange = edit.changes.some(function(c) {
+      return c.constructor && c.constructor.name === 'mxRootChange';
+    });
+    if (hasRootChange) {
+      setTimeout(validateGraph, 800);
+      return;
+    }
+
     edit.changes.forEach(change => {
       if (change.constructor.name === 'mxChildChange') {
         const vertex = change.child;
@@ -553,7 +814,6 @@ Draw.loadPlugin(function (ui) {
         const tgt = model.getTerminal(edge, false);
         if (src && tgt && !annotatedEdges.has(edge)) {
           annotatedEdges.add(edge);
-          // Small delay so draw.io finishes its own post-connect work first
           setTimeout(() => showEdgeAnnotationDialog(edge), 150);
         }
       }
@@ -570,46 +830,6 @@ Draw.loadPlugin(function (ui) {
     }
     return origPopup(menu, cell, evt);
   };
-
-  //  "Validate DPD" button injected into the toolbar area 
-
-  function injectValidateButton() {
-    // Avoid double-injection
-    if (document.getElementById('dpd-validate-btn')) return;
-
-    const btn = document.createElement('button');
-    btn.id = 'dpd-validate-btn';
-    btn.textContent = '✓ Validate DPD';
-    btn.title = 'Run all 15 DPD rules against the current diagram';
-    btn.style.cssText = [
-      'position:fixed',
-      'bottom:18px',
-      'right:18px',
-      'z-index:9999',
-      'padding:8px 16px',
-      'background:#1565c0',
-      'color:#fff',
-      'border:none',
-      'border-radius:6px',
-      'font-size:13px',
-      'font-weight:bold',
-      'cursor:pointer',
-      'box-shadow:0 2px 6px rgba(0,0,0,0.3)',
-    ].join(';');
-    btn.onmouseenter = () => { btn.style.background = '#0d47a1'; };
-    btn.onmouseleave = () => { btn.style.background = '#1565c0'; };
-    btn.onclick = validateGraph;
-    document.body.appendChild(btn);
-  }
-
-  // Inject after DOM is ready
-  if (document.readyState === 'complete') {
-    injectValidateButton();
-  } else {
-    window.addEventListener('load', injectValidateButton);
-  }
-  // Fallback: also try after a short delay in case the app shell renders late
-  setTimeout(injectValidateButton, 1500);
 
   console.log('DPD Plugin Loaded');
   console.log('[DPD] Plugin loaded — 15 rules active (R-S1–4, R-I1–5, R-L1–2, R-P1–4)');

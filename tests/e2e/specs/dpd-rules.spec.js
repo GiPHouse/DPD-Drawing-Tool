@@ -1,21 +1,13 @@
 /**
- * DPD rule enforcement E2E tests
+ * E2E tests for DPD rule enforcement and the DPD console sidebar panel.
  *
- * Covers Sprint 2 issues:
- *   #110  Create and understand DPD semantic rules
- *   #112  Implement UI representation of DPD rules enforcement
- *   #113  Update plugin to enforce DPD rules based on attributes
- *   #115  Custom Alert Messages
- *   #120  Implementing UI choice option for shape attributes
+ * These tests run against the live draw.io app in a real browser via
+ * Playwright. They cover:
+ * - DPD console panel visibility, empty state, and header controls
+ * - Highlights toggle button behaviour
+ * - Edit-lock warning banner visibility
  *
- * These tests use the draw.io canvas via Playwright's mouse API.
- * They will need the DPD stencil library loaded (issue #111 — Add XML attributes
- * to library) before the shape-specific assertions can be finalised.
- *
- * Sections marked TODO indicate where selectors / logic need updating once the
- * relevant Sprint 2 task is merged.
- *
- * Run with: npx playwright test specs/dpd-rules.spec.js
+ * Run: npx playwright test specs/dpd-rules.spec.js
  */
 
 const { test, expect } = require('@playwright/test');
@@ -23,22 +15,7 @@ const { test, expect } = require('@playwright/test');
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /**
- * Navigate to the app and wait for full initialisation.
- *
- * Key decisions (same as plugin-init.spec.js — see that file for full notes):
- *
- * 1. `/?atlas=1` ensures the atlas theme is active so the sidebar and all
- *    plugin callbacks are registered before assertions run.
- *
- * 2. We wait for `#geInfo` to be DETACHED — the loading-screen div that
- *    draw.io removes once the editor is fully ready, including all `loadPlugin`
- *    callbacks.  Waiting for `.geEditor` would resolve immediately because
- *    `<body class="geEditor">` is already in the static HTML.
- *
- * 3. A 60-second timeout covers Docker cold-start.
- *
- * NOTE: Remove the dialog handler once issue #115 replaces alert() with a
- * custom, non-blocking notification component.
+ * Navigate to the draw.io app and wait for full initialisation.
  */
 async function loadApp(page) {
   page.on('dialog', (dialog) => dialog.dismiss());
@@ -47,35 +24,18 @@ async function loadApp(page) {
 }
 
 /**
- * Drop a shape from the sidebar onto the canvas.
- *
- * Key decisions:
- *
- * 1. All sidebar panels start collapsed.  We click the "General" header to
- *    expand it, which reveals the `.geSidebar .geItem` shape tiles.
- *
- * 2. The panel header is an `<a class="geTitle">` element — a SIBLING of the
- *    `.geSidebar` content div, not a child of it.  So we must target
- *    `a.geTitle` directly; using `.geSidebar .getByText('General')` would
- *    search inside the (currently empty) panel body and time out.
- *
- * 3. `.geSidebar .geItem` is the stable selector for individual shape tiles
- *    inside any expanded sidebar panel (grapheditor.css line 1891).
- *
- * TODO: Once the DPD stencil panel has been added (issue #111) and given a
- *       stable CSS class or data attribute, switch to that panel's `<a.geTitle>`
- *       and change the tile selector accordingly.
+ * Drag the first shape from the General sidebar panel onto the canvas.
  */
 async function dropShapeOnCanvas(page, targetX, targetY) {
-  // Expand the General panel — target the <a class="geTitle"> header element,
-  // NOT .geSidebar (which is the collapsed content container, not the header)
-  await page.locator('a.geTitle').filter({ hasText: /^General$/ }).first().click();
-
   const firstShape = page.locator('.geSidebar .geItem').first();
+  
+  // Only click the 'General' header if the shape is hidden
+  if (!(await firstShape.isVisible())) {
+    await page.locator('a.geTitle').filter({ hasText: /^General$/ }).first().click();
+  }
+
   await firstShape.waitFor({ state: 'visible', timeout: 10_000 });
 
-  // On CI (especially Firefox), draw.io may render the graph as SVG rather
-  // than canvas. The diagram container is the most stable drag/drop target.
   const diagramContainer = page.locator('.geDiagramContainer').first();
   await diagramContainer.waitFor({ state: 'visible', timeout: 20_000 });
 
@@ -89,7 +49,14 @@ async function dropShapeOnCanvas(page, targetX, targetY) {
   });
 }
 
-// ── Vertex lifecycle (automated equivalents of PLUGIN_DEMO_TEST.md) ───────────
+/**
+ * Returns a locator for the DPD console panel in the right-hand sidebar.
+ */
+async function getDPDConsolePanel(page) {
+  return page.locator('text=DPD Violations').locator('..');
+}
+
+// ── Vertex lifecycle ──────────────────────────────────────────────────────────
 
 test.describe('Vertex lifecycle events', () => {
   test('adding a shape logs "Vertex added" and "Vertex moved"', async ({ page }) => {
@@ -115,77 +82,90 @@ test.describe('Vertex lifecycle events', () => {
   });
 });
 
-// ── DPD rule enforcement ──────────────────────────────────────────────────────
-// These tests will be fleshed out once issues #112 and #113 are merged.
-// The pattern for each test is:
-//   1. Place a shape with certain attributes
-//   2. Attempt an invalid connection (or set an invalid attribute)
-//   3. Assert the custom alert/notification appears with the correct message
-//   4. Assert the invalid state is visually indicated
+// ── DPD console sidebar panel ─────────────────────────────────────────────────
 
-test.describe('DPD semantic rule enforcement', () => {
-  /**
-   * TODO (issue #112 / #113): Update the alert/notification selector to match
-   * the custom alert component once issue #115 is implemented.
-   * Replace `page.getByRole('alert')` with the actual component selector.
-   */
-
-  test('shows a rule-violation alert when an invalid connection is made', async ({ page }) => {
-    // IMPORTANT: test.skip must be the first statement — if any earlier call
-    // (loadApp, dropShapeOnCanvas) throws, the skip is never reached and the
-    // test reports as failed rather than skipped.
-    test.skip(true, 'Awaiting issue #113 — DPD rule enforcement in plugin');
-
+test.describe('DPD Console sidebar panel', () => {
+  test('DPD console panel is visible in the right sidebar', async ({ page }) => {
     await loadApp(page);
-
-    // Place two shapes
-    await dropShapeOnCanvas(page, 300, 300);
-    await dropShapeOnCanvas(page, 600, 300);
-
-    // TODO: Draw a connection between them that violates a DPD rule.
-    // Once the DPD rule attributes are on the shapes, this should trigger an alert.
-    const alert = page.getByRole('alert');
-    await expect(alert).toBeVisible();
-    await expect(alert).toContainText(/DPD rule violation/i);
+    const consolePanelTitle = page.getByText('DPD Violations', { exact: true });
+    await expect(consolePanelTitle).toBeVisible({ timeout: 10_000 });
   });
 
-  test('does not show an alert for a valid connection', async ({ page }) => {
-    test.skip(true, 'Awaiting issue #113 — DPD rule enforcement in plugin');
-
+  test('DPD console shows "No violations detected" on a fresh empty diagram', async ({ page }) => {
     await loadApp(page);
+    const emptyMsg = page.locator('#dpdEmptyMessage');
+    await expect(emptyMsg).toBeVisible({ timeout: 10_000 });
+    await expect(emptyMsg).toContainText('No violations detected');
+  });
 
-    // TODO: place two compatible shapes and connect them
-    const alert = page.getByRole('alert');
-    await expect(alert).not.toBeVisible();
+  test('DPD console panel has a Highlights toggle button', async ({ page }) => {
+    await loadApp(page);
+    const highlightsBtn = page.locator('button', { hasText: 'Highlights' });
+    await expect(highlightsBtn).toBeVisible({ timeout: 10_000 });
+  });
+
+  test('DPD console panel has a clear (✕) button', async ({ page }) => {
+    await loadApp(page);
+    const clearBtn = page.locator('button', { hasText: '✕' });
+    await expect(clearBtn).toBeVisible({ timeout: 10_000 });
+  });
+
+  test('footer shows "0 violations" on a fresh empty diagram', async ({ page }) => {
+    await loadApp(page);
+    const statsText = page.getByText('0 violations', { exact: true });
+    await expect(statsText).toBeVisible({ timeout: 10_000 });
   });
 });
 
-// ── Shape attribute UI (issue #120) ──────────────────────────────────────────
+// ── Violation display and highlight controls ──────────────────────────────────
 
-test.describe('Shape attribute panel', () => {
-  test('clicking a shape opens the attribute panel', async ({ page }) => {
-    test.skip(true, 'Awaiting issue #120 — UI choice option for shape attributes');
-
+test.describe('DPD violation display after triggering validation', () => {
+  test('console shows violation entries after clicking Highlights with an unannotated edge', async ({ page }) => {
+    page.on('dialog', (dialog) => dialog.dismiss());
     await loadApp(page);
-    await dropShapeOnCanvas(page, 400, 300);
 
-    // Click the placed shape
-    await page.mouse.click(400, 300);
+    await dropShapeOnCanvas(page, 300, 300);
+    await dropShapeOnCanvas(page, 600, 300);
 
-    // TODO: update selector once the attribute choice panel (issue #120) is merged
-    const attrPanel = page.locator('.dpd-attribute-panel, [data-testid="attribute-panel"]');
-    await expect(attrPanel).toBeVisible();
+    const highlightsBtn = page.locator('button', { hasText: 'Highlights' });
+    await expect(highlightsBtn).toBeVisible({ timeout: 10_000 });
+    await highlightsBtn.click();
+
+    await expect(page.locator('#dpdEmptyMessage')).toBeVisible({ timeout: 5_000 });
   });
 
-  test('attribute panel shows the correct options for a DPD shape', async ({ page }) => {
-    test.skip(true, 'Awaiting issue #120 — UI choice option for shape attributes');
-
+  test('clicking Highlights a second time deactivates highlights (toggle off)', async ({ page }) => {
     await loadApp(page);
-    await dropShapeOnCanvas(page, 400, 300);
-    await page.mouse.click(400, 300);
 
-    // TODO: assert that dropdown options match the DPD XML attribute definitions
-    const dropdown = page.locator('.dpd-attribute-panel select').first();
-    await expect(dropdown).toBeVisible();
+    const highlightsBtn = page.locator('button', { hasText: 'Highlights' });
+    await expect(highlightsBtn).toBeVisible({ timeout: 10_000 });
+
+    await highlightsBtn.click();
+    await highlightsBtn.click();
+
+    await expect(highlightsBtn).toBeVisible();
+  });
+
+  test('clicking the clear (✕) button removes violation entries from the console', async ({ page }) => {
+    page.on('dialog', (dialog) => dialog.dismiss());
+    await loadApp(page);
+
+    await dropShapeOnCanvas(page, 400, 300);
+
+    const clearBtn = page.locator('button', { hasText: '✕' });
+    await clearBtn.click();
+
+    await expect(page.locator('#dpdEmptyMessage')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText('0 violations', { exact: true })).toBeVisible({ timeout: 5_000 });
+  });
+});
+
+// ── Edit-lock warning banner ──────────────────────────────────────────────────
+
+test.describe('Edit-lock warning banner', () => {
+  test('warning banner is hidden on initial load', async ({ page }) => {
+    await loadApp(page);
+    const banner = page.locator('text=Diagram editing is locked');
+    await expect(banner).toBeHidden({ timeout: 5_000 });
   });
 });

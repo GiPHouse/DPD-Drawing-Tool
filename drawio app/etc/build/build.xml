@@ -535,6 +535,7 @@ OUTPUT FILES (in src/main/webapp/js/):
 			
 			<sources dir="${war.dir}/js/diagramly">
 				<file name="App.js" />
+				<file name="DPDConsole.js" /> <!-- Added by SE team - task 112 - sprint 2  NOLAI -->
 				<file name="Menus.js" />
 				<file name="Pages.js" />
 				<file name="Trees.js" />

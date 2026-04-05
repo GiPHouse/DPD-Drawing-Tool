@@ -11267,8 +11267,36 @@
 
 			this.formatWidth = mxSettings.getFormatWidth();
 		}
-		
+		// SE team: sprint 2 - task 112 - adds console to format panel #NOLAI
 		editorUiCreateUi.apply(this, arguments);
+
+			if (this.format != null && this.formatContainer != null &&
+				typeof DPDConsole !== 'undefined' && this.dpdConsole == null)
+			{
+				var formatTop = document.createElement('div');
+				formatTop.style.cssText = 'position: relative; flex: 0 0 65%; min-height: 0; overflow: auto;';
+
+				var consoleBottom = document.createElement('div');
+				consoleBottom.style.cssText = 'position: relative; flex: 0 0 35%; min-height: 0; overflow: hidden;';
+
+				this.formatContainer.innerHTML = '';
+				this.formatContainer.style.display = 'flex';
+				this.formatContainer.style.flexDirection = 'column';
+				this.formatContainer.style.minHeight = '0';
+				this.formatContainer.style.height = '100%';
+				this.formatContainer.style.overflow = 'hidden';
+
+				this.formatContainer.appendChild(formatTop);
+				this.formatContainer.appendChild(consoleBottom);
+
+				// Rebind format to the top half so its refresh lifecycle doesn't wipe the console.
+				this.format.container = formatTop;
+				this.format.refresh();
+
+				this.dpdConsole = new DPDConsole(this, consoleBottom);
+			}
+
+			// END OF CHANGES SE team: sprint 2 - task 112 - adds console to format panel #NOLAI
 
 		if (Editor.isSettingsEnabled())
 		{
