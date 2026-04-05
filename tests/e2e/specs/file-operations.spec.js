@@ -167,12 +167,18 @@ async function openMyFilesList(page) {
   await clickTopmostOkButton(page);
 
   const listTitle = page.getByText('Select a .drawio file to load');
+  const listTitleAlt = page.getByText('Select a diagram');
+  const fileSelect = page.locator('.geDialog:visible select').first();
   const emptyMessage = page.getByText('No .drawio files found in Nextcloud.');
 
   const deadline = Date.now() + 20_000;
 
   while (Date.now() < deadline) {
-    if (await listTitle.isVisible().catch(() => false)) {
+    if (
+      await listTitle.isVisible().catch(() => false) ||
+      await listTitleAlt.isVisible().catch(() => false) ||
+      await fileSelect.isVisible().catch(() => false)
+    ) {
       return 'list';
     }
 
@@ -299,7 +305,7 @@ test.describe('Save file to Nextcloud', () => {
     await openSaveDialog(page);
 
     await expect(page.getByText('Save diagram to Nextcloud')).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator('tr', { hasText: 'Filename:' }).locator('input')).toBeVisible();
+    await expect(page.locator('input[placeholder="file.drawio"]')).toBeVisible();
   });
 
   test('diagram can be saved with a filename and appears in Nextcloud', async ({ page }) => {
