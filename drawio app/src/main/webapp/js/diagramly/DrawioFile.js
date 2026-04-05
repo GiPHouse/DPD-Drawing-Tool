@@ -1964,8 +1964,12 @@ DrawioFile.prototype.addUnsavedStatus = function(err)
 
 				var status = mxUtils.htmlEntities(mxResources.get('unsavedChangesClickHereToSave')) +
 					((msg != null && msg != '') ? ' (' + mxUtils.htmlEntities(msg) + ')' : '');
+
+				// ======   NOLAI - {- Frontend -} /Sprint 2/ Task 100  =====
 				var action = 'data-action="' + ((this.ui.mode == null || !this.isEditable()) ?
-					'saveAs' : 'save') + '"';
+					'Save' : 'Save') + '"'; // Changed the save option to our custom save action.
+				// ======   End of changes of the SE team    =====
+				
 				this.ui.editor.setStatus('<div ' + action + ' title="' +
 					status + '" class="geStatusAlert">' + status + '</div>');
 			}));

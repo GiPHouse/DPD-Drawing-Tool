@@ -858,9 +858,11 @@
 			*
 		*/
 		// ======	NOLAI - {- Backend -} /Sprint 1/ Task 16	=====
+		// ======   NOLAI - {- Frontend -} /Sprint 2/ Task 98   =====
 
-		editorUi.actions.addAction('saveToNextcloud', function()
+		editorUi.actions.addAction('Save', function()
 		{
+			// Get filename and ensure that it is a valid file
 			var currentFile = editorUi.getCurrentFile();
 			var filename = (currentFile != null && currentFile.getTitle() != null) ?
 				currentFile.getTitle() : editorUi.defaultFilename;
@@ -871,43 +873,75 @@
 			}
 			
 			var xmlContent = editorUi.getFileData(true);
-			
-			// Create form elements
+			var nolaiColor = '#008f89';
+
+			// Main container for dialog UI
 			var div = document.createElement('div');
-			div.style.padding = '10px';
-			
-			var title = document.createElement('p');
+			div.style.cssText = 'padding: 20px; font-family: Helvetica, Arial, sans-serif; color: #333;';
+
+			// The title for the dialog
+			var title = document.createElement('h2');
 			title.innerHTML = 'Save diagram to Nextcloud';
+			title.style.cssText = 'margin: 0 0 15px 0; color: ' + nolaiColor + '; font-size: 18px; border-bottom: 2px solid ' + nolaiColor + '; padding-bottom: 10px;';
 			div.appendChild(title);
-			
-			var table = document.createElement('table');
-			
-			// Helper addRow function to create input row 
-			function addRow(label, type, defaultValue)
+
+			// Helper function to create a labeled input field
+			function createField(label, type, defaultValue, placeholder) 
 			{
-				var tr = document.createElement('tr');
-				var td1 = document.createElement('td');
-				td1.innerHTML = label;
-				var td2 = document.createElement('td');
+				var group = document.createElement('div');
+				group.style.marginBottom = '12px';
+
+				var lbl = document.createElement('label');
+				lbl.innerHTML = label;
+				lbl.style.cssText = 'display: block; font-size: 12px; font-weight: bold; margin-bottom: 4px; color: #666;';
+
 				var input = document.createElement('input');
 				input.type = type;
 				input.value = defaultValue;
-				input.style.width = '300px';
-				td2.appendChild(input);
-				tr.appendChild(td1);
-				tr.appendChild(td2);
-				table.appendChild(tr);
-				return input;
+				input.placeholder = placeholder || '';
+				input.style.cssText = 'width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; outline: none; font-size: 14px;';
+
+				input.onfocus = function()
+				{
+					this.style.borderColor = nolaiColor;
+					this.style.boxShadow = '0 0 3px ' + nolaiColor; 
+				};
+
+				input.onblur = function()
+				{
+					this.style.borderColor = '#ccc';
+					this.style.boxShadow = 'none'
+				};
+
+				group.appendChild(lbl);
+				group.appendChild(input);
+				div.appendChild(group);
+				return input
 			}
 			
-			var urlInput = addRow('Nextcloud Base URL:', 'text', 'https://localhost/remote.php/dav/files/admin/');
-			var userInput = addRow('Username:', 'text', 'admin');
-			var passInput = addRow('Password:', 'password', 'admin');
-			var pathInput = addRow('Remote Path:', 'text', '');
-			var filenameInput = addRow('Filename:', 'text', filename);
+			// Creating the input fields
+			var urlInput = createField('Server URL', 'text', 'https://localhost/remote.php/dav/files/admin/', 'Enter WebDAV URL');
+			var userInput = createField('Username', 'text', 'admin', 'Nextcloud username');
+			var passInput = createField('Password', 'password', 'admin', 'Nextcloud password');
+
+			var row = document.createElement('div');
+			row.style.display = 'flex';
+			row.style.gap = '10px';
+
+			var pathCol = document.createElement('div'); 
+			pathCol.style.flex = '1';
 			
-			div.appendChild(table);
-			
+			var fileCol = document.createElement('div');
+			fileCol.style.flex = '2';
+
+			var pathInput = createField('Remote Path', 'text', '', 'e.g. /Diagrams');
+			var filenameInput = createField('Filename', 'text', filename, 'file.drawio');
+
+			row.appendChild(pathInput.parentNode);
+			row.appendChild(filenameInput.parentNode);
+			div.appendChild(row);
+
+			// Dialog logic
 			var dlg = new CustomDialog(editorUi, div, function()
 			{
 				var url = urlInput.value;
@@ -943,244 +977,271 @@
 				}
 			});
 
-			editorUi.showDialog(dlg.container, 420, 280, true, false);
-			urlInput.focus();
+			// Styling the OK button for saving files.
+			dlg.okButton.innerHTML = 'Save Diagram';
+    		dlg.okButton.style.backgroundColor = nolaiColor;
+			dlg.okButton.style.backgroundImage = 'none';
+			dlg.okButton.style.color = '#fff';
+
+			editorUi.showDialog(dlg.container, 450, 420, true, true);
+			filenameInput.focus();
 		});
-		
-			// ======	NOLAI - {- Backend -} /Sprint 1/ Task 92	=====
-			editorUi.actions.addAction('My Files', function()
+	
+		// ======	NOLAI - {- Backend -} /Sprint 1/ Task 92	=====
+		// ======   NOLAI - {- Frontend -} /Sprint 2/ Task 100  =====
+		editorUi.actions.addAction('My Files', function()
+		{
+			var nolaiColor = '#008f89';
+
+			// Main container for dialog UI
+			var div = document.createElement('div');
+			div.style.cssText = 'padding: 20px; font-family: Helvetica, Arial, sans-serif; color: #333;';
+
+			// The title for the dialog
+			var title = document.createElement('h2');
+			title.innerHTML = 'Load diagram from Nextcloud';
+			title.style.cssText = 'margin: 0 0 15px 0; color: ' + nolaiColor + '; font-size: 18px; border-bottom: 2px solid ' + nolaiColor + '; padding-bottom: 10px;';
+			div.appendChild(title);
+
+			// Helper function to create a labeled input field
+			function createField(label, type, defaultValue, placeholder)
 			{
-				var div = document.createElement('div');
-				div.style.padding = '10px';
+				var group = document.createElement('div');
+				group.style.marginBottom = '12px';
 
-				var title = document.createElement('p');
-				title.innerHTML = 'Load diagram from Nextcloud';
-				div.appendChild(title);
+				var lbl = document.createElement('label');
+				lbl.innerHTML = label;
+				lbl.style.cssText = 'display: block; font-size: 12px; font-weight: bold; margin-bottom: 4px; color: #666;';
 
-				var table = document.createElement('table');
+				var input = document.createElement('input');
+				input.type = type;
+				input.value = defaultValue;
+				input.placeholder = placeholder || '';
+				input.style.cssText = 'width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; outline: none; font-size: 14px;';
 
-				// Helper to create one label/input row and return the created input element.
-				function addRow(label, type, defaultValue)
+				input.onfocus = function()
 				{
-					var tr = document.createElement('tr');
-					var td1 = document.createElement('td');
-					td1.innerHTML = label;
-					var td2 = document.createElement('td');
-					var input = document.createElement('input');
-					input.type = type;
-					input.value = defaultValue;
-					input.style.width = '300px';
-					td2.appendChild(input);
-					tr.appendChild(td1);
-					tr.appendChild(td2);
-					table.appendChild(tr);
-					return input;
+					this.style.borderColor = nolaiColor;
+					this.style.boxShadow = '0 0 3px ' + nolaiColor; 
+				};
+
+				input.onblur = function()
+				{
+					this.style.borderColor = '#ccc';
+					this.style.boxShadow = 'none'
+				};
+
+				group.appendChild(lbl);
+				group.appendChild(input);
+				div.appendChild(group);
+				return input
+			}
+
+			// Creating the input fields
+			var urlInput = createField('Server URL', 'text', 'https://localhost/remote.php/dav/files/admin/', 'Enter WebDAV URL');
+			var userInput = createField('Username:', 'text', 'admin', 'Nextcloud username');
+			var passInput = createField('Password:', 'password', 'admin', 'Nextcloud password');
+			var pathInput = createField('Remote Path:', 'text', '', 'e.g. /Diagrams');
+
+			// When user confirms: fetch available .drawio files from Nextcloud.
+			var dlg = new CustomDialog(editorUi, div, function()
+			{
+				var url = urlInput.value;
+				var user = userInput.value;
+				var pass = passInput.value;
+				var path = pathInput.value;
+
+				// Check if Nextcloud helper functions are loaded.
+				if (typeof listDrawIOFilesInNextcloud !== 'function' || typeof getDrawIOFromNextcloudXML !== 'function' || typeof deleteFileInNextcloud !== 'function')
+				{
+					editorUi.handleError({message: 'NextcloudFile.js is not loaded'});
+					return;
 				}
 
-				var urlInput = addRow('Nextcloud Base URL:', 'text', 'https://localhost/remote.php/dav/files/admin/');
-				var userInput = addRow('Username:', 'text', 'admin');
-				var passInput = addRow('Password:', 'password', 'admin');
-				var pathInput = addRow('Remote Path:', 'text', '');
+				editorUi.spinner.spin(document.body, 'Loading file list from Nextcloud...');
 
-				div.appendChild(table);
-
-				// When user confirms: fetch available .drawio files from Nextcloud.
-				var dlg = new CustomDialog(editorUi, div, function()
+				listDrawIOFilesInNextcloud(url, user, pass, path).then(function(files)
 				{
-					var url = urlInput.value;
-					var user = userInput.value;
-					var pass = passInput.value;
-					var path = pathInput.value;
+					editorUi.spinner.stop();
 
-					// Check if Nextcloud helper functions are loaded.
-					if (typeof listDrawIOFilesInNextcloud !== 'function' || typeof getDrawIOFromNextcloudXML !== 'function' || typeof deleteFileInNextcloud !== 'function')
+					// Stop if no matching draw.io files were found.
+					if (files == null || files.length === 0)
 					{
-						editorUi.handleError({message: 'NextcloudFile.js is not loaded'});
+						editorUi.handleError({message: 'No .drawio files found in Nextcloud.'});
 						return;
 					}
 
-					editorUi.spinner.spin(document.body, 'Loading file list from Nextcloud...');
+					// Build second UI containing selectable file list.
+					var listDiv = document.createElement('div');
+					listDiv.style.cssText = 'padding: 20px; font-family: Helvetica, Arial, sans-serif;';
 
-					listDrawIOFilesInNextcloud(url, user, pass, path).then(function(files)
+					var listTitle = document.createElement('h3');
+					listTitle.innerHTML = 'Select a diagram';
+					listTitle.style.cssText = 'margin: 0 0 15px 0; color: ' + nolaiColor + '; font-size: 18px; border-bottom: 2px solid ' + nolaiColor + '; padding-bottom: 10px;';
+					listDiv.appendChild(listTitle);
+
+					var select = document.createElement('select');
+					select.style.cssText = 'width: 100%; height: 220px; padding: 5px;';
+					select.size = 12;
+
+					// List all file options
+					files.forEach(function(file, i)
 					{
-						editorUi.spinner.stop();
+						var option = document.createElement('option');
+						option.value = i;
+						option.text = file.displayPath;
+						select.appendChild(option);
+					});
 
-						// Stop if no matching draw.io files were found.
-						if (files == null || files.length === 0)
+					listDiv.appendChild(select);
+
+					var loadSelected = function()
+					{
+						if (select.selectedIndex < 0)
 						{
-							editorUi.handleError({message: 'No .drawio files found in Nextcloud.'});
+							editorUi.handleError({message: 'Please select a file to load.'});
 							return;
 						}
 
-						// Build second UI containing selectable file list.
-						var listDiv = document.createElement('div');
-						listDiv.style.padding = '10px';
-
-						var listTitle = document.createElement('p');
-						listTitle.innerHTML = 'Select a .drawio file to load';
-						listDiv.appendChild(listTitle);
-
-						var select = document.createElement('select');
-						select.style.width = '420px';
-						select.style.height = '220px';
-						select.size = 12;
-
-						for (var i = 0; i < files.length; i++)
+						var selected = files[parseInt(select.value, 10)];
+						
+						// Performs actual fetch+load into current editor state.
+						var performLoad = function()
 						{
-							var option = document.createElement('option');
-							option.value = i;
-							option.text = files[i].displayPath;
-							select.appendChild(option);
+							editorUi.spinner.spin(document.body, 'Loading file from Nextcloud...');
+
+							getDrawIOFromNextcloudXML(selected.name, url, user, pass, selected.remotePath).then(function(xml)
+							{
+								editorUi.spinner.stop();
+
+								if (xml == null)
+								{
+									editorUi.handleError({message: 'Failed to load selected file from Nextcloud.'});
+									return;
+								}
+
+								try
+								{
+									// Load XML as a fresh document and clear modified flag.
+									editorUi.fileLoaded(new LocalFile(editorUi, xml, selected.name, true), true);
+									editorUi.editor.modified = false;
+									editorUi.editor.setStatus('Loaded from Nextcloud successfully');
+								}
+								catch (e)
+								{
+									editorUi.handleError({message: 'Loaded file is not a valid draw.io diagram: ' + e.message});
+								}
+							}).catch(function(error)
+							{
+								editorUi.spinner.stop();
+								editorUi.handleError({message: 'Error: ' + error.message});
+							});
+						};
+
+						// Protect unsaved local changes before replacing current diagram.
+						if (editorUi.editor.modified)
+						{
+							editorUi.confirm(mxResources.get('allChangesLost'), null, performLoad,
+								mxResources.get('cancel'), mxResources.get('discardChanges'));
+						}
+						else
+						{
+							performLoad();
+						}
+					};
+
+					// ======	NOLAI - {- Backend -} /Sprint 2/ Task 117	=====
+					// ======	NOLAI - {- Frontend -} /Sprint 2/ Task 108	=====
+					var deleteSelected = function()
+					{
+						if (select.selectedIndex < 0)
+						{
+							editorUi.handleError({message: 'Please select a file to delete.'});
+							return;
 						}
 
-						listDiv.appendChild(select);
+						var selected = files[parseInt(select.value, 10)];
 
-						var loadSelected = function()
+						editorUi.confirm('Are you sure you want to delete "' + selected.displayPath + '"?', null, function()
 						{
-							if (select.selectedIndex < 0)
-							{
-								editorUi.handleError({message: 'Please select a file to load.'});
-								return;
-							}
+							editorUi.spinner.spin(document.body, 'Deleting file from Nextcloud...');
 
-							var selected = files[parseInt(select.value, 10)];
-							
-							// Performs actual fetch+load into current editor state.
-							var performLoad = function()
+							deleteFileInNextcloud(url, user, pass, selected.remotePath, selected.name).then(function(success)
 							{
-								editorUi.spinner.spin(document.body, 'Loading file from Nextcloud...');
+								editorUi.spinner.stop();
 
-								getDrawIOFromNextcloudXML(selected.name, url, user, pass, selected.remotePath).then(function(xml)
+								if (!success)
 								{
-									editorUi.spinner.stop();
+									editorUi.handleError({message: 'Failed to delete selected file from Nextcloud.'});
+									return;
+								}
 
-									if (xml == null)
-									{
-										editorUi.handleError({message: 'Failed to load selected file from Nextcloud.'});
-										return;
-									}
+								files.splice(select.selectedIndex, 1);
+								select.remove(select.selectedIndex);
 
-									try
-									{
-										// Load XML as a named local file so title/header reflects selected file.
-										editorUi.fileLoaded(new LocalFile(editorUi, xml, selected.name, true), true); // BUG FIX
-										editorUi.editor.modified = false;
-										editorUi.editor.setStatus('Loaded from Nextcloud successfully');
-									}
-									catch (e)
-									{
-										editorUi.handleError({message: 'Loaded file is not a valid draw.io diagram: ' + e.message});
-									}
-								}).catch(function(error)
+								if (files.length == 0)
 								{
-									editorUi.spinner.stop();
-									editorUi.handleError({message: 'Error: ' + error.message});
-								});
-							};
-
-							// Protect unsaved local changes before replacing current diagram.
-							if (editorUi.editor.modified)
-							{
-								editorUi.confirm(mxResources.get('allChangesLost'), null, performLoad,
-									mxResources.get('cancel'), mxResources.get('discardChanges'));
-							}
-							else
-							{
-								performLoad();
-							}
-						};
-						// ======	NOLAI - {- Backend -} /Sprint 2/ Task 117	=====
-
-						var deleteSelected = function()
-						{
-							if (select.selectedIndex < 0)
-							{
-								editorUi.handleError({message: 'Please select a file to delete.'});
-								return;
-							}
-
-							var selected = files[parseInt(select.value, 10)];
-
-							editorUi.confirm('Are you sure you want to delete "' + selected.displayPath + '"?', null, function()
-							{
-								editorUi.spinner.spin(document.body, 'Deleting file from Nextcloud...');
-
-								deleteFileInNextcloud(url, user, pass, selected.remotePath, selected.name).then(function(success)
-								{
-									editorUi.spinner.stop();
-
-									if (!success)
-									{
-										editorUi.handleError({message: 'Failed to delete selected file from Nextcloud.'});
-										return;
-									}
-
-									files.splice(select.selectedIndex, 1);
-									select.remove(select.selectedIndex);
-
-									if (files.length === 0)
-									{
-										editorUi.hideDialog();
-										editorUi.editor.setStatus('Deleted from Nextcloud successfully');
-										return;
-									}
-
-									if (select.selectedIndex < 0)
-									{
-										select.selectedIndex = 0;
-									}
-
+									editorUi.hideDialog();
 									editorUi.editor.setStatus('Deleted from Nextcloud successfully');
-								}).catch(function(error)
+									return;
+								}
+
+								if (select.selectedIndex < 0)
 								{
-									editorUi.spinner.stop();
-									editorUi.handleError({message: 'Error deleting file: ' + error.message});
-								});
-							}, mxResources.get('cancel'), 'Delete');
-						};
+									select.selectedIndex = 0;
+								}
 
-						var listDlg = new CustomDialog(editorUi, listDiv, loadSelected, null, 'Load', null,
-							null, false, null, false, [['Delete file', deleteSelected]]); 
-						// ======	NOLAI - {- Backend -} /Sprint 2/ Task 117	END OF SNIPPET =====
-						editorUi.showDialog(listDlg.container, 480, 360, true, false);
-						select.focus();
-					}).catch(function(error)
-					{
-						editorUi.spinner.stop();
-						editorUi.handleError({message: 'Error loading file list: ' + error.message});
-					});
+								editorUi.editor.setStatus('Deleted from Nextcloud successfully');
+							}).catch(function(error)
+							{
+								editorUi.spinner.stop();
+								editorUi.handleError({message: 'Error deleting file: ' + error.message});
+							});
+						}, mxResources.get('cancel'), 'Delete');
+					};
+
+					var buttonRow = document.createElement('div');
+					buttonRow.style.cssText = 'display: flex; justify-content: space-between; margin-top: 15px;';
+
+					var deleteBtn = document.createElement('button');
+					deleteBtn.innerHTML = 'Delete';
+					deleteBtn.style.cssText = 'padding: 8px 12px; border: none; border-radius: 4px; background-color: #e74c3c; color: white; cursor: pointer;';
+					deleteBtn.onclick = deleteSelected;
+					deleteBtn.onmouseover = function() { this.style.opacity = '0.85';};
+					deleteBtn.onmouseout = function() { this.style.opacity = '1';};
+
+					buttonRow.appendChild(deleteBtn);
+					listDiv.appendChild(buttonRow);
+
+					var listDlg = new CustomDialog(editorUi, listDiv, loadSelected);
+
+					// Add OK-button to load the diagram selected
+					listDlg.okButton.innerHTML = 'Load Diagram';
+					listDlg.okButton.style.backgroundColor = nolaiColor;
+					listDlg.okButton.style.color = '#fff';
+					listDlg.okButton.style.backgroundImage = 'none';
+
+					editorUi.showDialog(listDlg.container, 480, 420, true, false);
+					select.focus();
+				}).catch(function(error)
+				{
+					editorUi.spinner.stop();
+					editorUi.handleError({message: 'Error loading file list: ' + error.message});
 				});
-
-				editorUi.showDialog(dlg.container, 420, 250, true, false);
-				urlInput.focus();
 			});
 
-			// ====== end of changes by SE	======
-		
-		// ======	NOLAI - {- Backend -} /Sprint 2/ Task 117	=====
-		editorUi.actions.addAction('deleteFromNextcloud', function()
-		{
-			editorUi.spinner.spin(document.body, 'Deleting from Nextcloud...');
-			deleteFileInNextcloud(url, user, pass, path, filename).then(function(success)
- 			{
-    			editorUi.spinner.stop();
+			// Add OK-button to show all saved files
+			dlg.okButton.innerHTML = 'Fetch Files';
+			dlg.okButton.style.backgroundColor = nolaiColor;
+			dlg.okButton.style.color = '#fff';
+			dlg.okButton.style.backgroundImage = 'none';
 
-    				if (success)
-    				{
-      					editorUi.editor.setStatus('Deleted from Nextcloud successfully');
-    				}
-    			else
-    				{
-      				editorUi.handleError({message: 'Failed to delete from Nextcloud. Check console for details.'});
-    				}
-  			}).catch(function(error)
-			{
-    			editorUi.spinner.stop();
-    			editorUi.handleError({message: 'Error: ' + error.message});
-			});
+			editorUi.showDialog(dlg.container, 450, 420, true, true);
+			urlInput.focus();
 		});
-		// ======	NOLAI - {- Backend -} /Sprint 2/ Task 117	END OF SNIPPET	======
-			
+
+		// ====== end of changes by SE	======
+
 		editorUi.actions.addAction('keyboardShortcuts...', function()
 		{
 			if (!mxClient.IS_CHROMEAPP &&
@@ -4356,172 +4417,7 @@
 				this.addMenuItems(menu, ['-', 'createShape', 'editDiagram'], parent);
 			}
         })));
-        
-		this.put('openRecent', new Menu(function(menu, parent)
-		{
-			var recent = editorUi.getRecent();
-
-			if (recent != null)
-			{
-				for (var i = 0; i < recent.length; i++)
-				{
-					(function(entry)
-					{
-						var modeKey = entry.mode;
-						
-						// Google and oneDrive use different keys
-						if (modeKey == App.MODE_GOOGLE)
-						{
-							modeKey = 'googleDrive';
-						}
-						else if (modeKey == App.MODE_ONEDRIVE)
-						{
-							modeKey = 'oneDrive';
-						}
-						
-						menu.addItem(entry.title + ' (' + mxResources.get(modeKey) + ')', null, function()
-						{
-							editorUi.loadFile(entry.id);
-						}, parent);
-					})(recent[i]);
-				}
-
-				menu.addSeparator(parent);
-			}
-
-			menu.addItem(mxResources.get('reset'), null, function()
-			{
-				editorUi.resetRecent();
-			}, parent);
-		}));
-		
-		this.put('openFrom', new Menu(function(menu, parent)
-		{
-			if (editorUi.drive != null)
-			{
-				menu.addItem(mxResources.get('googleDrive') + '...', null, function()
-				{
-					editorUi.pickFile(App.MODE_GOOGLE);
-				}, parent);
-			}
-			else if (editorUi.isModeEnabled(App.MODE_GOOGLE))
-			{
-				menu.addItem(mxResources.get('googleDrive') + ' (' + mxResources.get('loading') + '...)', null, function()
-				{
-					// do nothing
-				}, parent, null, false);
-			}
-			
-			if (editorUi.isModeReady(App.MODE_ONEDRIVE))
-			{
-				menu.addItem(mxResources.get('oneDrive') + '...', null, function()
-				{
-					editorUi.pickFile(App.MODE_ONEDRIVE);
-				}, parent);
-			}
-			else if (editorUi.isModeEnabled(App.MODE_ONEDRIVE))
-			{
-				menu.addItem(mxResources.get('oneDrive') + ' (' + mxResources.get('loading') + '...)', null, function()
-				{
-					// do nothing
-				}, parent, null, false);
-			}
-
-			if (editorUi.isModeReady(App.MODE_DROPBOX))
-			{
-				menu.addItem(mxResources.get('dropbox') + '...', null, function()
-				{
-					editorUi.pickFile(App.MODE_DROPBOX);
-				}, parent);
-			}
-			else if (editorUi.isModeEnabled(App.MODE_DROPBOX))
-			{
-				menu.addItem(mxResources.get('dropbox') + ' (' + mxResources.get('loading') + '...)', null, function()
-				{
-					// do nothing
-				}, parent, null, false);
-			}
-
-			menu.addSeparator(parent);
-			
-			if (editorUi.isModeReady(App.MODE_GITHUB))
-			{
-				menu.addItem(mxResources.get('github') + '...', null, function()
-				{
-					editorUi.pickFile(App.MODE_GITHUB);
-				}, parent);
-			}
-			
-			if (editorUi.isModeReady(App.MODE_GITLAB))
-			{
-				menu.addItem(mxResources.get('gitlab') + '...', null, function()
-				{
-					editorUi.pickFile(App.MODE_GITLAB);
-				}, parent);
-			}
-
-			if (editorUi.isModeReady(App.MODE_TRELLO))
-			{
-				menu.addItem(mxResources.get('trello') + '...', null, function()
-				{
-					editorUi.pickFile(App.MODE_TRELLO);
-				}, parent);
-			}
-			else if (editorUi.isModeEnabled(App.MODE_TRELLO))
-			{
-				menu.addItem(mxResources.get('trello') + ' (' + mxResources.get('loading') + '...)', null, function()
-				{
-					// do nothing
-				}, parent, null, false);
-			}
-			
-			menu.addSeparator(parent);
-
-			if (isLocalStorage && urlParams['browser'] != '0')
-			{
-				menu.addItem(mxResources.get('browser') + '...', null, function()
-				{
-					editorUi.pickFile(App.MODE_BROWSER);
-				}, parent);
-			}
-			
-			//if (!mxClient.IS_IOS)
-			if (urlParams['noDevice'] != '1')
-			{
-				menu.addItem(mxResources.get('device') + '...', null, function()
-				{
-					editorUi.pickFile(App.MODE_DEVICE);
-				}, parent);
-			}
-
-			if (!editorUi.isOffline())
-			{
-				menu.addSeparator(parent);
-				
-				menu.addItem(mxResources.get('url') + '...', null, function()
-				{
-					var dlg = new FilenameDialog(editorUi, '', mxResources.get('open'), function(fileUrl)
-					{
-						if (fileUrl != null && fileUrl.length > 0)
-						{
-							if (editorUi.getCurrentFile() == null)
-							{
-								window.location.hash = '#U' + encodeURIComponent(fileUrl);
-							}
-							else
-							{
-								window.geOpenWindow(((mxClient.IS_CHROMEAPP) ?
-									'https://app.diagrams.net/' : 'https://' + location.host + '/') +
-									window.location.search + '#U' + encodeURIComponent(fileUrl));
-							}
-						}
-					}, mxResources.get('url'));
-					editorUi.showDialog(dlg.container, 300, 80, true, true);
-					dlg.init();
-				}, parent);
-			}
-		}));
-		
+	
 		if (Editor.enableCustomLibraries)
 		{
 			this.put('newLibrary', new Menu(function(menu, parent)
@@ -5359,7 +5255,6 @@
 			if (mxClient.IS_CHROMEAPP || EditorUi.isElectronApp)
 			{
 				editorUi.menus.addMenuItems(menu, ['new', 'open'], parent);
-				editorUi.menus.addSubmenu('openRecent', menu, parent);
 				editorUi.menus.addMenuItems(menu,
 					['-', 'synchronize', 'properties', '-',
 					'save', 'saveAs', '-'], parent);
@@ -5411,7 +5306,7 @@
 			
 			if (urlParams['noFileMenu'] != '1')
 			{
-				editorUi.menus.addMenuItems(menu, ['saveToNextcloud', 'My Files'], parent);
+				editorUi.menus.addMenuItems(menu, ['Save', 'My Files'], parent);
 			}
 	
 			if (Editor.currentTheme != 'simple' && Editor.currentTheme != 'min')
@@ -5560,7 +5455,7 @@
 					}
 					else
 					{
-						this.addMenuItems(menu, ['saveToNextcloud', 'My Files'], parent);
+						this.addMenuItems(menu, ['Save', 'My Files'], parent);
 						
 						if (urlParams['saveAndExit'] == '1')
 						{
@@ -5578,15 +5473,8 @@
 			{
 				var file = editorUi.getCurrentFile();
 				editorUi.menus.addMenuItems(menu, ['new'], parent);
-				editorUi.menus.addSubmenu('openFrom', menu, parent);
-
-				if (isLocalStorage)
-				{
-					this.addSubmenu('openRecent', menu, parent);
-				}
 				
 				menu.addSeparator(parent);
-				editorUi.menus.addMenuItems(menu, ['saveToNextcloud', 'My Files'], parent);
 
 				if (!mxClient.IS_CHROMEAPP && !EditorUi.isElectronApp &&
 					file != null && (file.constructor != LocalFile ||
@@ -5709,14 +5597,11 @@
 				{
 					this.addMenuItems(menu, ['new'], parent);
 				}
-				
-				this.addSubmenu('openFrom', menu, parent);
-
-				if (isLocalStorage)
-				{
-					this.addSubmenu('openRecent', menu, parent);
-				}
-				
+				// ======	NOLAI - {- Frontend -} /Sprint 2/ Task 98 and Task 100	=====
+				menu.addSeparator(parent);
+				this.addMenuItems(menu, ['Save', 'My Files'], parent);
+				// ====== end of changes by SE	======
+			
 				if (file != null && file.constructor == DriveFile)
 				{
 					this.addMenuItems(menu, ['new', '-', 'rename', 'makeCopy',
@@ -5743,7 +5628,7 @@
 						editorUi.getServiceName() == 'draw.io' &&
 						!editorUi.isOfflineApp() && file != null)
 					{
-						this.addMenuItems(menu, ['share', '-'], parent);
+						// this.addMenuItems(menu, ['share', '-'], parent);
 					}
 					
 					if (file != null && file.isRenamable())
@@ -5775,20 +5660,24 @@
 				}
 				
 				menu.addSeparator(parent);
-				// ======	NOLAI - {- Backend -} /Sprint 1/ Task 16	=====
-				this.addMenuItems(menu, ['saveToNextcloud', 'My Files'], parent);
-				// ====== end of changes by SE	======
 
 				if (!editorUi.isOffline())
 				{
 					menu.addSeparator(parent);
 					this.addSubmenu('embed', menu, parent);
-					this.addSubmenu('publish', menu, parent);
+
+					// ======   NOLAI - {- Frontend -} /Sprint 2/ Task 98   =====
+					// this.addSubmenu('publish', menu, parent); (This line was commented to avoid confusion and make a more streamlined UI)
+					// ====== end of changes by SE	======
 				}
 				
 				menu.addSeparator(parent);
-				this.addSubmenu('newLibrary', menu, parent);
-				this.addSubmenu('openLibraryFrom', menu, parent);
+
+				// ======   NOLAI - {- Frontend -} /Sprint 2/ Task 98   =====
+				// (These two lines were commented to avoid confusion and make a more streamlined UI):
+				// this.addSubmenu('newLibrary', menu, parent);
+				// this.addSubmenu('openLibraryFrom', menu, parent);
+				// ====== end of changes by SE	======
 				
 				if (editorUi.isRevisionHistorySupported())
 				{
@@ -5829,7 +5718,7 @@
 				this.addMenuItems(menu, ['-', 'close']);
 			}
 		})));
-		
+	
 		//Replace the default font family menu
 		this.put('fontFamily', new Menu(mxUtils.bind(this, function(menu, parent)
 		{
