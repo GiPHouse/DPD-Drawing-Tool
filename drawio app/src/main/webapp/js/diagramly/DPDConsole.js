@@ -1,8 +1,7 @@
 /* +--------------------------------------------------------+
-| This file contains modified code by SE team,           |
-| refer to keywords: 'NOLAI'                             |
-| Task 112, Sprint 2                                     |
-+--------------------------------------------------------+
+| This file was made by the SE team,                        |
+| Task 112, Sprint 2       	                                |
++-----------------------------------------------------------+
 
  */
 /**
