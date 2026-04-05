@@ -44,14 +44,30 @@ async function loadApp(page) {
 }
 
 async function clickFileMenuAction(page, actionLabelRegex) {
-  const fileMenu = page
-    .locator('a.geItem, button.geItem, .geMenubar a, .geMenubar button')
-    .filter({ hasText: /^file$/i })
-    .first();
+  const fileMenuCandidates = [
+    page.getByRole('menuitem', { name: /^file$/i }).first(),
+    page.getByRole('button', { name: /^file$/i }).first(),
+    page
+      .locator('a.geItem, button.geItem, .geMenubar a, .geMenubar button')
+      .filter({ hasText: /^file$/i })
+      .first(),
+  ];
 
   for (let attempt = 0; attempt < 4; attempt += 1) {
     try {
-      await fileMenu.click({ force: true, timeout: 4_000 });
+      let opened = false;
+
+      for (const menu of fileMenuCandidates) {
+        if (await menu.count().catch(() => 0)) {
+          await menu.click({ force: true, timeout: 4_000 });
+          opened = true;
+          break;
+        }
+      }
+
+      if (!opened) {
+        await page.keyboard.press('Alt+F').catch(() => {});
+      }
 
       const popup = page.locator('.mxPopupMenu').last();
       await expect(popup).toBeVisible({ timeout: 6_000 });
@@ -61,8 +77,10 @@ async function clickFileMenuAction(page, actionLabelRegex) {
         .filter({ hasText: actionLabelRegex })
         .first();
 
-      await actionItem.click({ force: true, timeout: 4_000 });
-      return;
+      if (await actionItem.count().catch(() => 0)) {
+        await actionItem.click({ force: true, timeout: 4_000 });
+        return;
+      }
     } catch {
       await closeDialogs(page);
       await page.waitForTimeout(400);
@@ -98,16 +116,9 @@ async function fillNextcloudDialog(page, filename) {
       return false;
     }
 
-    const fillByLabel = (label, value) => {
-      const labelCell = Array.from(activeDialog.querySelectorAll('td')).find((td) =>
-        (td.textContent || '').trim() === label
-      );
+    const fillByPlaceholder = (placeholder, value) => {
+      const input = activeDialog.querySelector(`input[placeholder="${placeholder}"]`);
 
-      if (!labelCell || !labelCell.parentElement) {
-        return false;
-      }
-
-      const input = labelCell.parentElement.querySelector('input');
       if (!input) {
         return false;
       }
@@ -122,17 +133,17 @@ async function fillNextcloudDialog(page, filename) {
     };
 
     const baseFilled =
-      fillByLabel('Nextcloud Base URL:', url) &&
-      fillByLabel('Username:', user) &&
-      fillByLabel('Password:', pass) &&
-      fillByLabel('Remote Path:', remotePath);
+      fillByPlaceholder('Enter WebDAV URL', url) &&
+      fillByPlaceholder('Nextcloud username', user) &&
+      fillByPlaceholder('Nextcloud password', pass) &&
+      fillByPlaceholder('e.g. /Diagrams', remotePath);
 
     if (!baseFilled) {
       return false;
     }
 
     if (name != null) {
-      return fillByLabel('Filename:', name);
+      return fillByPlaceholder('file.drawio', name);
     }
 
     return true;
@@ -198,7 +209,7 @@ async function clickTopmostOkButton(page) {
       const visible = rect.width > 0 && rect.height > 0 &&
         style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
 
-      if (visible && /^ok$/i.test(text)) {
+      if (visible && /^(save diagram|ok|open|fetch files)$/i.test(text)) {
         btn.click();
         return true;
       }
@@ -251,7 +262,7 @@ async function openSaveDialog(page) {
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
     await closeDialogs(page);
-    await clickFileMenuAction(page, /^saveToNextcloud$|save\s*to\s*nextcloud/i);
+    await clickFileMenuAction(page, /^save$/i);
 
     if (await waitVisible(title, 4_000)) {
       return;
@@ -317,7 +328,7 @@ test.describe('Load file from Nextcloud', () => {
     await openLoadDialog(page);
 
     await expect(page.getByText('Load diagram from Nextcloud')).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator('tr', { hasText: 'Nextcloud Base URL:' }).locator('input')).toBeVisible();
+    await expect(page.locator('input[placeholder="Nextcloud username"]')).toBeVisible();
   });
 
   test('a previously saved file appears in the load dialog', async ({ page }) => {
