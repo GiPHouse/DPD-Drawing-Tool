@@ -11267,7 +11267,7 @@
 
 			this.formatWidth = mxSettings.getFormatWidth();
 		}
-		// SE team: sprint 2 - task 112 - adds console to format panel
+		// SE team: sprint 2 - task 112 - adds console to format panel #NOLAI
 		editorUiCreateUi.apply(this, arguments);
 
 			if (this.format != null && this.formatContainer != null &&
