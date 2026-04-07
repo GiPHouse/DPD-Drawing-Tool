@@ -3776,6 +3776,7 @@
 				
 				if (file != null)
 				{
+					// ======	NOLAI - {- Backend -} /Sprint 2/ Task 99	======
 					var allPeople = [];
 					var selectedPeople = {};
 
@@ -4076,6 +4077,7 @@
 					editorUi.showDialog(shareDlg.container, 540, 460, true, false);
 					searchInput.focus();
 					loadCompanyPeople();
+					// ====== end of changes by SE	======
 				}
 			}
 			catch (e)

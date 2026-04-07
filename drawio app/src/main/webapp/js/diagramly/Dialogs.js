@@ -258,9 +258,31 @@ var StorageDialog = function(editorUi, fn, rowLimit)
 	{
 		editorUi.hideDialog();
 		var prev = Editor.useLocalStorage;
-		editorUi.createFile(editorUi.defaultFilename,
-			null, null, null, null, null, null, true);
-		Editor.useLocalStorage = prev;
+		// ======	NOLAI - {- Frontend -} /Sprint 2/ Task 109	======
+		editorUi.editor.loadUrl(TEMPLATE_PATH + '/templateLegend.drawio', function(xml)
+		{
+			editorUi.createFile(editorUi.defaultFilename,
+				xml, null, null, function()
+				{
+					if (!editorUi.editor.chromeless || editorUi.editor.editable)
+					{
+						editorUi.actions.get('fitWindow').funct();
+					}
+				}, null, null, true);
+			Editor.useLocalStorage = prev;
+		}, function()
+		{
+			editorUi.createFile(editorUi.defaultFilename,
+				null, null, null, function()
+				{
+					if (!editorUi.editor.chromeless || editorUi.editor.editable)
+					{
+						editorUi.actions.get('fitWindow').funct();
+					}
+				}, null, null, true);
+			Editor.useLocalStorage = prev;
+		});
+		// ====== end of changes by SE	======
 	});
 	
 	// Checks if Google Drive is missing after a 5 sec delay
@@ -2905,6 +2927,13 @@ var NewDialog = function(editorUi, compact, showName, callback, createOnly, canc
 						editorUi.createFile(filename, templateXml, (templateLibs != null &&
 							templateLibs.length > 0) ? templateLibs : null, mode, function()
 						{
+							// ======	NOLAI - {- Frontend -} /Sprint 2/ Task 109	======
+							if (!editorUi.editor.chromeless || editorUi.editor.editable)
+							{
+								editorUi.actions.get('fitWindow').funct();
+							}
+							// ====== end of changes by SE ======
+
 							if (!insertWasPressed)
 							{
 								editorUi.hideDialog();
@@ -2985,7 +3014,6 @@ var NewDialog = function(editorUi, compact, showName, callback, createOnly, canc
 
 		tmplSearchInput.focus();
 	});
-	
 	mxEvent.addListener(tmplSearchInput, 'keydown', mxUtils.bind(this, function(evt)
 	{
 		if (evt.keyCode == 13 /* Enter */)
@@ -3549,9 +3577,11 @@ var NewDialog = function(editorUi, compact, showName, callback, createOnly, canc
 	var customCatCount = 0, firstInitUi = true;
 	var currentEntry = null, lastEntry = null;
 
+	// ======	NOLAI - {- Frontend -} /Sprint 2/ Task 109	======
 	// Adds local basic templates
-	categories['basic'] = noBlank? [] : [{title: 'blankDiagram'}];
+	categories['basic'] = noBlank? [] : [{title: 'blankDiagram', url: 'templateLegend.drawio'}];
 	var templates = categories['basic'];
+	// ====== end of changes by SE ======
 
 	if (Editor.enableAi &&
 		editorUi.isExternalDataComms() &&
