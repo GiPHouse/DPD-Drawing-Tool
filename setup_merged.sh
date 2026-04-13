@@ -6,6 +6,23 @@
 #|                                                        |
 #+--------------------------------------------------------+
 
+# ====== NOLAI - Infrastructure / Sprint 2 / Task: Deprecation Notice ======
+#
+# DEPRECATED — do not use for new deployments.
+#
+# This script has been superseded by the following committed files:
+#   docker-compose.yml  — replaces the generated docker-compose.yml block
+#   Caddyfile           — replaces the generated Caddyfile block
+#   .env.example        — replaces hardcoded credentials in this script
+#   start.sh            — replaces this script's startup and post-install logic
+#
+# WHAT TO USE INSTEAD:
+#   cp .env.example .env   # fill in your values
+#   bash start.sh          # builds containers, waits for health, enables app, exports cert
+#
+# This file is retained for historical reference only.
+# ====== end of changes by SE ======
+
 # This combined setup script launches a secure Nextcloud instance behind
 # Caddy, as well as a custom Draw.io build.  It also performs the
 # auto-installation of Nextcloud and configures the Draw.io integration.

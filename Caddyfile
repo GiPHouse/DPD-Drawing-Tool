@@ -1,0 +1,99 @@
+# +--------------------------------------------------------+
+# | This file contains modified code by SE team,          |
+# | refer to keywords: 'NOLAI'                            |
+# |                                                        |
+# +--------------------------------------------------------+
+
+# ====== NOLAI - Infrastructure / Sprint 2 / Task: Dev Caddyfile ======
+#
+# Caddy reverse proxy configuration for the development Docker Compose stack.
+# This file is committed to the repository and mounted read-only into the
+# caddy container. Previously it was generated at runtime by setup_merged.sh.
+#
+# ARCHITECTURE:
+#   Port 443  → nextcloud:80  (Nextcloud service, HTTPS)
+#   Port 5443 → drawio:8080   (Draw.io service,   HTTPS)
+#
+# WHAT CHANGED FROM THE PREVIOUS CADDYFILE:
+#   - Draw.io is now served via Caddy on port 5443 over HTTPS instead of
+#     being exposed directly on port 5500 over plain HTTP.
+#   - CORS configuration updated: origin references changed from
+#     http://localhost:5500 → https://localhost:5443 to match the new
+#     HTTPS endpoint.
+#   - The Vary: Origin header has been removed from non-preflight responses
+#     to avoid unnecessary cache fragmentation.
+#
+# WHY local_certs:
+#   Caddy generates its own self-signed root CA for local development.
+#   The generated certificate must be trusted on each developer's machine.
+#   Run start.sh after 'docker compose up' to extract it to caddy-root.crt,
+#   then follow the trust instructions in README.md.
+#   For a production deployment with a real domain name, remove the
+#   local_certs line — Caddy will obtain a Let's Encrypt certificate
+#   automatically.
+#
+# ====== end of changes by SE ======
+
+{
+    local_certs
+}
+
+# -----------------------------------------------------------------------
+# Nextcloud — primary HTTPS endpoint
+#
+# WHY CORS on WebDAV: Draw.io (origin https://localhost:5443) makes WebDAV
+# requests to Nextcloud (origin https://localhost). Different ports means
+# different origins under browser security rules, so the browser sends
+# an OPTIONS preflight before every cross-origin request. Without the
+# headers below, the browser blocks all WebDAV calls from Draw.io.
+# -----------------------------------------------------------------------
+https://localhost {
+
+    # ---- WebDAV CORS preflight handler ----
+    # Matches OPTIONS requests on Nextcloud's WebDAV path.
+    # Responds immediately with 204 No Content and the required headers so
+    # the browser permits the subsequent GET/PUT/PROPFIND etc.
+    @davPreflight {
+        method OPTIONS
+        path_regexp dav ^/remote\.php/dav(?:/.*)?$
+    }
+    handle @davPreflight {
+        @preflightDrawio header Origin https://localhost:5443
+        header @preflightDrawio Access-Control-Allow-Origin  "https://localhost:5443"
+        header Access-Control-Allow-Credentials              "true"
+        header Access-Control-Allow-Methods                  "OPTIONS, GET, HEAD, PROPFIND, MKCOL, MOVE, COPY, LOCK, UNLOCK, PUT, DELETE"
+        header Access-Control-Allow-Headers                  "Authorization, Content-Type, Depth, Timeout, If, Lock-Token, Destination, Overwrite, X-Requested-With, OCS-APIRequest"
+        header Access-Control-Max-Age                        "86400"
+        header Vary                                          "Origin"
+        respond "" 204
+    }
+
+    # ---- Proxy to Nextcloud ----
+    # Forwards all non-preflight traffic to the nextcloud service.
+    # 'nextcloud' resolves via Docker Compose service-name DNS.
+    reverse_proxy nextcloud:80
+
+    # ---- CORS headers on WebDAV responses ----
+    # Attaches the Allow-Origin header to actual WebDAV responses (not
+    # just preflights) so the browser accepts the response body.
+    @originDrawio header Origin https://localhost:5443
+    header @originDrawio Access-Control-Allow-Origin  "https://localhost:5443"
+    header Access-Control-Allow-Credentials           "true"
+    header Access-Control-Expose-Headers              "DAV, ETag, Lock-Token"
+    header Vary                                       "Origin"
+}
+
+# -----------------------------------------------------------------------
+# Draw.io — secondary HTTPS endpoint
+#
+# WHY port 5443: Draw.io's Tomcat serves the application at the ROOT context
+# path (/). Sharing port 443 with Nextcloud via a path prefix would require
+# rewriting all of Draw.io's absolute asset paths (/js/app.min.js, etc),
+# which would require modifying the upstream source. A dedicated port keeps
+# things clean without touching Draw.io's internals.
+#
+# 'drawio' resolves to the drawio container via Docker Compose DNS.
+# -----------------------------------------------------------------------
+https://localhost:5443 {
+    reverse_proxy drawio:8080
+}

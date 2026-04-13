@@ -1,0 +1,179 @@
+# +--------------------------------------------------------+
+# | This file contains modified code by SE team,          |
+# | refer to keywords: 'NOLAI'                            |
+# |                                                        |
+# +--------------------------------------------------------+
+
+# ====== NOLAI - Infrastructure / Sprint 2 / Task: Docker Compose Dev Stack ======
+#
+# Development and testing Docker Compose stack for the DPD Drawing Tool.
+#
+# WHAT CHANGED FROM THE PREVIOUS SETUP:
+#   - This file is now committed to the repository. Previously it was generated
+#     at runtime by setup_merged.sh and was never version-controlled.
+#   - All credentials have been removed. They now live in a .env file
+#     (see .env.example). Copy that file to .env and fill in your values.
+#   - Nextcloud auto-installs on first boot using NEXTCLOUD_ADMIN_USER /
+#     NEXTCLOUD_ADMIN_PASSWORD environment variables — no occ commands needed
+#     from outside the container.
+#   - Healthchecks replace the fragile sleep-loop in setup_merged.sh. Caddy
+#     only starts once Nextcloud reports healthy; Nextcloud only starts once
+#     MariaDB reports healthy.
+#   - Draw.io is no longer exposed directly on port 5500 over plain HTTP.
+#     It is now proxied through Caddy on port 5443 over HTTPS, matching
+#     Nextcloud's HTTPS origin and reducing the CORS surface.
+#
+# SERVICES:
+#   db        - MariaDB 10.11: Nextcloud's database (internal only)
+#   nextcloud - Nextcloud 28 with Apache: application server
+#   caddy     - Reverse proxy: HTTPS termination on ports 443 and 5443
+#   drawio    - Custom Draw.io build: served via Caddy, not directly exposed
+#
+# USAGE:
+#   cp .env.example .env        # Fill in passwords and domain
+#   docker compose up -d --build
+#   bash start.sh               # Enables the drawio app and exports the cert
+#
+# ACCESS (after trusting the Caddy certificate — see README):
+#   Nextcloud : https://localhost
+#   Draw.io   : https://localhost:5443
+#
+# NOTE — E2E tests:
+#   tests/e2e/ currently targets http://localhost:5500. Update the base URL
+#   in tests/e2e/playwright.config.js to https://localhost:5443 when running
+#   integration tests against this compose stack.
+#
+# ====== end of changes by SE ======
+
+version: '3.8'
+
+services:
+
+  # ------------------------------------------------------------------
+  # MariaDB — Nextcloud's database backend
+  #
+  # WHY READ-COMMITTED + ROW binlog: Nextcloud explicitly requires these
+  # settings to avoid deadlocks and ensure correct replication behaviour.
+  # They are passed as startup command flags so they apply regardless of
+  # any local my.cnf on the host.
+  # ------------------------------------------------------------------
+  db:
+    image: mariadb:10.11
+    restart: always
+    command: --transaction-isolation=READ-COMMITTED --binlog-format=ROW
+    volumes:
+      - db_data:/var/lib/mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_PASSWORD:      ${MYSQL_PASSWORD}
+      MYSQL_DATABASE:      ${MYSQL_DATABASE}
+      MYSQL_USER:          ${MYSQL_USER}
+    # WHY healthcheck: Nextcloud must not attempt to connect to the database
+    # before MariaDB is ready to accept connections. service_healthy in
+    # depends_on (below) enforces this ordering without any sleep loops.
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      start_period: 10s
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ------------------------------------------------------------------
+  # Nextcloud — application server
+  #
+  # WHY nextcloud:28-apache: pins to a specific major version for
+  # reproducibility rather than floating on 'latest'. The -apache variant
+  # bundles Apache and all required PHP extensions.
+  #
+  # WHY OVERWRITEPROTOCOL=https: Nextcloud generates internal URLs based on
+  # the protocol it detects. Behind Caddy (which terminates TLS), Nextcloud
+  # only sees plain HTTP from localhost, so it would generate http:// URLs.
+  # This env var forces https:// in all generated links.
+  #
+  # WHY TRUSTED_PROXIES=caddy: tells Nextcloud to trust X-Forwarded-For
+  # headers from the Caddy container so client IPs are logged correctly.
+  # ------------------------------------------------------------------
+  nextcloud:
+    image: nextcloud:28-apache
+    container_name: nextcloud-main
+    restart: always
+    volumes:
+      - nextcloud_data:/var/www/html
+    environment:
+      MYSQL_PASSWORD:           ${MYSQL_PASSWORD}
+      MYSQL_DATABASE:           ${MYSQL_DATABASE}
+      MYSQL_USER:               ${MYSQL_USER}
+      MYSQL_HOST:               db
+      NEXTCLOUD_ADMIN_USER:     ${NEXTCLOUD_ADMIN_USER}
+      NEXTCLOUD_ADMIN_PASSWORD: ${NEXTCLOUD_ADMIN_PASSWORD}
+      NEXTCLOUD_TRUSTED_DOMAINS: ${NEXTCLOUD_TRUSTED_DOMAINS}
+      OVERWRITEPROTOCOL:        https
+      OVERWRITEHOST:            ${NEXTCLOUD_TRUSTED_DOMAINS}
+      TRUSTED_PROXIES:          caddy
+      # ---- Goauthentik OIDC (uncomment when auth integration is implemented) ----
+      # The client's Goauthentik instance URL and credentials go here.
+      # The container does not run Goauthentik — it connects to the client's
+      # existing instance. See docker/entrypoint.sh for how the single-container
+      # image uses these same variables.
+      # OIDC_PROVIDER_URL:      ${OIDC_PROVIDER_URL}
+      # OIDC_CLIENT_ID:         ${OIDC_CLIENT_ID}
+      # OIDC_CLIENT_SECRET:     ${OIDC_CLIENT_SECRET}
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      # /status.php returns 200 once Nextcloud is fully installed and running.
+      # Caddy's depends_on waits for this before starting.
+      test: ["CMD", "curl", "-f", "http://localhost/status.php"]
+      start_period: 60s
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  # ------------------------------------------------------------------
+  # Caddy — reverse proxy and HTTPS termination
+  #
+  # WHY two ports (443 + 5443): Nextcloud and Draw.io are served from
+  # separate upstream containers. Routing both through a single Caddy
+  # port using path-based rules would break Draw.io's absolute-path
+  # asset references (/js/app.min.js etc). Virtual-host-on-different-port
+  # is the clean solution without modifying the Draw.io source.
+  #
+  # WHY depends on nextcloud healthy: if Caddy starts before Nextcloud is
+  # ready, early browser requests get 502 errors. Starting Caddy only after
+  # Nextcloud is healthy avoids that race condition.
+  # ------------------------------------------------------------------
+  caddy:
+    image: caddy:latest
+    container_name: caddy-proxy
+    restart: always
+    command: ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+    ports:
+      - "80:80"     # HTTP — Caddy redirects to HTTPS
+      - "443:443"   # HTTPS — Nextcloud
+      - "5443:5443" # HTTPS — Draw.io
+    volumes:
+      - caddy_data:/data
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      nextcloud:
+        condition: service_healthy
+
+  # ------------------------------------------------------------------
+  # Draw.io — custom DPD build
+  #
+  # WHY no ports block: Draw.io is intentionally not exposed directly.
+  # All external traffic goes through Caddy (port 5443) so it receives
+  # HTTPS and CORS headers are consistent. The container is reachable
+  # internally by Caddy via the Docker network on port 8080.
+  # ------------------------------------------------------------------
+  drawio:
+    build:
+      context: "./drawio app"
+    container_name: drawio-app
+    restart: always
+
+volumes:
+  nextcloud_data:
+  db_data:
+  caddy_data:
