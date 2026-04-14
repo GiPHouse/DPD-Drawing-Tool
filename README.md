@@ -167,18 +167,41 @@ The `docker/` directory contains everything needed to build a single distributab
 docker build -f docker/Dockerfile -t dpd-app:latest .
 ```
 
-### Push to a registry
+### Push to GitHub Container Registry (GHCR)
 
-A Docker registry (like Docker Hub or GitHub Container Registry) is where you store and share Docker images — similar to how GitHub stores code.
+The `.github/workflows/publish.yml` workflow builds and pushes the image automatically — you do not run these commands manually in normal development. The workflow triggers on:
+
+- Every push to `main` → publishes `ghcr.io/<org>/<repo>:latest` and a short SHA tag (e.g. `:sha-a1b2c3d`)
+- Every version tag (e.g. `v1.2.3`) → publishes `:1.2.3`, `:1.2`, and `:latest`
+
+No extra secrets are needed. The workflow uses the automatic `GITHUB_TOKEN`.
+
+**One-time setup — link the package to the repository:**
+
+After the first workflow run, the package appears under the repository's **Packages** tab (right sidebar on GitHub). If it isn't automatically linked to the repo, go to the package page → **Package settings** → **Connect a repository** and select this repo. This allows repo collaborators to pull the image using their own GitHub credentials.
+
+**Client authentication — pulling a private package:**
+
+Since the client has access to the repository, they can authenticate to GHCR using a Personal Access Token (PAT). They create one at GitHub → **Settings → Developer settings → Personal access tokens → Tokens (classic)**, with the `read:packages` scope selected. They then log in once on their server:
 
 ```bash
-docker tag dpd-app:latest your-registry/dpd-app:latest
-docker push your-registry/dpd-app:latest
+docker login ghcr.io -u <their-github-username> -p <their-PAT>
 ```
+
+After that, `docker pull` and `docker run` work without any further authentication steps.
+
+**To trigger a versioned release manually:**
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+This pushes a tag, which triggers the publish workflow and produces the `:1.0.0`, `:1.0`, and `:latest` tags in GHCR.
 
 ### Client deployment (one command)
 
-The client runs this on their server:
+The client runs this on their server. Replace `<org>` and `<repo>` with your GitHub organisation and repository name (both lowercase):
 
 ```bash
 docker run -d \
@@ -187,7 +210,7 @@ docker run -d \
   -v dpd_data:/data \
   -e MYSQL_PASSWORD=your_db_password \
   -e NEXTCLOUD_ADMIN_PASSWORD=your_admin_password \
-  your-registry/dpd-app:latest
+  ghcr.io/<org>/<repo>:latest
 ```
 
 **What these flags mean:**
