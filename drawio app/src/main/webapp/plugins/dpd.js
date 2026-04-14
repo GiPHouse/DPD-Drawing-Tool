@@ -170,7 +170,8 @@ Draw.loadPlugin(function (ui) {
       if (value && typeof value === 'object' && typeof value.getAttribute === 'function') {
         el = value.cloneNode(true);
       } else {
-        el = document.createElement('UserObject');
+        const xmlDoc = mxUtils.createXmlDocument();
+        el = xmlDoc.createElement('UserObject');
         el.setAttribute('label', (typeof value === 'string' ? value : '') || '');
       }
       Object.entries(attrs).forEach(([k, v]) => {
