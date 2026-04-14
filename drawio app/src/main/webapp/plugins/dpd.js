@@ -1290,7 +1290,7 @@ Draw.loadPlugin(function (ui) {
     const edit = evt.getProperty('edit');
     if (!edit || !edit.changes) return;
 
-    const hasRootChange = edit.changes.some(function (c) {
+    const hasRootChange = edit.changes.some(function(c) {
       return c.root !== undefined && c.previous !== undefined;
     });
 
