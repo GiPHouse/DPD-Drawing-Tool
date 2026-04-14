@@ -104,11 +104,6 @@ jobs:
           exit 1
 
       - name: Run Playwright tests
-        env:
-          DRAWIO_URL: https://localhost:5443
-          NEXTCLOUD_URL: https://localhost
-          NEXTCLOUD_USER: admin
-          NEXTCLOUD_PASS: admin
         run: npm test
 
       - name: Upload Playwright report
