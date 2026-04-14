@@ -755,72 +755,28 @@ Draw.loadPlugin(function (ui) {
 
   // Auto-show annotation dialog on new connections
 
+  // Auto-show annotation dialog on new connections
   const annotatedEdges = new WeakSet();
-  const loggedAddedVertices = new WeakSet();
-  const loggedMovedVertices = new WeakSet();
 
-  if (typeof graph.addListener === 'function') {
-    graph.addListener(mxEvent.CELLS_ADDED, function (sender, evt) {
-      const cells = evt.getProperty('cells') || [];
-      cells.forEach(cell => {
-        if (cell && model.isVertex(cell) && !loggedAddedVertices.has(cell)) {
-          loggedAddedVertices.add(cell);
-          console.log('Vertex added:', cell.id || '(no id)');
-        }
-      });
-    });
-
-    graph.addListener(mxEvent.CELLS_MOVED, function (sender, evt) {
-      const cells = evt.getProperty('cells') || [];
-      cells.forEach(cell => {
-        if (cell && model.isVertex(cell) && !loggedMovedVertices.has(cell)) {
-          loggedMovedVertices.add(cell);
-          console.log('Vertex moved:', cell.id || '(no id)');
-        }
-      });
-    });
-  }
+  graph.connectionHandler.addListener(mxEvent.CONNECT, function(sender, evt) {
+    const edge = evt.getProperty('cell');
+    if (edge && model.isEdge(edge) && !annotatedEdges.has(edge)) {
+      annotatedEdges.add(edge);
+      setTimeout(() => showEdgeAnnotationDialog(edge), 150);
+    }
+  });
 
   model.addListener(mxEvent.CHANGE, function (sender, evt) {
     const edit = evt.getProperty('edit');
     if (!edit || !edit.changes) return;
 
     const hasRootChange = edit.changes.some(function(c) {
-      return c.constructor && c.constructor.name === 'mxRootChange';
+      return c.root !== undefined && c.previous !== undefined;
     });
+
     if (hasRootChange) {
       setTimeout(validateGraph, 800);
-      return;
     }
-
-    edit.changes.forEach(change => {
-      if (change.constructor.name === 'mxChildChange') {
-        const vertex = change.child;
-        if (vertex && model.isVertex(vertex) && change.parent && !loggedAddedVertices.has(vertex)) {
-          loggedAddedVertices.add(vertex);
-          console.log('Vertex added:', vertex.id || '(no id)');
-        }
-      }
-
-      if (change.constructor.name === 'mxGeometryChange') {
-        const vertex = change.cell;
-        if (vertex && model.isVertex(vertex) && !loggedMovedVertices.has(vertex)) {
-          loggedMovedVertices.add(vertex);
-          console.log('Vertex moved:', vertex.id || '(no id)');
-        }
-      }
-
-      if (change.constructor.name === 'mxTerminalChange') {
-        const edge = change.cell;
-        if (!model.isEdge(edge)) return;
-        const src = model.getTerminal(edge, true);
-        const tgt = model.getTerminal(edge, false);
-        if (src && tgt && !annotatedEdges.has(edge)) {
-          annotatedEdges.add(edge);
-          setTimeout(() => showEdgeAnnotationDialog(edge), 150);
-        }
-      }
-    });
   });
 
   // Right-click popup menu extension
