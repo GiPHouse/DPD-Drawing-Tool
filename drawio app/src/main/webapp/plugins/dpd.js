@@ -163,18 +163,18 @@ Draw.loadPlugin(function (ui) {
    * Write DPD properties back onto an edge, preserving its existing label.
    */
   function setEdgeProps(edge, attrs) {
-    console.log('[DPD] setEdgeProps called on edge:', edge.id, attrs); // ← add this
+    console.log('[DPD] setEdgeProps called on edge:', edge.id, attrs);
     model.beginUpdate();
     try {
         let value = model.getValue(edge);
-        console.log('[DPD] current value type:', typeof value, value); // ← and this
+        console.log('[DPD] current value type:', typeof value, value);
         let el;
         if (value && typeof value === 'object' && typeof value.getAttribute === 'function') {
             el = value.cloneNode(true);
         } else {
             const xmlDoc = mxUtils.createXmlDocument();
             el = xmlDoc.createElement('UserObject');
-            console.log('[DPD] created element tagName:', el.tagName); // ← and this
+            console.log('[DPD] created element tagName:', el.tagName);
             el.setAttribute('label', (typeof value === 'string' ? value : '') || '');
         }
         Object.entries(attrs).forEach(([k, v]) => {
@@ -182,7 +182,7 @@ Draw.loadPlugin(function (ui) {
         });
         el.setAttribute('label', '');
         model.setValue(edge, el);
-        console.log('[DPD] setValue done, el.outerHTML:', el.outerHTML); // ← and this
+        console.log('[DPD] setValue done, el.outerHTML:', el.outerHTML);
     } finally {
         model.endUpdate();
     }
@@ -760,7 +760,10 @@ Draw.loadPlugin(function (ui) {
 
   graph.connectionHandler.addListener(mxEvent.CONNECT, function(sender, evt) {
     const edge = evt.getProperty('cell');
-    if (edge && model.isEdge(edge) && !annotatedEdges.has(edge)) {
+    const src = edge ? model.getTerminal(edge, true) : null;
+    const tgt = edge ? model.getTerminal(edge, false) : null;
+
+    if (edge && model.isEdge(edge) && src && tgt && !annotatedEdges.has(edge)) {
       annotatedEdges.add(edge);
       setTimeout(() => showEdgeAnnotationDialog(edge), 150);
     }
