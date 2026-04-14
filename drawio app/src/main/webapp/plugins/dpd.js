@@ -1258,7 +1258,7 @@ Draw.loadPlugin(function (ui) {
   const loggedAddedVertices = new WeakSet();
   const loggedMovedVertices = new WeakSet();
 
-  graph.connectionHandler.addListener(mxEvent.CONNECT, function (sender, evt) {
+  graph.connectionHandler.addListener(mxEvent.CONNECT, function(sender, evt) {
     const edge = evt.getProperty('cell');
     const src = edge ? model.getTerminal(edge, true) : null;
     const tgt = edge ? model.getTerminal(edge, false) : null;
@@ -1269,9 +1269,9 @@ Draw.loadPlugin(function (ui) {
     }
   });
 
-  graph.addListener(mxEvent.CELLS_ADDED, function (sender, evt) {
+  graph.addListener(mxEvent.CELLS_ADDED, function(sender, evt) {
     const cells = evt.getProperty('cells') || [];
-    cells.forEach(function (cell) {
+    cells.forEach(function(cell) {
       if (cell && model.isVertex(cell) && !loggedAddedVertices.has(cell)) {
         loggedAddedVertices.add(cell);
         console.log('Vertex added:', cell.id || '(no id)');
@@ -1279,9 +1279,9 @@ Draw.loadPlugin(function (ui) {
     });
   });
 
-  graph.addListener(mxEvent.CELLS_MOVED, function (sender, evt) {
+  graph.addListener(mxEvent.CELLS_MOVED, function(sender, evt) {
     const cells = evt.getProperty('cells') || [];
-    cells.forEach(function (cell) {
+    cells.forEach(function(cell) {
       if (cell && model.isVertex(cell) && !loggedMovedVertices.has(cell)) {
         loggedMovedVertices.add(cell);
         console.log('Vertex moved:', cell.id || '(no id)');
@@ -1301,17 +1301,12 @@ Draw.loadPlugin(function (ui) {
       setTimeout(validateGraph, 800);
     }
 
-    edit.changes.forEach(function (change) {
+    edit.changes.forEach(function(change) {
       if (change.constructor && change.constructor.name === 'mxChildChange') {
         const vertex = change.child;
-        if (vertex && model.isVertex(vertex) && change.parent && change.previous == null && !loggedAddedVertices.has(vertex)) {
+        if (vertex && model.isVertex(vertex) && change.parent && !loggedAddedVertices.has(vertex)) {
           loggedAddedVertices.add(vertex);
           console.log('Vertex added:', vertex.id || '(no id)');
-        }
-        if (model.isVertex(vertex) && change.parent && change.previous == null && getComponentType(vertex) == "process") {
-          setTimeout(() => showProcessAnnotationDialog(vertex), 150);
-        } else if (model.isVertex(vertex) && change.parent && change.previous == null && getComponentType(vertex) == "data_store") {
-          setTimeout(() => showDataAnnotationDialog(vertex), 150);
         }
       }
 
