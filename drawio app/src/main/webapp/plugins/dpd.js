@@ -754,9 +754,10 @@ Draw.loadPlugin(function (ui) {
   }
 
   // Auto-show annotation dialog on new connections
-
-  // Auto-show annotation dialog on new connections
   const annotatedEdges = new WeakSet();
+
+  const loggedAddedVertices = new WeakSet();
+  const loggedMovedVertices = new WeakSet();
 
   graph.connectionHandler.addListener(mxEvent.CONNECT, function(sender, evt) {
     const edge = evt.getProperty('cell');
@@ -767,6 +768,26 @@ Draw.loadPlugin(function (ui) {
       annotatedEdges.add(edge);
       setTimeout(() => showEdgeAnnotationDialog(edge), 150);
     }
+  });
+
+  graph.addListener(mxEvent.CELLS_ADDED, function(sender, evt) {
+    const cells = evt.getProperty('cells') || [];
+    cells.forEach(function(cell) {
+      if (cell && model.isVertex(cell) && !loggedAddedVertices.has(cell)) {
+        loggedAddedVertices.add(cell);
+        console.log('Vertex added:', cell.id || '(no id)');
+      }
+    });
+  });
+
+  graph.addListener(mxEvent.CELLS_MOVED, function(sender, evt) {
+    const cells = evt.getProperty('cells') || [];
+    cells.forEach(function(cell) {
+      if (cell && model.isVertex(cell) && !loggedMovedVertices.has(cell)) {
+        loggedMovedVertices.add(cell);
+        console.log('Vertex moved:', cell.id || '(no id)');
+      }
+    });
   });
 
   model.addListener(mxEvent.CHANGE, function (sender, evt) {
@@ -780,6 +801,24 @@ Draw.loadPlugin(function (ui) {
     if (hasRootChange) {
       setTimeout(validateGraph, 800);
     }
+
+    edit.changes.forEach(function(change) {
+      if (change.constructor && change.constructor.name === 'mxChildChange') {
+        const vertex = change.child;
+        if (vertex && model.isVertex(vertex) && change.parent && !loggedAddedVertices.has(vertex)) {
+          loggedAddedVertices.add(vertex);
+          console.log('Vertex added:', vertex.id || '(no id)');
+        }
+      }
+
+      if (change.constructor && change.constructor.name === 'mxGeometryChange') {
+        const vertex = change.cell;
+        if (vertex && model.isVertex(vertex) && !loggedMovedVertices.has(vertex)) {
+          loggedMovedVertices.add(vertex);
+          console.log('Vertex moved:', vertex.id || '(no id)');
+        }
+      }
+    });
   });
 
   // Right-click popup menu extension
