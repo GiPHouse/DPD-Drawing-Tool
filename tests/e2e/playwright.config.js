@@ -28,6 +28,7 @@ module.exports = defineConfig({
 
   use: {
     baseURL: process.env.DRAWIO_URL || 'https://localhost:5443',
+    ignoreHTTPSErrors: true,
 
     // Capture trace on first retry to help debug CI failures
     trace: 'on-first-retry',
