@@ -1126,6 +1126,15 @@
 									editorUi.fileLoaded(new LocalFile(editorUi, xml, selected.name, true), true);
 									editorUi.editor.modified = false;
 									editorUi.editor.setStatus('Loaded from Nextcloud successfully');
+
+									// Re-run DPD validation after model has fully settled
+									setTimeout(function()
+									{
+										if (typeof editorUi._dpdValidate === 'function')
+										{
+											editorUi._dpdValidate();
+										}
+									}, 900);
 								}
 								catch (e)
 								{

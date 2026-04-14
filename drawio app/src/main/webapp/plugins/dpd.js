@@ -163,28 +163,30 @@ Draw.loadPlugin(function (ui) {
    * Write DPD properties back onto an edge, preserving its existing label.
    */
   function setEdgeProps(edge, attrs) {
+    console.log('[DPD] setEdgeProps called on edge:', edge.id, attrs); // ← add this
     model.beginUpdate();
     try {
-      let value = model.getValue(edge);
-      let el;
-      if (value && typeof value === 'object' && typeof value.getAttribute === 'function') {
-        el = value.cloneNode(true);
-      } else {
-        const xmlDoc = mxUtils.createXmlDocument();
-        el = xmlDoc.createElement('UserObject');
-        el.setAttribute('label', (typeof value === 'string' ? value : '') || '');
-      }
-      Object.entries(attrs).forEach(([k, v]) => {
-        if (v !== null && v !== undefined) el.setAttribute(k, v);
-      });
-      // NOLAI: Keep the edge label empty — annotation details live in the sidebar
-      // and violation numbers are shown as badges on the arrow itself.
-      el.setAttribute('label', '');
-      model.setValue(edge, el);
+        let value = model.getValue(edge);
+        console.log('[DPD] current value type:', typeof value, value); // ← and this
+        let el;
+        if (value && typeof value === 'object' && typeof value.getAttribute === 'function') {
+            el = value.cloneNode(true);
+        } else {
+            const xmlDoc = mxUtils.createXmlDocument();
+            el = xmlDoc.createElement('UserObject');
+            console.log('[DPD] created element tagName:', el.tagName); // ← and this
+            el.setAttribute('label', (typeof value === 'string' ? value : '') || '');
+        }
+        Object.entries(attrs).forEach(([k, v]) => {
+            if (v !== null && v !== undefined) el.setAttribute(k, v);
+        });
+        el.setAttribute('label', '');
+        model.setValue(edge, el);
+        console.log('[DPD] setValue done, el.outerHTML:', el.outerHTML); // ← and this
     } finally {
-      model.endUpdate();
+        model.endUpdate();
     }
-  }
+}
 
   // Structural connection validation (R-S1, R-S2, R-S3) 
 
@@ -834,4 +836,6 @@ Draw.loadPlugin(function (ui) {
 
   console.log('DPD Plugin Loaded');
   console.log('[DPD] Plugin loaded — 15 rules active (R-S1–4, R-I1–5, R-L1–2, R-P1–4)');
+  ui._dpdValidate = validateGraph;
+
 });
