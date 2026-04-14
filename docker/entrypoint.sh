@@ -198,8 +198,13 @@ SQL
     # supervisord will restart them cleanly as managed processes.
     echo "[7/7] Stopping temporary services..."
     apache2ctl stop
-    kill "${MYSQL_PID}"
-    wait  "${MYSQL_PID}" 2>/dev/null || true
+    # WHY mysqladmin shutdown not kill: sending SIGTERM to mysqld_safe does not
+    # reliably stop mariadbd in time — mysqld_safe stays alive waiting for
+    # mariadbd to exit, causing 'wait' to hang indefinitely. mysqladmin shutdown
+    # tells MariaDB to stop gracefully via its own protocol; mysqld_safe detects
+    # the exit and terminates, so 'wait' completes immediately after.
+    mysqladmin -u root shutdown
+    wait "${MYSQL_PID}" 2>/dev/null || true
 
     # Write the init marker so this block is skipped on all future starts
     touch "$INIT_MARKER"
