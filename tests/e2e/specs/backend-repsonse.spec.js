@@ -22,8 +22,8 @@ const { test, expect } = require('@playwright/test');
 
 const NC_URL        = process.env.NEXTCLOUD_URL  || 'https://localhost';
 const NC_USER       = process.env.NEXTCLOUD_USER || 'admin';
-const NC_PASS       = process.env.NEXTCLOUD_PASS || 'admin';
-const DRAWIO_ORIGIN = process.env.DRAWIO_URL     || 'http://localhost:5500';
+const NC_PASS       = process.env.NEXTCLOUD_ADMIN_PASSWORD || 'change_me_admin_password';
+const DRAWIO_ORIGIN = process.env.DRAWIO_URL     || 'https://localhost:5443';
 
 const AUTH_HEADER = `Basic ${Buffer.from(`${NC_USER}:${NC_PASS}`).toString('base64')}`;
 const DAV_ROOT    = `${NC_URL}/remote.php/dav/files/${NC_USER}/`;
