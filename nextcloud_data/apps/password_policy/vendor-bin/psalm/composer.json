@@ -1,0 +1,11 @@
+{
+	"config": {
+		"platform": {
+			"php": "8.2"
+		}
+	},
+	"require-dev": {
+		"nextcloud/ocp": "dev-master",
+		"vimeo/psalm": "^5.25"
+	}
+}

@@ -80,8 +80,8 @@ jobs:
       - name: Generate and start integration stack
         working-directory: .
         run: |
-          chmod +x ./setup_merged.sh
-          ./setup_merged.sh
+          chmod +x ./start.sh
+          ./start.sh
 
       - name: Wait for draw.io and Nextcloud
         run: |

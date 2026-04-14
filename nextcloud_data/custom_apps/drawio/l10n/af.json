@@ -1,0 +1,9 @@
+{ "translations": {
+    "Saving..." : "Stoor tans…",
+    "Dark" : "Donker",
+    "Yes" : "Ja",
+    "No" : "Nee",
+    "Language" : "Taal",
+    "Save" : "Bewaar"
+},"pluralForm" :"nplurals=2; plural=(n != 1);"
+}
