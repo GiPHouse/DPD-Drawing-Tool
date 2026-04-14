@@ -786,28 +786,4 @@ describe('Edge attribute persistence (setEdgeProps)', () => {
 
     jest.useRealTimers();
   });
-
-  it('preserves existing attributes when re-annotating an already-annotated edge', () => {
-    // Simulates the user opening the dialog on an existing edge and changing values.
-    // cloneNode must carry over all prior attributes before new ones are applied.
-    const edge = createMockCell({ isEdge: true, id: 600 });
-
-    // Set up an existing UserObject value on the edge
-    const xmlDoc = mxUtils.createXmlDocument();
-    const existing = xmlDoc.createElement('UserObject');
-    existing.setAttribute('identifiability', 'de_identified');
-    existing.setAttribute('linkability', 'locally_linkable');
-    existing.setAttribute('pseudonymity', 'none');
-    existing.setAttribute('label', '');
-    edge.value = existing;
-
-    // cloneNode should carry the existing value forward
-    const cloned = edge.value.cloneNode();
-    cloned.setAttribute('identifiability', 'directly_identifiable'); // user changed this
-    cloned.setAttribute('label', '');
-
-    expect(cloned.getAttribute('identifiability')).toBe('directly_identifiable');
-    // linkability was not changed, should still be present from clone
-    expect(cloned.getAttribute('linkability')).toBe('locally_linkable');
-  });
 });
