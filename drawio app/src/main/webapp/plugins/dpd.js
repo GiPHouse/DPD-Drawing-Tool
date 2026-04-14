@@ -163,6 +163,7 @@ Draw.loadPlugin(function (ui) {
    * Write DPD properties back onto an edge, preserving its existing label.
    */
   function setEdgeProps(edge, attrs) {
+    console.log('[DPD] setEdgeProps called on edge:', edge.id, attrs); // ← add this
     model.beginUpdate();
     try {
       let value = model.getValue(edge);
@@ -180,9 +181,9 @@ Draw.loadPlugin(function (ui) {
       el.setAttribute('label', '');
       model.setValue(edge, el);
     } finally {
-      model.endUpdate();
+        model.endUpdate();
     }
-  }
+}
 
   function setNodeProps(node, attrs) {
     model.beginUpdate();
