@@ -4,8 +4,8 @@ const { defineConfig, devices } = require('@playwright/test');
 /**
  * Playwright configuration for the DPD Drawing Tool E2E test suite.
  *
- * The draw.io app is expected to be running at http://localhost:5500
- * (the Docker port mapping from the docker-compose setup).
+ * The draw.io app is expected to be running at https://localhost:5443
+ * through the Caddy reverse proxy when using the Docker Compose stack.
  *
  * Set DRAWIO_URL and NEXTCLOUD_URL environment variables to override.
  */
@@ -27,7 +27,7 @@ module.exports = defineConfig({
   ],
 
   use: {
-    baseURL: process.env.DRAWIO_URL || 'http://localhost:5500',
+    baseURL: process.env.DRAWIO_URL || 'https://localhost:5443',
 
     // Capture trace on first retry to help debug CI failures
     trace: 'on-first-retry',

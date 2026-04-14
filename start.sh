@@ -51,8 +51,8 @@ if [ ! -f ".env" ]; then
     echo "ERROR: .env file not found."
     echo "       Copy .env.example to .env and fill in your values:"
     echo "       cp .env.example .env"
-
-fi # disabled quitting on missing .env to allow defaults from .env.example
+    exit 1
+fi
 
 # ---- Build and start containers ----
 echo "Building and starting containers..."

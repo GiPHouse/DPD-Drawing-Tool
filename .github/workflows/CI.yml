@@ -81,6 +81,9 @@ jobs:
         working-directory: .
         run: |
           chmod +x ./start.sh
+          if [ ! -f .env ]; then
+            cp .env.example .env
+          fi
           ./start.sh
 
       - name: Wait for draw.io and Nextcloud
