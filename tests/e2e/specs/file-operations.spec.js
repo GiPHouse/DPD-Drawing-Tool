@@ -23,7 +23,7 @@ const { test, expect } = require('@playwright/test');
 
 const NC_URL  = process.env.NEXTCLOUD_URL  || 'https://localhost';
 const NC_USER = process.env.NEXTCLOUD_USER || 'admin';
-const NC_PASS = process.env.NEXTCLOUD_PASS || 'admin';
+const NC_PASS = process.env.NEXTCLOUD_ADMIN_PASSWORD || 'change_me_admin_password';
 const NC_DAV_URL = process.env.NEXTCLOUD_DAV_URL ||
   (NC_URL.includes('/remote.php/dav/')
     ? NC_URL
