@@ -163,23 +163,26 @@ Draw.loadPlugin(function (ui) {
    * Write DPD properties back onto an edge, preserving its existing label.
    */
   function setEdgeProps(edge, attrs) {
-    console.log('[DPD] setEdgeProps called on edge:', edge.id, attrs); // ← add this
+    console.log('[DPD] setEdgeProps called on edge:', edge.id, attrs);
     model.beginUpdate();
     try {
-      let value = model.getValue(edge);
-      let el;
-      if (value && typeof value === 'object' && typeof value.getAttribute === 'function') {
-        el = value.cloneNode(true);
-      } else {
-        const xmlDoc = mxUtils.createXmlDocument();
-        el = xmlDoc.createElement('UserObject');
-        el.setAttribute('label', (typeof value === 'string' ? value : '') || '');
-      }
-      Object.entries(attrs).forEach(([k, v]) => {
-        if (v !== null && v !== undefined) el.setAttribute(k, v);
-      });
-      el.setAttribute('label', '');
-      model.setValue(edge, el);
+        let value = model.getValue(edge);
+        console.log('[DPD] current value type:', typeof value, value);
+        let el;
+        if (value && typeof value === 'object' && typeof value.getAttribute === 'function') {
+            el = value.cloneNode(true);
+        } else {
+            const xmlDoc = mxUtils.createXmlDocument();
+            el = xmlDoc.createElement('UserObject');
+            console.log('[DPD] created element tagName:', el.tagName);
+            el.setAttribute('label', (typeof value === 'string' ? value : '') || '');
+        }
+        Object.entries(attrs).forEach(([k, v]) => {
+            if (v !== null && v !== undefined) el.setAttribute(k, v);
+        });
+        el.setAttribute('label', '');
+        model.setValue(edge, el);
+        console.log('[DPD] setValue done, el.outerHTML:', el.outerHTML);
     } finally {
         model.endUpdate();
     }
