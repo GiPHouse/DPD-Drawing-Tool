@@ -57,6 +57,7 @@ on:
   push:
     branches:
       - main
+      - docker_cleanup  # TEMPORARY — remove after testing; see workflow_dispatch note above
     tags:
       # Match any semantic version tag, e.g. v1.0.0, v2.3.1
       - 'v*.*.*'
