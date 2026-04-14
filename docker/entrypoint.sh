@@ -122,10 +122,15 @@ SQL
         --database-name="${MYSQL_DATABASE}" \
         --database-user="${MYSQL_USER}" \
         --database-pass="${MYSQL_PASSWORD}" \
-        --database-host="127.0.0.1" \
+        --database-host="localhost" \
         --admin-user="${NEXTCLOUD_ADMIN_USER}" \
         --admin-pass="${NEXTCLOUD_ADMIN_PASSWORD}" \
         --data-dir="/data/nextcloud"
+        # WHY localhost not 127.0.0.1: MariaDB is started with --skip-networking
+        # during init, which disables TCP entirely. MySQL clients treat 'localhost'
+        # specially — they connect via Unix socket instead of TCP, which works
+        # even with --skip-networking. Using '127.0.0.1' forces TCP and causes
+        # "Connection refused" because TCP is disabled at this point.
 
     # ---- Configure Nextcloud system settings ----
     echo "[6/7] Configuring Nextcloud system settings..."

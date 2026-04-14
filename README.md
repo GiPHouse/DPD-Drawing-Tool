@@ -199,9 +199,32 @@ git push origin v1.0.0
 
 This pushes a tag, which triggers the publish workflow and produces the `:1.0.0`, `:1.0`, and `:latest` tags in GHCR.
 
-### Client deployment (one command)
+### Client deployment
 
-The client runs this on their server. Replace `<org>` and `<repo>` with your GitHub organisation and repository name (both lowercase):
+#### Step 1 — Create a Personal Access Token (PAT)
+
+The image is hosted in a private registry. The client needs a GitHub PAT to pull it. They only need to do this once.
+
+1. Log in to GitHub and go to **Settings → Developer settings → Personal access tokens → Tokens (classic)**
+2. Click **Generate new token (classic)**
+3. Give it a name (e.g. `dpd-docker-pull`), set an expiry, and tick **`read:packages`** — nothing else is needed
+4. Click **Generate token** and copy it immediately (GitHub only shows it once)
+
+#### Step 2 — Log in to the registry
+
+Run this once on the server. Enter the PAT when prompted:
+
+```bash
+echo <PAT> | docker login ghcr.io -u <github-username> --password-stdin
+```
+
+#### Step 3 — Pull the image
+
+```bash
+docker pull ghcr.io/giphouse/dpd-drawing-tool:latest
+```
+
+#### Step 4 — Run the container
 
 ```bash
 docker run -d \
@@ -210,8 +233,10 @@ docker run -d \
   -v dpd_data:/data \
   -e MYSQL_PASSWORD=your_db_password \
   -e NEXTCLOUD_ADMIN_PASSWORD=your_admin_password \
-  ghcr.io/<org>/<repo>:latest
+  ghcr.io/giphouse/dpd-drawing-tool:latest
 ```
+
+> **Apple Silicon Mac (M1/M2/M3)?** Add `--platform linux/amd64` to both the `pull` and `run` commands. The image is built for `linux/amd64` — Docker on Apple Silicon will run it automatically under Rosetta emulation.
 
 **What these flags mean:**
 - `-d` — run in the background (detached)
