@@ -151,9 +151,14 @@ RUN curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
 # systemd and sets up /etc/default/tomcat9, which makes it awkward to manage
 # via supervisord. Using the binary tarball gives us a clean CATALINA_HOME
 # at /opt/tomcat with no systemd assumptions.
+#
+# WHY archive.apache.org not downloads.apache.org: downloads.apache.org only
+# keeps the latest release of each major version. Older pinned versions are
+# rotated off. archive.apache.org keeps every release permanently, which is
+# the correct source for any pinned version number.
 # --------------------------------------------------------------------------
 RUN mkdir -p /opt/tomcat \
-    && curl -L "https://downloads.apache.org/tomcat/tomcat-9/v${TOMCAT_VERSION}/bin/apache-tomcat-${TOMCAT_VERSION}.tar.gz" \
+    && curl -L "https://archive.apache.org/dist/tomcat/tomcat-9/v${TOMCAT_VERSION}/bin/apache-tomcat-${TOMCAT_VERSION}.tar.gz" \
       | tar xz -C /opt/tomcat --strip-components=1 \
     && chmod +x /opt/tomcat/bin/*.sh \
     # Remove default example webapps to reduce attack surface
