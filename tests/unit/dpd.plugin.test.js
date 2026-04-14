@@ -20,7 +20,7 @@ const makeTerminalChange = ({ cell } = {}) => ({
 
 // Dispatching this change via model.fireChange() causes dpd.js to schedule
 // validateGraph() with a 800 ms timeout, which tests advance with fake timers.
-const makeRootChange = () => ({ constructor: { name: 'mxRootChange' } });
+const makeRootChange = () => ({ root: {}, previous: {} });
 
 // ---------------------------------------------------------------------------
 // Plugin load helpers
@@ -165,51 +165,47 @@ describe('Connection created', () => {
 
   it('schedules the annotation dialog 150 ms after a complete connection is made', () => {
     jest.useFakeTimers();
-    const { model } = loadPlugin();
+    const { graph } = loadPlugin();
     const timeoutSpy = jest.spyOn(global, 'setTimeout');
 
-    const source = createMockCell({ isVertex: true, id: 1 });
-    const target = createMockCell({ isVertex: true, id: 2 });
-    const edge   = createMockCell({ isEdge: true, id: 3 });
-    edge._source = source;
-    edge._target = target;
+    const edge = createMockCell({ isEdge: true, id: 3 });
+    edge._source = createMockCell({ isVertex: true, id: 1 });
+    edge._target = createMockCell({ isVertex: true, id: 2 });
 
-    model.fireChange([makeTerminalChange({ cell: edge })]);
+    // Fire the CONNECT event the way draw.io does after a drag-connect
+    graph.connectionHandler.fireEvent(mxEvent.CONNECT, { cell: edge });
 
-    // The 150 ms delay gives draw.io time to finish rendering the edge
-    // before the Annotate Data Flow dialog is shown.
     expect(timeoutSpy.mock.calls.some(([, d]) => d === 150)).toBe(true);
   });
 
-  it('does not schedule the dialog when the source endpoint is missing', () => {
+  it('does not schedule the dialog when the edge has no source', () => {
     jest.useFakeTimers();
-    const { model } = loadPlugin();
+    const { graph } = loadPlugin();
     const timeoutSpy = jest.spyOn(global, 'setTimeout');
 
     const edge = createMockCell({ isEdge: true, id: 3 });
     edge._source = null;
     edge._target = createMockCell({ isVertex: true, id: 2 });
 
-    model.fireChange([makeTerminalChange({ cell: edge })]);
+    graph.connectionHandler.fireEvent(mxEvent.CONNECT, { cell: edge });
 
     expect(timeoutSpy.mock.calls.some(([, d]) => d === 150)).toBe(false);
   });
 
-  it('does not schedule the dialog when the target endpoint is missing', () => {
+  it('does not schedule the dialog when the edge has no target', () => {
     jest.useFakeTimers();
-    const { model } = loadPlugin();
+    const { graph } = loadPlugin();
     const timeoutSpy = jest.spyOn(global, 'setTimeout');
 
     const edge = createMockCell({ isEdge: true, id: 3 });
     edge._source = createMockCell({ isVertex: true, id: 1 });
     edge._target = null;
 
-    model.fireChange([makeTerminalChange({ cell: edge })]);
+    graph.connectionHandler.fireEvent(mxEvent.CONNECT, { cell: edge });
 
     expect(timeoutSpy.mock.calls.some(([, d]) => d === 150)).toBe(false);
   });
 });
-
 // ---------------------------------------------------------------------------
 // Console violation helpers (pushConsoleViolation / syncConsoleViolations)
 // ---------------------------------------------------------------------------
