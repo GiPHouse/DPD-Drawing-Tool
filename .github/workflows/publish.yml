@@ -114,7 +114,8 @@ jobs:
       #     ghcr.io/<org>/<repo>:1.2     (major.minor)
       #     ghcr.io/<org>/<repo>:latest
       #
-      # WHY sha tag on main: gives each main-branch image a stable,
+      # WHY sha tag on all branches: ensures at least one tag is always
+      # produced (required by the registry), and gives every image a stable
       # unique identifier for rollback or audit purposes.
       #
       # WHY major.minor tag: lets the client pin to a minor line
@@ -128,8 +129,10 @@ jobs:
           tags: |
             # 'latest' on every push to the default branch (main)
             type=raw,value=latest,enable={{is_default_branch}}
-            # Short SHA tag on every push to main, e.g. sha-a1b2c3d
-            type=sha,enable={{is_default_branch}}
+            # Short SHA tag on every push to any branch, e.g. sha-a1b2c3d
+            # WHY no enable condition: sha must always be generated so there
+            # is at least one tag to push to the registry on non-main branches.
+            type=sha
             # Full semver from tag, e.g. v1.2.3 → 1.2.3
             type=semver,pattern={{version}}
             # Major.minor from tag, e.g. v1.2.3 → 1.2
