@@ -80,13 +80,16 @@ jobs:
       - name: Generate and start integration stack
         working-directory: .
         run: |
-          chmod +x ./setup_merged.sh
-          ./setup_merged.sh
+          chmod +x ./start.sh
+          if [ ! -f .env ]; then
+            cp .env.example .env
+          fi
+          ./start.sh
 
       - name: Wait for draw.io and Nextcloud
         run: |
           for i in {1..60}; do
-            if curl -fsS http://localhost:5500 >/dev/null && \
+            if curl -kfsS https://localhost:5443 >/dev/null && \
               curl -kfsS https://localhost/status.php | grep -q '"installed":true'; then
               echo "Services are ready"
               exit 0
@@ -101,11 +104,6 @@ jobs:
           exit 1
 
       - name: Run Playwright tests
-        env:
-          DRAWIO_URL: http://localhost:5500
-          NEXTCLOUD_URL: https://localhost
-          NEXTCLOUD_USER: admin
-          NEXTCLOUD_PASS: admin
         run: npm test
 
       - name: Upload Playwright report

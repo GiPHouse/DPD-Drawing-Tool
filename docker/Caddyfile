@@ -1,0 +1,87 @@
+# +--------------------------------------------------------+
+# | This file contains modified code by SE team,          |
+# | refer to keywords: 'NOLAI'                            |
+# |                                                        |
+# +--------------------------------------------------------+
+
+# ====== NOLAI - Infrastructure / Sprint 2 / Task: Single-Container Caddyfile ======
+#
+# Caddy reverse proxy configuration for the single-container image.
+# This file is copied into the image at /etc/caddy/Caddyfile by docker/Dockerfile.
+#
+# ARCHITECTURE (all traffic internal to the container):
+#   Port 443  → Apache2 on 127.0.0.1:8000  (Nextcloud)
+#   Port 5443 → Tomcat  on 127.0.0.1:8080  (Draw.io)
+#
+# DIFFERENCE FROM THE DEV Caddyfile (repo root):
+#   - Upstream addresses use 127.0.0.1 (loopback) instead of Docker Compose
+#     service names (nextcloud-main, drawio), because in the single container
+#     both services are local processes rather than separate containers.
+#   - APP_DOMAIN environment variable is used instead of hardcoded 'localhost'
+#     so the same image works for local testing and real client domains.
+#
+# WHY local_certs:
+#   For testing and client demos this generates a self-signed certificate.
+#   For a production deployment with a real domain:
+#     - Set APP_DOMAIN to the real domain name (e.g. dpd.example.com)
+#     - Remove the 'local_certs' line from this file before building the image
+#     - Caddy will automatically obtain a Let's Encrypt certificate
+#
+# APP_DOMAIN:
+#   Set via the -e APP_DOMAIN=your.domain flag in docker run.
+#   Defaults to 'localhost' if not provided.
+#
+# ====== end of changes by SE ======
+
+{
+    local_certs
+}
+
+# -----------------------------------------------------------------------
+# Nextcloud — primary HTTPS endpoint
+#
+# WHY CORS on WebDAV (same reasoning as the dev Caddyfile):
+#   Nextcloud (port 443) and Draw.io (port 5443) are different origins under
+#   browser security rules, even though both run inside the same container.
+#   The browser still enforces the same-origin policy based on the URL the
+#   client sees. CORS headers are therefore still required.
+# -----------------------------------------------------------------------
+https://{$APP_DOMAIN:localhost} {
+
+    # ---- WebDAV CORS preflight handler ----
+    @davPreflight {
+        method OPTIONS
+        path_regexp dav ^/remote\.php/dav(?:/.*)?$
+    }
+    handle @davPreflight {
+        @preflightDrawio header Origin "https://{$APP_DOMAIN:localhost}:5443"
+        header @preflightDrawio Access-Control-Allow-Origin  "https://{$APP_DOMAIN:localhost}:5443"
+        header Access-Control-Allow-Credentials              "true"
+        header Access-Control-Allow-Methods                  "OPTIONS, GET, HEAD, PROPFIND, MKCOL, MOVE, COPY, LOCK, UNLOCK, PUT, DELETE"
+        header Access-Control-Allow-Headers                  "Authorization, Content-Type, Depth, Timeout, If, Lock-Token, Destination, Overwrite, X-Requested-With, OCS-APIRequest"
+        header Access-Control-Max-Age                        "86400"
+        header Vary                                          "Origin"
+        respond "" 204
+    }
+
+    # Forward all Nextcloud traffic to Apache on the internal loopback port.
+    # Apache is configured to listen on 8000 (not 80) to avoid clashing with Caddy.
+    reverse_proxy 127.0.0.1:8000
+
+    # ---- CORS headers on WebDAV responses ----
+    @originDrawio header Origin "https://{$APP_DOMAIN:localhost}:5443"
+    header @originDrawio Access-Control-Allow-Origin  "https://{$APP_DOMAIN:localhost}:5443"
+    header Access-Control-Allow-Credentials           "true"
+    header Access-Control-Expose-Headers              "DAV, ETag, Lock-Token"
+    header Vary                                       "Origin"
+}
+
+# -----------------------------------------------------------------------
+# Draw.io — secondary HTTPS endpoint
+#
+# Tomcat serves Draw.io on internal port 8080. Caddy terminates TLS and
+# forwards traffic on port 5443 to Tomcat.
+# -----------------------------------------------------------------------
+https://{$APP_DOMAIN:localhost}:5443 {
+    reverse_proxy 127.0.0.1:8080
+}
