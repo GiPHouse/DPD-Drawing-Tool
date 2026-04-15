@@ -135,8 +135,8 @@ wait_healthy() {
 
 # Nextcloud is typically ready first; goauthentik takes longer on first start
 # because it runs database migrations before accepting requests.
-wait_healthy nextcloud    120
-wait_healthy authentik-server 240
+wait_healthy nextcloud       120
+wait_healthy authentik-server 480   # first boot runs all Django migrations — allow 8 min
 
 # -----------------------------------------------------------------------
 # 5. Bootstrap the goauthentik OAuth2 provider and application via API
