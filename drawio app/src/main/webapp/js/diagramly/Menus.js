@@ -919,42 +919,29 @@
 				return input
 			}
 			
-			// Creating the input fields
-			var urlInput = createField('Server URL', 'text', 'https://localhost/remote.php/dav/files/admin/', 'Enter WebDAV URL');
-			var userInput = createField('Username', 'text', 'admin', 'Nextcloud username');
-			var passInput = createField('Password', 'password', 'admin', 'Nextcloud password');
+			// Server URL includes the username — the WebDAV functions extract it automatically.
+			// Authentication uses the active session cookie; no password required.
+			var urlInput = createField('Server URL', 'text', 'https://localhost/remote.php/dav/files/akadmin/', 'WebDAV URL');
 
-			var row = document.createElement('div');
-			row.style.display = 'flex';
-			row.style.gap = '10px';
-
-			var pathCol = document.createElement('div'); 
-			pathCol.style.flex = '1';
-			
-			var fileCol = document.createElement('div');
-			fileCol.style.flex = '2';
-
-			var pathInput = createField('Remote Path', 'text', '', 'e.g. /Diagrams');
+			// Ensure filename always ends with .drawio
+			if (!filename.endsWith('.drawio')) { filename += '.drawio'; }
 			var filenameInput = createField('Filename', 'text', filename, 'file.drawio');
-
-			row.appendChild(pathInput.parentNode);
-			row.appendChild(filenameInput.parentNode);
-			div.appendChild(row);
 
 			// Dialog logic
 			var dlg = new CustomDialog(editorUi, div, function()
 			{
-				var url = urlInput.value;
-				var user = userInput.value;
-				var pass = passInput.value;
-				var path = pathInput.value;
-				var fname = filenameInput.value;
-				
+				var url = urlInput.value.trim();
+
+				var fname = filenameInput.value.trim();
+				// Force .drawio extension
+				if (!fname.endsWith('.drawio')) { fname += '.drawio'; }
+
 				if (typeof saveDrawIOToNextcloudXML === 'function')
 				{
 					editorUi.spinner.spin(document.body, 'Saving to Nextcloud...');
-					
-					saveDrawIOToNextcloudXML(fname, xmlContent, url, user, pass, path).then(function(success)
+
+					// Username extracted from URL; null password — session cookie authenticates.
+					saveDrawIOToNextcloudXML(fname, xmlContent, url, null, null, '/').then(function(success)
 					{
 						editorUi.spinner.stop();
 						if (success)
@@ -983,7 +970,7 @@
 			dlg.okButton.style.backgroundImage = 'none';
 			dlg.okButton.style.color = '#fff';
 
-			editorUi.showDialog(dlg.container, 450, 420, true, true);
+			editorUi.showDialog(dlg.container, 450, 280, true, true);
 			filenameInput.focus();
 		});
 	
@@ -1037,19 +1024,15 @@
 				return input
 			}
 
-			// Creating the input fields
-			var urlInput = createField('Server URL', 'text', 'https://localhost/remote.php/dav/files/admin/', 'Enter WebDAV URL');
-			var userInput = createField('Username:', 'text', 'admin', 'Nextcloud username');
-			var passInput = createField('Password:', 'password', 'admin', 'Nextcloud password');
-			var pathInput = createField('Remote Path:', 'text', '', 'e.g. /Diagrams');
+			// Server URL includes the username — the WebDAV functions extract it automatically.
+			// Authentication uses the active session cookie; no password required.
+			var urlInput = createField('Server URL', 'text', 'https://localhost/remote.php/dav/files/akadmin/', 'WebDAV URL');
 
-			// When user confirms: fetch available .drawio files from Nextcloud.
+			// When user confirms: fetch all .drawio files from Nextcloud.
 			var dlg = new CustomDialog(editorUi, div, function()
 			{
-				var url = urlInput.value;
-				var user = userInput.value;
-				var pass = passInput.value;
-				var path = pathInput.value;
+				var url = urlInput.value.trim();
+				// null password — session cookie authenticates all WebDAV requests.
 
 				// Check if Nextcloud helper functions are loaded.
 				if (typeof listDrawIOFilesInNextcloud !== 'function' || typeof getDrawIOFromNextcloudXML !== 'function' || typeof deleteFileInNextcloud !== 'function')
@@ -1060,7 +1043,7 @@
 
 				editorUi.spinner.spin(document.body, 'Loading file list from Nextcloud...');
 
-				listDrawIOFilesInNextcloud(url, user, pass, path).then(function(files)
+				listDrawIOFilesInNextcloud(url, null, null, '/').then(function(files)
 				{
 					editorUi.spinner.stop();
 
@@ -1110,7 +1093,7 @@
 						{
 							editorUi.spinner.spin(document.body, 'Loading file from Nextcloud...');
 
-							getDrawIOFromNextcloudXML(selected.name, url, user, pass, selected.remotePath).then(function(xml)
+							getDrawIOFromNextcloudXML(selected.name, url, null, null, selected.remotePath).then(function(xml)
 							{
 								editorUi.spinner.stop();
 
@@ -1166,7 +1149,7 @@
 						{
 							editorUi.spinner.spin(document.body, 'Deleting file from Nextcloud...');
 
-							deleteFileInNextcloud(url, user, pass, selected.remotePath, selected.name).then(function(success)
+							deleteFileInNextcloud(url, null, null, selected.remotePath, selected.name).then(function(success)
 							{
 								editorUi.spinner.stop();
 
@@ -1236,7 +1219,7 @@
 			dlg.okButton.style.color = '#fff';
 			dlg.okButton.style.backgroundImage = 'none';
 
-			editorUi.showDialog(dlg.container, 450, 420, true, true);
+			editorUi.showDialog(dlg.container, 450, 240, true, true);
 			urlInput.focus();
 		});
 

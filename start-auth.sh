@@ -296,6 +296,12 @@ OCC="docker exec --user www-data nextcloud-main php occ"
 # goauthentik is reachable via a public hostname instead.
 $OCC config:system:set allow_local_remote_servers --value=true --type=boolean
 
+# Allow the draw.io app (served at https://localhost:5443) to make
+# credentialed cross-origin WebDAV and OCS requests to Nextcloud (https://localhost).
+# Without this Nextcloud rejects CORS preflight requests from port 5443,
+# blocking all WebDAV save/load and the OCS session-detection call.
+$OCC config:system:set cors.allowed-domains 0 --value="https://localhost:5443"
+
 # Install the OIDC login app if it is not already present, then enable it.
 $OCC app:install user_oidc 2>/dev/null || true
 $OCC app:enable  user_oidc

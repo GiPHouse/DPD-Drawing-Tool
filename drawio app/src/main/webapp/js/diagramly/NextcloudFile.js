@@ -1,4 +1,4 @@
-/* 
+/*
 
 +--------------------------------------------------------+
 | This file contains modified code by SE team,           |
@@ -31,14 +31,15 @@ function buildNextcloudWebdavBaseContext(nextcloudUrl, username, password, remot
     }).join('/');
     const encodedUsername = encodeURIComponent(effectiveUsername);
 
-    // Set to true when Nextcloud session cookies are required.
-    // Leave false for Basic-auth-only flow to reduce CORS complexity.
-    const useCookieSession = false;
+    // Use session cookies so the active goauthentik SSO session authenticates WebDAV calls.
+    // No password is required — the browser sends the Nextcloud session cookie automatically.
+    // Set to false to fall back to Basic Auth (re-add password field in Menus.js).
+    const useCookieSession = true;
     const requestBase = {
         mode: 'cors',
         credentials: useCookieSession ? 'include' : 'omit',
     };
-    const authHeader = `Basic ${btoa(`${effectiveUsername}:${password}`)}`;
+    const authHeader = useCookieSession ? null : `Basic ${btoa(`${effectiveUsername}:${password}`)}`;
 
     return {
         authHeader: authHeader,
@@ -71,6 +72,56 @@ function buildNextcloudWebdavContext(filename, nextcloudUrl, username, password,
     };
 }
 
+// ====== NOLAI - Infrastructure / Sprint 3 / Task: SSO Session Detection ======
+// Queries the Nextcloud OCS API to find out which user is currently logged in
+// via the browser's session cookie (set by goauthentik SSO).
+// Returns the username string on success, or null if not authenticated / on error.
+// Used by Menus.js to auto-detect the logged-in user so no manual username
+// entry is needed in the Save / Load dialogs.
+async function getNextcloudCurrentUser(nextcloudBaseUrl) {
+    // Strip any WebDAV path suffix — the OCS endpoint lives at the Nextcloud root.
+    let origin;
+    try {
+        const parsed = new URL(nextcloudBaseUrl, window.location.origin);
+        const davMatch = parsed.pathname.match(/^(.*)\/remote\.php\//);
+        const basePath = davMatch ? davMatch[1] : '';
+        origin = `${parsed.origin}${basePath}`;
+    } catch (e) {
+        console.error('getNextcloudCurrentUser: invalid URL', nextcloudBaseUrl);
+        return null;
+    }
+
+    try {
+        const response = await fetch(`${origin}/ocs/v2.php/cloud/user?format=json`, {
+            method: 'GET',
+            mode: 'cors',
+            credentials: 'include',
+            headers: {
+                // OCS-APIREQUEST tells Nextcloud this is a programmatic call,
+                // not a browser page load, so it returns JSON instead of HTML.
+                'OCS-APIREQUEST': 'true',
+            },
+        });
+
+        if (!response.ok) {
+            console.warn(`getNextcloudCurrentUser: OCS API returned ${response.status}`);
+            return null;
+        }
+
+        const json = await response.json();
+        const userId = json && json.ocs && json.ocs.data && json.ocs.data.id;
+        if (userId) {
+            console.log(`getNextcloudCurrentUser: detected user '${userId}'`);
+            return userId;
+        }
+        return null;
+    } catch (e) {
+        console.warn('getNextcloudCurrentUser: request failed', e);
+        return null;
+    }
+}
+// ====== end of changes by SE ======
+
 // WebDAV PUT function that saves the file as XML content to the Nextcloud server. Returns true if successful, false otherwise.
 async function saveDrawIOToNextcloudXML(filename, xmlContent, nextcloudUrl, username, password, remotePath = '/') {
     const webdavContext = buildNextcloudWebdavContext(filename, nextcloudUrl, username, password, remotePath);
@@ -102,7 +153,9 @@ async function saveDrawIOToNextcloudXML(filename, xmlContent, nextcloudUrl, user
             ...requestBase,
             method: 'LOCK',
             headers: {
-                'Authorization': authHeader,
+                // Spread auth header conditionally: when useCookieSession=true authHeader is null
+                // and we must omit the key entirely (passing null breaks some servers).
+                ...(authHeader ? {'Authorization': authHeader} : {}),
                 'Content-Type': 'application/xml; charset=utf-8',
                 'Depth': '0',
                 'Timeout': 'Second-300',
@@ -143,7 +196,7 @@ async function saveDrawIOToNextcloudXML(filename, xmlContent, nextcloudUrl, user
 
         // WebDAV PUT request
         const putHeaders = {
-            'Authorization': authHeader,
+            ...(authHeader ? {'Authorization': authHeader} : {}),
             'Content-Type': 'application/xml',
         };
 
@@ -181,7 +234,7 @@ async function saveDrawIOToNextcloudXML(filename, xmlContent, nextcloudUrl, user
                     ...requestBase,
                     method: 'UNLOCK',
                     headers: {
-                        'Authorization': authHeader,
+                        ...(authHeader ? {'Authorization': authHeader} : {}),
                         'Lock-Token': lockToken,
                     },
                 });
@@ -192,7 +245,7 @@ async function saveDrawIOToNextcloudXML(filename, xmlContent, nextcloudUrl, user
     }
 }
 
-// WebDAV GET function to retrieve file content from Nextcloud server. Returns null on failure, otherwise returns file content as string. 
+// WebDAV GET function to retrieve file content from Nextcloud server. Returns null on failure, otherwise returns file content as string.
 async function getDrawIOFromNextcloudXML(filename, nextcloudUrl, username, password, remotePath = '/') {
     const webdavContext = buildNextcloudWebdavContext(filename, nextcloudUrl, username, password, remotePath);
     if (!webdavContext) {
@@ -205,7 +258,7 @@ async function getDrawIOFromNextcloudXML(filename, nextcloudUrl, username, passw
             ...webdavContext.requestBase,
             method: 'GET',
             headers: {
-                'Authorization': webdavContext.authHeader,
+                ...(webdavContext.authHeader ? {'Authorization': webdavContext.authHeader} : {}),
             },
         });
 
@@ -240,7 +293,7 @@ async function listDrawIOFilesInNextcloud(nextcloudUrl, username, password, remo
 
     while (pendingDirectories.length > 0) {
         const currentPath = pendingDirectories.shift();
-        
+
         // If already visited this path, then skip and continue to the next.
         if (visitedDirectories[currentPath]) {
             continue;
@@ -262,7 +315,7 @@ async function listDrawIOFilesInNextcloud(nextcloudUrl, username, password, remo
                 ...context.requestBase,
                 method: 'PROPFIND',
                 headers: {
-                    'Authorization': context.authHeader,
+                    ...(context.authHeader ? {'Authorization': context.authHeader} : {}),
                     'Depth': '1',
                     'Content-Type': 'application/xml; charset=utf-8',
                 },
@@ -288,7 +341,7 @@ async function listDrawIOFilesInNextcloud(nextcloudUrl, username, password, remo
                     for (let i = 0; i < responseNodes.length; i++) {
                         const responseNode = responseNodes[i];
                         const hrefNode = responseNode.getElementsByTagNameNS('DAV:', 'href')[0];
-                        
+
                         if (!hrefNode || hrefNode.textContent == null) {
                             continue;
                         }
@@ -311,7 +364,7 @@ async function listDrawIOFilesInNextcloud(nextcloudUrl, username, password, remo
                         if (pathParts.length === 0) {
                             continue;
                         }
-                        
+
                         const name = decodeURIComponent(pathParts[pathParts.length - 1]);
                         const parentPath = (pathParts.length > 1) ? pathParts.slice(0, -1).join('/') : '/';
 
@@ -363,9 +416,9 @@ async function listDrawIOFilesInNextcloud(nextcloudUrl, username, password, remo
 
 // ======	NOLAI - {- Backend -} /Sprint 2/ Task 117	=====
 async function deleteFileInNextcloud(nextcloudUrl, username, password, remotePath = '/', filename) {
-    
+
     const webdavContext = buildNextcloudWebdavContext(filename, nextcloudUrl, username, password, remotePath);
-    
+
     if (!webdavContext) {
         return false;
     }
@@ -394,7 +447,7 @@ async function deleteFileInNextcloud(nextcloudUrl, username, password, remotePat
             ...requestBase,
             method: 'LOCK',
             headers: {
-                'Authorization': authHeader,
+                ...(authHeader ? {'Authorization': authHeader} : {}),
                 'Content-Type': 'application/xml; charset=utf-8',
                 'Depth': '0',
                 'Timeout': 'Second-300',
@@ -435,7 +488,7 @@ async function deleteFileInNextcloud(nextcloudUrl, username, password, remotePat
 
         // WebDAV DELETE request
         const deleteHeaders = {
-            'Authorization': authHeader,
+            ...(authHeader ? {'Authorization': authHeader} : {}),
             'Content-Type': 'application/xml',
         };
 
@@ -472,7 +525,7 @@ async function deleteFileInNextcloud(nextcloudUrl, username, password, remotePat
                     ...requestBase,
                     method: 'UNLOCK',
                     headers: {
-                        'Authorization': authHeader,
+                        ...(authHeader ? {'Authorization': authHeader} : {}),
                         'Lock-Token': lockToken,
                     },
                 });
@@ -483,7 +536,7 @@ async function deleteFileInNextcloud(nextcloudUrl, username, password, remotePat
         }
     }
 
-// Helper function that extracts relative path from full WebDAV by removing the user-specific prefix. 
+// Helper function that extracts relative path from full WebDAV by removing the user-specific prefix.
 // Returns null if pathname doesn't start with the expected prefix.
 function extractRelativeWebdavPath(pathname, userDavPrefix) {
     if (pathname.indexOf(userDavPrefix) !== 0) {
