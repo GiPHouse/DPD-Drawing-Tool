@@ -197,6 +197,20 @@ if [ -z "$INVALIDATION_FLOW_PK" ]; then
     exit 1
 fi
 
+# Fetch the self-signed certificate keypair goauthentik generates on first boot.
+# This is used to sign JWTs — without it, the JWT header has no 'kid' field and
+# Nextcloud's user_oidc plugin rejects the token with "kid must be provided".
+SIGNING_KEY_PK=$(ak_get "/crypto/certificatekeypairs/?has_key=true" \
+    | jq -r '.results[0].pk // empty')
+
+if [ -z "$SIGNING_KEY_PK" ]; then
+    echo ""
+    echo "ERROR: Could not find a signing certificate keypair in goauthentik."
+    echo "       goauthentik may not have finished its first-boot migration."
+    echo "       Wait 30 seconds and re-run this script."
+    exit 1
+fi
+
 # -- 5b. Create the OAuth2 provider (skip if already exists) --
 # The redirect URI must match the URL Nextcloud sends the browser to after
 # the user logs in. Nextcloud's user_oidc app always uses /apps/user_oidc/code.
@@ -207,9 +221,10 @@ PROVIDER_JSON=$(ak_post "/providers/oauth2/" "$(cat <<EOF
   "name":                      "Nextcloud",
   "authorization_flow":        "${FLOW_PK}",
   "invalidation_flow":         "${INVALIDATION_FLOW_PK}",
+  "signing_key":               "${SIGNING_KEY_PK}",
   "client_type":               "confidential",
   "redirect_uris":             [{"matching_mode": "strict", "url": "${REDIRECT_URI}"}],
-  "sub_mode":                  "hashed_user_id",
+  "sub_mode":                  "user_username",
   "include_claims_in_id_token": true
 }
 EOF
@@ -301,7 +316,7 @@ $OCC user_oidc:provider goauthentik \
     --clientsecret="${CLIENT_SECRET}" \
     --discoveryuri="http://authentik-server:9000/application/o/nextcloud/.well-known/openid-configuration" \
     --unique-uid=1 \
-    --mapping-uid=preferred_username
+    --mapping-uid=sub
 
 # Disable Nextcloud's built-in password login so all users must go through
 # goauthentik SSO. Comment this line out temporarily if you need direct
