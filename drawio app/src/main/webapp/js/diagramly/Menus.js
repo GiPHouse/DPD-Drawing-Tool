@@ -862,31 +862,27 @@
 
 		editorUi.actions.addAction('Save', function()
 		{
-			// Get filename and ensure that it is a valid file
 			var currentFile = editorUi.getCurrentFile();
 			var filename = (currentFile != null && currentFile.getTitle() != null) ?
 				currentFile.getTitle() : editorUi.defaultFilename;
-			
-			if (!filename.endsWith('.drawio') && !filename.endsWith('.xml'))
+
+			// Always ensure the default filename ends with .drawio
+			if (!filename.endsWith('.drawio'))
 			{
-				filename += '.drawio';
+				filename = filename.replace(/\.[^/.]+$/, '') + '.drawio';
 			}
-			
-			var xmlContent = editorUi.getFileData(true);
+
 			var nolaiColor = '#008f89';
 
-			// Main container for dialog UI
 			var div = document.createElement('div');
 			div.style.cssText = 'padding: 20px; font-family: Helvetica, Arial, sans-serif; color: #333;';
 
-			// The title for the dialog
 			var title = document.createElement('h2');
 			title.innerHTML = 'Save diagram to Nextcloud';
 			title.style.cssText = 'margin: 0 0 15px 0; color: ' + nolaiColor + '; font-size: 18px; border-bottom: 2px solid ' + nolaiColor + '; padding-bottom: 10px;';
 			div.appendChild(title);
 
-			// Helper function to create a labeled input field
-			function createField(label, type, defaultValue, placeholder) 
+			function createField(label, type, defaultValue, placeholder)
 			{
 				var group = document.createElement('div');
 				group.style.marginBottom = '12px';
@@ -904,56 +900,87 @@
 				input.onfocus = function()
 				{
 					this.style.borderColor = nolaiColor;
-					this.style.boxShadow = '0 0 3px ' + nolaiColor; 
+					this.style.boxShadow = '0 0 3px ' + nolaiColor;
 				};
 
 				input.onblur = function()
 				{
 					this.style.borderColor = '#ccc';
-					this.style.boxShadow = 'none'
+					this.style.boxShadow = 'none';
 				};
 
 				group.appendChild(lbl);
 				group.appendChild(input);
 				div.appendChild(group);
-				return input
+				return input;
 			}
-			
-			// Creating the input fields
-			var urlInput = createField('Server URL', 'text', 'https://localhost/remote.php/dav/files/admin/', 'Enter WebDAV URL');
-			var userInput = createField('Username', 'text', 'admin', 'Nextcloud username');
-			var passInput = createField('Password', 'password', 'admin', 'Nextcloud password');
+
+			var urlInput      = createField('Server URL', 'text', 'https://localhost/remote.php/dav/files/admin/', 'Enter WebDAV URL');
+			var userInput     = createField('Username', 'text', 'admin', 'Nextcloud username');
+			var passInput     = createField('Password', 'password', 'admin', 'Nextcloud password');
 
 			var row = document.createElement('div');
 			row.style.display = 'flex';
 			row.style.gap = '10px';
 
-			var pathCol = document.createElement('div'); 
-			pathCol.style.flex = '1';
-			
-			var fileCol = document.createElement('div');
-			fileCol.style.flex = '2';
-
-			var pathInput = createField('Remote Path', 'text', '', 'e.g. /Diagrams');
-			var filenameInput = createField('Filename', 'text', filename, 'file.drawio');
+			var pathInput     = createField('Remote Path', 'text', '', 'e.g. /Diagrams');
+			var filenameInput = createField('Filename (.drawio only)', 'text', filename, 'file.drawio');
 
 			row.appendChild(pathInput.parentNode);
 			row.appendChild(filenameInput.parentNode);
 			div.appendChild(row);
 
-			// Dialog logic
+			// Warning message shown when user types a wrong extension
+			var extWarning = document.createElement('div');
+			extWarning.style.cssText = [
+				'display: none',
+				'margin-top: -8px',
+				'margin-bottom: 10px',
+				'padding: 8px 12px',
+				'background: #fff3e0',
+				'border-left: 4px solid #e65100',
+				'border-radius: 0 4px 4px 0',
+				'font-size: 12px',
+				'color: #e65100',
+			].join(';');
+			extWarning.innerHTML = '⚠ Only <strong>.drawio</strong> files are supported. The extension will be corrected automatically.';
+			div.appendChild(extWarning);
+
+			// Live enforcement: correct extension and show warning as user types
+			filenameInput.addEventListener('input', function()
+			{
+				var val = filenameInput.value;
+				if (val.includes('.') && !val.endsWith('.drawio'))
+				{
+					extWarning.style.display = 'block';
+				}
+				else
+				{
+					extWarning.style.display = 'none';
+				}
+			});
+
 			var dlg = new CustomDialog(editorUi, div, function()
 			{
-				var url = urlInput.value;
-				var user = userInput.value;
-				var pass = passInput.value;
-				var path = pathInput.value;
-				var fname = filenameInput.value;
-				
+				var url   = urlInput.value;
+				var user  = userInput.value;
+				var pass  = passInput.value;
+				var path  = pathInput.value;
+				var fname = filenameInput.value.trim();
+
+				// Strip any extension and enforce .drawio before saving
+				if (!fname.endsWith('.drawio'))
+				{
+					fname = fname.replace(/\.[^/.]+$/, '').replace(/\.$/, '') + '.drawio';
+				}
+
+				// Capture XML at confirm time so all model changes are included
+				var xmlContent = editorUi.getFileData(true);
+
 				if (typeof saveDrawIOToNextcloudXML === 'function')
 				{
 					editorUi.spinner.spin(document.body, 'Saving to Nextcloud...');
-					
+
 					saveDrawIOToNextcloudXML(fname, xmlContent, url, user, pass, path).then(function(success)
 					{
 						editorUi.spinner.stop();
@@ -977,13 +1004,12 @@
 				}
 			});
 
-			// Styling the OK button for saving files.
 			dlg.okButton.innerHTML = 'Save Diagram';
-    		dlg.okButton.style.backgroundColor = nolaiColor;
+			dlg.okButton.style.backgroundColor = nolaiColor;
 			dlg.okButton.style.backgroundImage = 'none';
 			dlg.okButton.style.color = '#fff';
 
-			editorUi.showDialog(dlg.container, 450, 420, true, true);
+			editorUi.showDialog(dlg.container, 450, 440, true, true);
 			filenameInput.focus();
 		});
 	
