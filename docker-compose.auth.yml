@@ -134,10 +134,10 @@ services:
     command: server
     environment:
       AUTHENTIK_REDIS__HOST:              redis
-      AUTHENTIK_DATABASE__HOST:           postgresql
-      AUTHENTIK_DATABASE__USER:           ${PG_USER:-authentik}
-      AUTHENTIK_DATABASE__NAME:           ${PG_DB:-authentik}
-      AUTHENTIK_DATABASE__PASSWORD:       ${PG_PASS}
+      AUTHENTIK_POSTGRESQL__HOST:           postgresql
+      AUTHENTIK_POSTGRESQL__USER:           ${PG_USER:-authentik}
+      AUTHENTIK_POSTGRESQL__NAME:           ${PG_DB:-authentik}
+      AUTHENTIK_POSTGRESQL__PASSWORD:       ${PG_PASS}
       AUTHENTIK_SECRET_KEY:               ${AUTHENTIK_SECRET_KEY}
 
       # WHY set AUTHENTIK_HOST to the service name:
@@ -188,10 +188,10 @@ services:
     command: worker
     environment:
       AUTHENTIK_REDIS__HOST:              redis
-      AUTHENTIK_DATABASE__HOST:           postgresql
-      AUTHENTIK_DATABASE__USER:           ${PG_USER:-authentik}
-      AUTHENTIK_DATABASE__NAME:           ${PG_DB:-authentik}
-      AUTHENTIK_DATABASE__PASSWORD:       ${PG_PASS}
+      AUTHENTIK_POSTGRESQL__HOST:           postgresql
+      AUTHENTIK_POSTGRESQL__USER:           ${PG_USER:-authentik}
+      AUTHENTIK_POSTGRESQL__NAME:           ${PG_DB:-authentik}
+      AUTHENTIK_POSTGRESQL__PASSWORD:       ${PG_PASS}
       AUTHENTIK_SECRET_KEY:               ${AUTHENTIK_SECRET_KEY}
       AUTHENTIK_HOST:                     http://authentik-server:9000
       AUTHENTIK_BOOTSTRAP_PASSWORD:       ${AUTHENTIK_BOOTSTRAP_PASSWORD}
