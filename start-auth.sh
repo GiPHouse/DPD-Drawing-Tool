@@ -171,16 +171,27 @@ ak_post() {
         "${API}${1}"
 }
 
-# -- 5a. Fetch the default authorization flow PK --
-# goauthentik ships with a default implicit-consent flow. We use it so
-# users are redirected to goauthentik's login page without a separate
-# consent screen (appropriate for an internal tool).
+# -- 5a. Fetch the default authorization and invalidation flow PKs --
+# goauthentik ships with default flows. We use the implicit-consent auth flow
+# (no separate consent screen — appropriate for an internal tool) and the
+# default invalidation flow (became a required field in goauthentik 2026.x).
 FLOW_PK=$(ak_get "/flows/instances/?slug=default-provider-authorization-implicit-consent" \
     | jq -r '.results[0].pk // empty')
 
 if [ -z "$FLOW_PK" ]; then
     echo ""
     echo "ERROR: Could not find the default authorization flow in goauthentik."
+    echo "       goauthentik may not have finished its first-boot migration."
+    echo "       Wait 30 seconds and re-run this script."
+    exit 1
+fi
+
+INVALIDATION_FLOW_PK=$(ak_get "/flows/instances/?designation=invalidation" \
+    | jq -r '.results[0].pk // empty')
+
+if [ -z "$INVALIDATION_FLOW_PK" ]; then
+    echo ""
+    echo "ERROR: Could not find the default invalidation flow in goauthentik."
     echo "       goauthentik may not have finished its first-boot migration."
     echo "       Wait 30 seconds and re-run this script."
     exit 1
@@ -195,6 +206,7 @@ PROVIDER_JSON=$(ak_post "/providers/oauth2/" "$(cat <<EOF
 {
   "name":                      "Nextcloud",
   "authorization_flow":        "${FLOW_PK}",
+  "invalidation_flow":         "${INVALIDATION_FLOW_PK}",
   "client_type":               "confidential",
   "redirect_uris":             [{"matching_mode": "strict", "url": "${REDIRECT_URI}"}],
   "sub_mode":                  "hashed_user_id",
@@ -262,6 +274,13 @@ echo "[5/7] Configuring Nextcloud user_oidc plugin..."
 
 OCC="docker exec --user www-data nextcloud-main php occ"
 
+# Allow Nextcloud to make outbound HTTP requests to local/private network
+# addresses. Required because goauthentik runs on the same Docker network
+# (172.x.x.x) and Nextcloud's SSRF protection blocks private IPs by default.
+# This is intentional in the dev stack; do not set this in production where
+# goauthentik is reachable via a public hostname instead.
+$OCC config:system:set allow_local_remote_servers --value=true --type=boolean
+
 # Install the OIDC login app if it is not already present, then enable it.
 $OCC app:install user_oidc 2>/dev/null || true
 $OCC app:enable  user_oidc
@@ -274,12 +293,13 @@ $OCC app:enable  user_oidc
 #   (a random hash), which creates new accounts on every login.
 #
 # --discoveryuri:
-#   Points to the goauthentik OIDC discovery document. Nextcloud fetches this
-#   server-side via Docker DNS; it resolves 'authentik-server' internally.
-$OCC user_oidc:provider add goauthentik \
+#   Full URL to the OIDC discovery document (user_oidc 7.5+ requires the
+#   complete /.well-known/openid-configuration path, not just the issuer base).
+#   Nextcloud fetches this server-side via Docker DNS.
+$OCC user_oidc:provider goauthentik \
     --clientid="${CLIENT_ID}" \
     --clientsecret="${CLIENT_SECRET}" \
-    --discoveryuri="http://authentik-server:9000/application/o/nextcloud/" \
+    --discoveryuri="http://authentik-server:9000/application/o/nextcloud/.well-known/openid-configuration" \
     --unique-uid=1 \
     --mapping-uid=preferred_username
 

@@ -169,11 +169,12 @@ services:
     healthcheck:
       # goauthentik's built-in readiness probe — returns 200 once the server
       # has completed its database migrations and is ready to handle requests.
+      # WHY curl not wget: the goauthentik 2026.x image ships curl but not wget.
       # WHY long start_period: on first boot goauthentik runs all Django
       # migrations across ~50 apps before the health endpoint responds.
       # 180s start_period + 10 retries = up to 8 minutes total, which covers
       # even slow first-boot migration runs.
-      test: ["CMD-SHELL", "wget -q --spider http://localhost:9000/-/health/ready/ || exit 1"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:9000/-/health/ready/ || exit 1"]
       start_period: 180s
       interval: 30s
       timeout: 10s
