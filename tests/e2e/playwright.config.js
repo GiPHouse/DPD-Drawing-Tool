@@ -45,7 +45,30 @@ module.exports = defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: {
+        ...devices['Desktop Chrome'],
+        // On headless Linux (CI/Docker), Chromium emits a large volume of
+        // GPU-initialisation and sandbox-setup messages to stdout before it
+        // is ready. Playwright's spawnAsync utility accumulates that output
+        // into a single string; if the string grows past the JavaScript
+        // maximum string length (~1 GB) the process crashes with:
+        //   RangeError: Invalid string length
+        // The flags below suppress the sources of that noise:
+        //   --no-sandbox / --disable-setuid-sandbox : required when running
+        //     as root inside a Docker container.
+        //   --disable-dev-shm-usage : avoids /dev/shm exhaustion in
+        //     memory-constrained CI runners.
+        //   --disable-gpu : prevents the GPU process from starting and
+        //     flooding stdout with driver-not-found errors.
+        launchOptions: {
+          args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-gpu',
+          ],
+        },
+      },
     },
     {
       name: 'firefox',
