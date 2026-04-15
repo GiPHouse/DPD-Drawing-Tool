@@ -862,31 +862,27 @@
 
 		editorUi.actions.addAction('Save', function()
 		{
-			// Get filename and ensure that it is a valid file
 			var currentFile = editorUi.getCurrentFile();
 			var filename = (currentFile != null && currentFile.getTitle() != null) ?
 				currentFile.getTitle() : editorUi.defaultFilename;
-			
-			if (!filename.endsWith('.drawio') && !filename.endsWith('.xml'))
+
+			// Always ensure the default filename ends with .drawio
+			if (!filename.endsWith('.drawio'))
 			{
-				filename += '.drawio';
+				filename = filename.replace(/\.[^/.]+$/, '') + '.drawio';
 			}
-			
-			var xmlContent = editorUi.getFileData(true);
+
 			var nolaiColor = '#008f89';
 
-			// Main container for dialog UI
 			var div = document.createElement('div');
 			div.style.cssText = 'padding: 20px; font-family: Helvetica, Arial, sans-serif; color: #333;';
 
-			// The title for the dialog
 			var title = document.createElement('h2');
 			title.innerHTML = 'Save diagram to Nextcloud';
 			title.style.cssText = 'margin: 0 0 15px 0; color: ' + nolaiColor + '; font-size: 18px; border-bottom: 2px solid ' + nolaiColor + '; padding-bottom: 10px;';
 			div.appendChild(title);
 
-			// Helper function to create a labeled input field
-			function createField(label, type, defaultValue, placeholder) 
+			function createField(label, type, defaultValue, placeholder)
 			{
 				var group = document.createElement('div');
 				group.style.marginBottom = '12px';
@@ -904,19 +900,19 @@
 				input.onfocus = function()
 				{
 					this.style.borderColor = nolaiColor;
-					this.style.boxShadow = '0 0 3px ' + nolaiColor; 
+					this.style.boxShadow = '0 0 3px ' + nolaiColor;
 				};
 
 				input.onblur = function()
 				{
 					this.style.borderColor = '#ccc';
-					this.style.boxShadow = 'none'
+					this.style.boxShadow = 'none';
 				};
 
 				group.appendChild(lbl);
 				group.appendChild(input);
 				div.appendChild(group);
-				return input
+				return input;
 			}
 			
 			// Server URL includes the username — the WebDAV functions extract it automatically.
@@ -964,9 +960,8 @@
 				}
 			});
 
-			// Styling the OK button for saving files.
 			dlg.okButton.innerHTML = 'Save Diagram';
-    		dlg.okButton.style.backgroundColor = nolaiColor;
+			dlg.okButton.style.backgroundColor = nolaiColor;
 			dlg.okButton.style.backgroundImage = 'none';
 			dlg.okButton.style.color = '#fff';
 
