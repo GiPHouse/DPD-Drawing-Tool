@@ -78,16 +78,40 @@ test.describe('NOLAI logo', () => {
   });
 
   test('logo links to https://www.ru.nl/en/nolai', async ({ page, context }) => {
+    await page.addInitScript(() => {
+      const originalOpen = window.open;
+      window.__dpdLastOpenedUrl = null;
+      window.open = function(...args) {
+        window.__dpdLastOpenedUrl = args[0] ? String(args[0]) : null;
+        return originalOpen.apply(window, args);
+      };
+    });
+
     await loadApp(page);
     const logo = page.locator('img.geSmallAppIcon, img[src*="NOLAI_logo"]').first();
 
-    // Clicking the logo should open a new tab pointing to the NOLAI site
-    const [newPage] = await Promise.all([
-      context.waitForEvent('page'),
-      logo.click(),
-    ]);
-    await expect(newPage).toHaveURL(/ru\.nl.*nolai/i);
-    await newPage.close();
+    // Depending on browser settings and app mode, the click may open a popup,
+    // navigate the same tab, or call window.open while popup is blocked.
+    const popupPromise = context.waitForEvent('page', { timeout: 8_000 }).catch(() => null);
+    const navPromise = page.waitForURL(/ru\.nl.*nolai/i, { timeout: 8_000 }).then(() => true).catch(() => false);
+
+    await logo.click();
+
+    const [popupPage, sameTabNavigated] = await Promise.all([popupPromise, navPromise]);
+
+    if (popupPage) {
+      await expect(popupPage).toHaveURL(/ru\.nl.*nolai/i);
+      await popupPage.close();
+      return;
+    }
+
+    if (sameTabNavigated) {
+      await expect(page).toHaveURL(/ru\.nl.*nolai/i);
+      return;
+    }
+
+    const openedUrl = await page.evaluate(() => window.__dpdLastOpenedUrl || '');
+    expect(openedUrl).toMatch(/ru\.nl.*nolai/i);
   });
 });
 

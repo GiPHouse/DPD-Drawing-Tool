@@ -1,0 +1,174 @@
+# +--------------------------------------------------------+
+# | This file contains modified code by SE team,          |
+# | refer to keywords: 'NOLAI'                            |
+# |                                                        |
+# +--------------------------------------------------------+
+
+# ====== NOLAI - Infrastructure / Sprint 2 / Task: #145 ======
+#
+# Builds the single-container image (docker/Dockerfile) and pushes it to
+# GitHub Container Registry (GHCR) so the client can pull it with one command.
+#
+# WHEN THIS RUNS:
+#   - Every push to the 'main' branch  → pushes the 'latest' tag + a short SHA tag
+#   - Every version tag (e.g. v1.2.3) → pushes semver tags (1.2.3, 1.2, 1) + latest
+#
+# WHY NOT on every branch push:
+#   The build is expensive — Stage 1 compiles Draw.io from source using Ant,
+#   Stage 2 downloads and installs Nextcloud, MariaDB, Tomcat, Caddy, and PHP.
+#   Publishing only from 'main' and release tags keeps registry clean and avoids
+#   wasting build minutes on work-in-progress branches.
+#
+# AUTHENTICATION:
+#   Uses the automatic GITHUB_TOKEN — no extra secrets or PATs are required.
+#   GitHub grants this token 'packages: write' permission via the permissions block.
+#
+# IMAGE NAME:
+#   ghcr.io/<org-or-user>/<repo-name>
+#   Derived from github.repository at runtime, so no hardcoding is needed.
+#   Example: ghcr.io/nolai/dpd-drawing-tool:latest
+#
+# BUILD CONTEXT:
+#   The build context is the repo root (.), not docker/, because Stage 1 of the
+#   Dockerfile copies from "drawio app/" which lives at the repo root.
+#   The Dockerfile path is explicitly set with -f docker/Dockerfile.
+#
+# CACHING:
+#   GitHub Actions cache (type=gha) is used to cache Docker layer data between
+#   runs. This dramatically speeds up rebuilds when only application-level files
+#   change (e.g. dpd.js), because the expensive apt install and Ant compile
+#   layers are already cached.
+#
+# CLIENT PULL COMMAND (client must log in with a PAT — see README):
+#   docker login ghcr.io -u <github-username> -p <PAT>
+#   docker pull ghcr.io/<org>/<repo>:latest
+#
+# MANUAL TEST TRIGGER:
+#   workflow_dispatch allows the workflow to be triggered manually from the
+#   GitHub Actions UI on any branch. This is useful for testing the build
+#   without pushing to main. Tags produced on a non-main branch:
+#     ghcr.io/<org>/<repo>:sha-<7-char-sha>  (no 'latest' — see tagging step)
+#
+# ====== end of changes by SE ======
+
+name: Publish Docker image
+
+on:
+  push:
+    branches:
+      - main
+      - docker_cleanup  # TEMPORARY — remove after testing; see workflow_dispatch note above
+    tags:
+      # Match any semantic version tag, e.g. v1.0.0, v2.3.1
+      - 'v*.*.*'
+  # WHY workflow_dispatch: allows manual triggering from the GitHub Actions UI
+  # on any branch. Useful for testing the build without pushing to main.
+  # The 'latest' tag is only applied when running on the default branch (main),
+  # so a manual run from a feature branch produces only a SHA tag — safe to
+  # push to the registry without affecting what the client pulls.
+  workflow_dispatch:
+
+# WHY these two permissions:
+#   contents: read  — needed to check out the repository
+#   packages: write — needed to push to GitHub Container Registry
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    name: Build and push to GHCR
+    runs-on: ubuntu-latest
+
+    steps:
+      # ------------------------------------------------------------------
+      # 1. Check out the repository at the commit that triggered this run.
+      # ------------------------------------------------------------------
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      # ------------------------------------------------------------------
+      # 2. Log in to GHCR using the automatic GITHUB_TOKEN.
+      #
+      # WHY github.actor as username: GITHUB_TOKEN is scoped to the actor
+      # (user or bot) that triggered the workflow. Using github.actor ensures
+      # the token and username match.
+      # ------------------------------------------------------------------
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # ------------------------------------------------------------------
+      # 3. Generate image tags and OCI labels from git metadata.
+      #
+      # Tags produced:
+      #   On push to main:
+      #     ghcr.io/<org>/<repo>:latest
+      #     ghcr.io/<org>/<repo>:sha-<7-char-sha>
+      #
+      #   On version tag (e.g. v1.2.3):
+      #     ghcr.io/<org>/<repo>:1.2.3   (full semver, no 'v' prefix)
+      #     ghcr.io/<org>/<repo>:1.2     (major.minor)
+      #     ghcr.io/<org>/<repo>:latest
+      #
+      # WHY sha tag on all branches: ensures at least one tag is always
+      # produced (required by the registry), and gives every image a stable
+      # unique identifier for rollback or audit purposes.
+      #
+      # WHY major.minor tag: lets the client pin to a minor line
+      # (e.g. :1.2) and receive patch updates automatically.
+      # ------------------------------------------------------------------
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            # 'latest' on every push to the default branch (main)
+            type=raw,value=latest,enable={{is_default_branch}}
+            # Short SHA tag on every push to any branch, e.g. sha-a1b2c3d
+            # WHY no enable condition: sha must always be generated so there
+            # is at least one tag to push to the registry on non-main branches.
+            type=sha
+            # Full semver from tag, e.g. v1.2.3 → 1.2.3
+            type=semver,pattern={{version}}
+            # Major.minor from tag, e.g. v1.2.3 → 1.2
+            type=semver,pattern={{major}}.{{minor}}
+
+      # ------------------------------------------------------------------
+      # 4. Set up Docker Buildx.
+      #
+      # WHY Buildx: the build-push-action requires Buildx (Docker's extended
+      # build frontend) for cache export/import and multi-platform support.
+      # ------------------------------------------------------------------
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ------------------------------------------------------------------
+      # 5. Build the single-container image and push it to GHCR.
+      #
+      # WHY context: . — the Dockerfile Stage 1 does:
+      #   COPY ["drawio app/", "/app/"]
+      # which references a path relative to the build context. The context
+      # must be the repo root so Docker can find "drawio app/".
+      #
+      # WHY cache-from / cache-to with type=gha:
+      #   The Ant compile (Stage 1) and the apt install + Nextcloud/Tomcat
+      #   download (Stage 2) are slow. GHA layer caching stores these layers
+      #   in the Actions cache so they are reused on subsequent runs unless
+      #   the relevant Dockerfile instructions or source files change.
+      #   mode=max caches all intermediate layers, not just the final image.
+      # ------------------------------------------------------------------
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

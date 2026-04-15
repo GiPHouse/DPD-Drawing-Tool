@@ -1,0 +1,33 @@
+# +--------------------------------------------------------+
+# | This file contains modified code by SE team,          |
+# | refer to keywords: 'NOLAI'                            |
+# |                                                        |
+# +--------------------------------------------------------+
+
+# ====== NOLAI - Infrastructure / Sprint 2 / Task: MariaDB Config for Nextcloud ======
+#
+# MariaDB configuration overrides required by Nextcloud.
+# Placed at /etc/mysql/conf.d/nextcloud.cnf inside the container.
+#
+# WHY this file exists:
+#   In docker-compose.yml these settings are passed as command-line flags to
+#   the mariadb container (--transaction-isolation=... --binlog-format=...).
+#   In the single-container image there is no command override mechanism, so
+#   the same settings are expressed here as a config file instead.
+#
+# WHY READ-COMMITTED:
+#   Nextcloud performs multi-statement transactions. The default REPEATABLE-READ
+#   isolation level can cause deadlocks under concurrent load with Nextcloud's
+#   query patterns. READ-COMMITTED avoids this by not holding gap locks between
+#   statements in a transaction.
+#
+# WHY ROW binlog format:
+#   Nextcloud's documentation explicitly requires ROW-based binary logging when
+#   binary logging is enabled. STATEMENT-based logging can produce incorrect
+#   results for non-deterministic queries (e.g. those using NOW() or UUID()).
+#
+# ====== end of changes by SE ======
+
+[mysqld]
+transaction_isolation = READ-COMMITTED
+binlog_format         = ROW

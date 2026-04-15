@@ -1,0 +1,28 @@
+OC.L10N.register(
+    "photos",
+    {
+    "Photos" : "Tiwlafin",
+    "Videos" : "Tividyutin",
+    "People" : "Imdanen",
+    "Folders" : "Ikaramen",
+    "Favorites" : "Imenyafen",
+    "Tags" : "Tibzimin",
+    "Back" : "Retour",
+    "Save" : "Sekles",
+    "Favorite" : "Menyif",
+    "Go back" : "Tuɣalin",
+    "Pick folder" : "Fren akaram",
+    "All folders" : "Akk ikaramen",
+    "Add folder" : "Rnu akaram",
+    "Home" : "Asnubeg",
+    "General" : "Amatu",
+    "Remove from favorites" : "Kkes-it seg ismal",
+    "Save." : "Sekles.",
+    "Details" : "Talqayt",
+    "Cancel" : "Semmet",
+    "Confirm" : "Sergeg",
+    "Group" : "Agraw",
+    "Back to {folder}" : "Uɣal ar {folder}",
+    "Add" : "Rnu"
+},
+"nplurals=2; plural=(n != 1);");
