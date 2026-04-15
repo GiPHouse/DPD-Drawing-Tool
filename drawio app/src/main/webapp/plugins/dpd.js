@@ -185,6 +185,26 @@ Draw.loadPlugin(function (ui) {
     }
   }
 
+  function setNodeProps(node, attrs) {
+    model.beginUpdate();
+    try {
+      let value = model.getValue(node);
+      let el;
+      if (value && typeof value === 'object' && typeof value.getAttribute === 'function') {
+        el = value.cloneNode(true);
+      } else {
+        el = document.createElement('UserObject');
+      }
+      Object.entries(attrs).forEach(([k, v]) => {
+        if (v !== null && v !== undefined) el.setAttribute(k, v);
+      });
+      // NOLAI: Keep the edge label empty — annotation details live in the sidebar
+      // and violation numbers are shown as badges on the arrow itself.
+      model.setValue(node, el);
+    } finally {
+      model.endUpdate();
+    }
+  }
   // Structural connection validation (R-S1, R-S2, R-S3) 
 
   const originalIsValidConnection = graph.isValidConnection.bind(graph);
@@ -226,6 +246,306 @@ Draw.loadPlugin(function (ui) {
   };
 
   // Edge annotation dialog
+
+  function showDataAnnotationDialog(process) {
+    const props_stores_max_identifiability = getNodeProp(process, "stores_max_identifiability");
+
+    // --- NEW: Dynamic Theme Evaluation (Computed Fallback) ---
+    let isDark = false;
+
+    if (ui.theme === 'dark') {
+      isDark = true;
+    } else if (typeof ui.isDarkMode === 'function' && ui.isDarkMode()) {
+      isDark = true;
+    } else if (ui.editor && typeof ui.editor.isDarkMode === 'function' && ui.editor.isDarkMode()) {
+      isDark = true;
+    } else if (document.body.classList.contains('geDark') || 
+               document.documentElement.classList.contains('geDark') ||
+               document.documentElement.getAttribute('data-color-mode') === 'dark' ||
+               document.body.getAttribute('data-theme') === 'dark') {
+      isDark = true;
+    } else {
+      try {
+        const container = ui.container || document.body;
+        const bgColor = window.getComputedStyle(container).backgroundColor;
+        const match = bgColor.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+        if (match) {
+          const r = parseInt(match[1], 10);
+          const g = parseInt(match[2], 10);
+          const b = parseInt(match[3], 10);
+          const luminance = (0.299 * r + 0.587 * g + 0.114 * b);
+          isDark = luminance < 128; 
+        }
+      } catch (e) {
+        console.warn('[DPD] Could not compute background color for theme detection');
+      }
+    }
+
+    const bgColor = isDark ? 'var(--ge-dark-panel-color)' : 'var(--ge-panel-color)';
+    const textColor = isDark ? 'var(--dark-text-color)' : 'var(--text-color)';
+    const borderColor = isDark ? 'var(--dark-border-color)' : 'var(--border-color)';
+    // -------------------------------------
+
+    const wrap = document.createElement('div');
+    wrap.style.cssText = [
+      'padding:20px',
+      'min-width:340px',
+      'font-family:Arial,sans-serif',
+      'font-size:13px',
+      `color:${textColor}`,
+      `background:${bgColor}`,
+    ].join(';');
+
+    function field(label, required, inputHtml) {
+      return `
+        <div style="margin-bottom:14px;">
+          <label style="display:block;font-weight:bold;margin-bottom:4px;
+                        color:${textColor};">
+            ${label}${required ? ' <span style="color:#e05050">*</span>' : ''}
+          </label>
+          ${inputHtml}
+        </div>`;
+    }
+
+    const selStyle = [
+      'width:100%',
+      'padding:5px',
+      'font-size:12px',
+      `border:1px solid ${borderColor}`,
+      'border-radius:3px',
+      `background:${bgColor}`,
+      `color:${textColor}`,
+    ].join(';');
+
+    const inpStyle = [
+      'width:100%',
+      'padding:5px',
+      'font-size:12px',
+      `border:1px solid ${borderColor}`,
+      'border-radius:3px',
+      'box-sizing:border-box',
+      `background:${bgColor}`,
+      `color:${textColor}`,
+    ].join(';');
+
+    function opt(val, label, cur) {
+      return `<option value="${val}" ${cur === val ? 'selected' : ''}>${label}</option>`;
+    }
+
+    wrap.innerHTML = `
+      <h3 style="margin:0 0 16px;font-size:15px;border-bottom:1px solid ${borderColor};padding-bottom:8px;color:${textColor};">
+        Annotate Data Flow
+      </h3>
+      ${field('Stores Max Identifiability', false, `
+        <select id="dpd-stores-max" style="${selStyle}">
+          <option value="">— select —</option>
+          ${opt('none',                   'None',                       props_stores_max_identifiability || 'none')}
+          ${opt('non_personal',           'Non-personal (0)',           props_stores_max_identifiability)}
+          ${opt('de_identified',          'De-identified (1)',          props_stores_max_identifiability)}
+          ${opt('indirectly_identifiable','Indirectly identifiable (2)',props_stores_max_identifiability)}
+          ${opt('directly_identifiable',  'Directly identifiable (3)',  props_stores_max_identifiability)}
+        </select>`)}
+      <div id="dpd-err" style="color:#e05050;font-size:12px;min-height:16px;margin-bottom:8px;"></div>
+    `;
+
+    const btnRow = document.createElement('div');
+    btnRow.style.cssText = 'display:flex;justify-content:flex-end;gap:8px;margin-top:4px;';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.style.cssText = [
+      'padding:6px 18px',
+      `border:1px solid ${borderColor}`,
+      'border-radius:4px',
+      `background:${bgColor}`,
+      `color:${textColor}`,
+      'cursor:pointer',
+      'font-size:13px',
+    ].join(';');
+    cancelBtn.onclick = () => ui.hideDialog();
+
+    const okBtn = document.createElement('button');
+    okBtn.textContent = 'Save';
+    okBtn.style.cssText = 'padding:6px 18px;border:none;border-radius:4px;background:#1565c0;color:#fff;cursor:pointer;font-size:13px;font-weight:bold;';
+    okBtn.onclick = () => {
+      const stores  = wrap.querySelector('#dpd-stores-max').value;
+      const errEl  = wrap.querySelector('#dpd-err');
+
+      errEl.textContent = '';
+
+      setNodeProps(process, { stores_max_identifiability: stores });
+      ui.hideDialog();
+
+      // Auto-validate silently after annotation save: update console without opening modal.
+      setTimeout(function() { validateGraph(); }, 50);
+    };
+
+    btnRow.appendChild(cancelBtn);
+    btnRow.appendChild(okBtn);
+    wrap.appendChild(btnRow);
+
+    ui.showDialog(wrap, 400, 370, true, false);
+  }
+
+  function showProcessAnnotationDialog(process) {
+    const props_accepts_max_identifiability = getNodeProp(process, "accepts_max_identifiability");
+    const props_outputs_max_identifiability = getNodeProp(process, "outputs_max_identifiability");
+    const props_accepts_max_linkability = getNodeProp(process, "accepts_max_linkability");
+
+    // --- NEW: Dynamic Theme Evaluation (Computed Fallback) ---
+    let isDark = false;
+
+    if (ui.theme === 'dark') {
+      isDark = true;
+    } else if (typeof ui.isDarkMode === 'function' && ui.isDarkMode()) {
+      isDark = true;
+    } else if (ui.editor && typeof ui.editor.isDarkMode === 'function' && ui.editor.isDarkMode()) {
+      isDark = true;
+    } else if (document.body.classList.contains('geDark') || 
+               document.documentElement.classList.contains('geDark') ||
+               document.documentElement.getAttribute('data-color-mode') === 'dark' ||
+               document.body.getAttribute('data-theme') === 'dark') {
+      isDark = true;
+    } else {
+      try {
+        const container = ui.container || document.body;
+        const bgColor = window.getComputedStyle(container).backgroundColor;
+        const match = bgColor.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+        if (match) {
+          const r = parseInt(match[1], 10);
+          const g = parseInt(match[2], 10);
+          const b = parseInt(match[3], 10);
+          const luminance = (0.299 * r + 0.587 * g + 0.114 * b);
+          isDark = luminance < 128; 
+        }
+      } catch (e) {
+        console.warn('[DPD] Could not compute background color for theme detection');
+      }
+    }
+
+    const bgColor = isDark ? 'var(--ge-dark-panel-color)' : 'var(--ge-panel-color)';
+    const textColor = isDark ? 'var(--dark-text-color)' : 'var(--text-color)';
+    const borderColor = isDark ? 'var(--dark-border-color)' : 'var(--border-color)';
+    // -------------------------------------
+
+    const wrap = document.createElement('div');
+    wrap.style.cssText = [
+      'padding:20px',
+      'min-width:340px',
+      'font-family:Arial,sans-serif',
+      'font-size:13px',
+      `color:${textColor}`,
+      `background:${bgColor}`,
+    ].join(';');
+
+    function field(label, required, inputHtml) {
+      return `
+        <div style="margin-bottom:14px;">
+          <label style="display:block;font-weight:bold;margin-bottom:4px;
+                        color:${textColor};">
+            ${label}${required ? ' <span style="color:#e05050">*</span>' : ''}
+          </label>
+          ${inputHtml}
+        </div>`;
+    }
+
+    const selStyle = [
+      'width:100%',
+      'padding:5px',
+      'font-size:12px',
+      `border:1px solid ${borderColor}`,
+      'border-radius:3px',
+      `background:${bgColor}`,
+      `color:${textColor}`,
+    ].join(';');
+
+    const inpStyle = [
+      'width:100%',
+      'padding:5px',
+      'font-size:12px',
+      `border:1px solid ${borderColor}`,
+      'border-radius:3px',
+      'box-sizing:border-box',
+      `background:${bgColor}`,
+      `color:${textColor}`,
+    ].join(';');
+
+    function opt(val, label, cur) {
+      return `<option value="${val}" ${cur === val ? 'selected' : ''}>${label}</option>`;
+    }
+
+    wrap.innerHTML = `
+      <h3 style="margin:0 0 16px;font-size:15px;border-bottom:1px solid ${borderColor};padding-bottom:8px;color:${textColor};">
+        Annotate Data Flow
+      </h3>
+      ${field('Accepts Max Identifiability', false, `
+        <select id="dpd-accepts-max" style="${selStyle}">
+          <option value="">— select —</option>
+          ${opt('none',                   'None',                       props_accepts_max_identifiability || 'none')}
+          ${opt('non_personal',           'Non-personal (0)',           props_accepts_max_identifiability)}
+          ${opt('de_identified',          'De-identified (1)',          props_accepts_max_identifiability)}
+          ${opt('indirectly_identifiable','Indirectly identifiable (2)',props_accepts_max_identifiability)}
+          ${opt('directly_identifiable',  'Directly identifiable (3)',  props_accepts_max_identifiability)}
+        </select>`)}
+      ${field('Outputs Max Identifiability', false, `
+        <select id="dpd-outputs-max" style="${selStyle}">
+          <option value="">— select —</option>
+          ${opt('none',                   'None',                       props_outputs_max_identifiability || 'none')}
+          ${opt('non_personal',           'Non-personal (0)',           props_outputs_max_identifiability)}
+          ${opt('de_identified',          'De-identified (1)',          props_outputs_max_identifiability)}
+          ${opt('indirectly_identifiable','Indirectly identifiable (2)',props_outputs_max_identifiability)}
+          ${opt('directly_identifiable',  'Directly identifiable (3)',  props_outputs_max_identifiability)}
+        </select>`)}
+      ${field('Accepts Max Linkability', false, `
+        <select id="dpd-link-max" style="${selStyle}">
+          ${opt('none',               'None',                     props_accepts_max_linkability || 'none')}
+          ${opt('unlinkable',          'Unlinkable (0)',          props_accepts_max_linkability)}
+          ${opt('locally_linkable',    'Locally linkable (1)',    props_accepts_max_linkability)}
+          ${opt('universally_linkable','Universally linkable (2)',props_accepts_max_linkability)}
+        </select>`)}
+      <div id="dpd-err" style="color:#e05050;font-size:12px;min-height:16px;margin-bottom:8px;"></div>
+    `;
+
+    const btnRow = document.createElement('div');
+    btnRow.style.cssText = 'display:flex;justify-content:flex-end;gap:8px;margin-top:4px;';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.style.cssText = [
+      'padding:6px 18px',
+      `border:1px solid ${borderColor}`,
+      'border-radius:4px',
+      `background:${bgColor}`,
+      `color:${textColor}`,
+      'cursor:pointer',
+      'font-size:13px',
+    ].join(';');
+    cancelBtn.onclick = () => ui.hideDialog();
+
+    const okBtn = document.createElement('button');
+    okBtn.textContent = 'Save';
+    okBtn.style.cssText = 'padding:6px 18px;border:none;border-radius:4px;background:#1565c0;color:#fff;cursor:pointer;font-size:13px;font-weight:bold;';
+    okBtn.onclick = () => {
+      const acceptident  = wrap.querySelector('#dpd-accepts-max').value;
+      const linkmax   = wrap.querySelector('#dpd-link-max').value;
+      const outputident = wrap.querySelector('#dpd-outputs-max').value;
+      const errEl  = wrap.querySelector('#dpd-err');
+
+      errEl.textContent = '';
+
+      setNodeProps(process, { accepts_max_identifiability: acceptident, outputs_max_identifiability: outputident, accepts_max_linkability: linkmax });
+      ui.hideDialog();
+
+      // Auto-validate silently after annotation save: update console without opening modal.
+      setTimeout(function() { validateGraph(); }, 50);
+    };
+
+    btnRow.appendChild(cancelBtn);
+    btnRow.appendChild(okBtn);
+    wrap.appendChild(btnRow);
+
+    ui.showDialog(wrap, 400, 370, true, false);
+  }
 
   function showEdgeAnnotationDialog(edge) {
     const props = getEdgeProps(edge);
@@ -793,9 +1113,14 @@ Draw.loadPlugin(function (ui) {
     edit.changes.forEach(change => {
       if (change.constructor.name === 'mxChildChange') {
         const vertex = change.child;
-        if (vertex && model.isVertex(vertex) && change.parent && !loggedAddedVertices.has(vertex)) {
+        if (vertex && model.isVertex(vertex) && change.parent && change.previous == null && !loggedAddedVertices.has(vertex)) {
           loggedAddedVertices.add(vertex);
           console.log('Vertex added:', vertex.id || '(no id)');
+        }
+        if (model.isVertex(vertex) && change.parent && change.previous == null && getComponentType(vertex) == "process"){
+          setTimeout(() => showProcessAnnotationDialog(vertex), 150);
+        } else if (model.isVertex(vertex) && change.parent && change.previous == null && getComponentType(vertex) == "data_store"){
+          setTimeout(() => showDataAnnotationDialog(vertex), 150);
         }
       }
 
@@ -810,12 +1135,12 @@ Draw.loadPlugin(function (ui) {
       if (change.constructor.name === 'mxTerminalChange') {
         const edge = change.cell;
         if (!model.isEdge(edge)) return;
-        const src = model.getTerminal(edge, true);
-        const tgt = model.getTerminal(edge, false);
-        if (src && tgt && !annotatedEdges.has(edge)) {
-          annotatedEdges.add(edge);
-          setTimeout(() => showEdgeAnnotationDialog(edge), 150);
-        }
+          const src = model.getTerminal(edge, true);
+          const tgt = model.getTerminal(edge, false);
+          if (src && tgt && !annotatedEdges.has(edge)) {
+            annotatedEdges.add(edge);
+            setTimeout(() => showEdgeAnnotationDialog(edge), 150);
+          }
       }
     });
   });
