@@ -1,5 +1,4 @@
 name: CI
-
 on:
   push:
     branches:
@@ -8,41 +7,32 @@ on:
     branches:
       - '**'
   workflow_dispatch:
-
 permissions:
   contents: read
-
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-
 jobs:
   unit-tests:
     name: Unit tests (Jest)
     runs-on: ubuntu-latest
     timeout-minutes: 15
-
     defaults:
       run:
         working-directory: tests/unit
-
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
           cache-dependency-path: tests/unit/package-lock.json
-
       - name: Install unit test dependencies
         run: npm ci
-
       - name: Run Jest tests
         run: npm test -- --ci
-
       - name: Upload unit coverage artifact
         if: always()
         uses: actions/upload-artifact@v4
@@ -50,33 +40,27 @@ jobs:
           name: unit-coverage
           path: tests/unit/coverage
           if-no-files-found: ignore
-
   e2e-tests:
     name: E2E tests (Playwright)
     runs-on: ubuntu-latest
     timeout-minutes: 45
-
+    if: github.event_name == 'pull_request'
     defaults:
       run:
         working-directory: tests/e2e
-
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
           cache-dependency-path: tests/e2e/package-lock.json
-
       - name: Install e2e dependencies
         run: npm ci
-
       - name: Install Playwright browsers
         run: npx playwright install --with-deps
-
       - name: Generate and start integration stack
         working-directory: .
         run: |
@@ -85,7 +69,6 @@ jobs:
             cp .env.example .env
           fi
           ./start.sh
-
       - name: Wait for draw.io and Nextcloud
         run: |
           for i in {1..60}; do
@@ -102,10 +85,8 @@ jobs:
             docker compose -f "$GITHUB_WORKSPACE/docker-compose.yml" ps
           fi
           exit 1
-
       - name: Run Playwright tests
         run: npm test
-
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v4
@@ -113,17 +94,15 @@ jobs:
           name: playwright-report
           path: tests/e2e/playwright-report
           if-no-files-found: ignore
-
       - name: Dump Docker logs on failure
         if: failure()
         run: |
           if [ -f "$GITHUB_WORKSPACE/docker-compose.yml" ]; then
             docker compose -f "$GITHUB_WORKSPACE/docker-compose.yml" logs --no-color
           fi
-
       - name: Stop Docker stack
         if: always()
         run: |
           if [ -f "$GITHUB_WORKSPACE/docker-compose.yml" ]; then
-            docker compose -f "$GITHUB_WORKSPACE/docker-compose.yml" down -v
+            docker compose -f "$GITHUB_WORKSPACE/docker-compose.yml" logs --no-color
           fi
