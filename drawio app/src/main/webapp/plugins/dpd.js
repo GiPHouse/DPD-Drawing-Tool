@@ -795,7 +795,7 @@ Draw.loadPlugin(function (ui) {
       if (tt === 'process') {
         const maxIdent = getNodeProp(tgt, 'accepts_max_identifiability');
         if (maxIdent && identRank > (IDENT_RANK[maxIdent] ?? 99)) {
-          violations.push({ rule: 'R-I1', severity: 'error', edge: edge,
+          violations.push({ rule: 'R-I1', severity: 'error', vertex: tt,
             msg: `Flow is "${props.identifiability}" but process only accepts "${maxIdent}" or lower.` });
         }
       }
@@ -804,7 +804,7 @@ Draw.loadPlugin(function (ui) {
       if (st === 'process') {
         const maxOut = getNodeProp(src, 'outputs_max_identifiability');
         if (maxOut && identRank > (IDENT_RANK[maxOut] ?? 99)) {
-          violations.push({ rule: 'R-I2', severity: 'error', edge: edge,
+          violations.push({ rule: 'R-I2', severity: 'error', vertex: st,
             msg: `Flow is "${props.identifiability}" but process should output "${maxOut}" or lower.` });
         }
       }
@@ -813,7 +813,7 @@ Draw.loadPlugin(function (ui) {
       if (tt === 'data_store') {
         const maxStore = getNodeProp(tgt, 'stores_max_identifiability');
         if (maxStore && identRank > (IDENT_RANK[maxStore] ?? 99)) {
-          violations.push({ rule: 'R-I3', severity: 'error', edge: edge,
+          violations.push({ rule: 'R-I3', severity: 'error', vertex: tt,
             msg: `Store accepts at most "${maxStore}" but receives "${props.identifiability}".` });
         }
         // Accumulate for R-I5
@@ -842,7 +842,7 @@ Draw.loadPlugin(function (ui) {
       if (tt === 'process') {
         const maxLink = getNodeProp(tgt, 'accepts_max_linkability');
         if (maxLink && linkRank > (LINK_RANK[maxLink] ?? 99)) {
-          violations.push({ rule: 'R-L1', severity: 'error', edge: edge,
+          violations.push({ rule: 'R-L1', severity: 'error', vertex: tt,
             msg: `Flow is "${props.linkability}" but process only accepts "${maxLink}" or lower.` });
         }
       }
@@ -899,7 +899,7 @@ Draw.loadPlugin(function (ui) {
     });
 
     syncConsoleViolations(violations);
-    highlightViolatingEdges(violations);
+    highlightViolations(violations);
 
     lastViolations = violations;
     highlightsVisible = violations.length > 0;
@@ -1002,19 +1002,28 @@ Draw.loadPlugin(function (ui) {
     violationHighlightedEdges.clear();
   }
 
-  function highlightViolatingEdges(violations) {
+  function highlightViolations(violations) {
     var edgeViolationMap = new Map();
+    var vertexViolationMap = new Map();
     violations.forEach(function(v, i) {
-      if (!v.edge) return;
-      if (!edgeViolationMap.has(v.edge)) {
-        edgeViolationMap.set(v.edge, { indices: [], hasError: false });
+      if (v.edge) {
+        if (!edgeViolationMap.has(v.edge)) {
+          edgeViolationMap.set(v.edge, { indices: [], hasError: false });
+        }
+        var entry = edgeViolationMap.get(v.edge);
+        entry.indices.push(i + 1);
+        if (v.severity === 'error') entry.hasError = true;
+      } else if (v.vertex) {
+          if (!vertexViolationMap.has(v.vertex)) {
+          vertexViolationMap.set(v.vertex, { indices: [], hasError: false });
+        }
+        var entry = vertexViolationMap.get(v.vertex);
+        entry.indices.push(i + 1);
+        if (v.severity === 'error') entry.hasError = true;
       }
-      var entry = edgeViolationMap.get(v.edge);
-      entry.indices.push(i + 1);
-      if (v.severity === 'error') entry.hasError = true;
     });
 
-    if (edgeViolationMap.size === 0) return;
+    if (edgeViolationMap.size === 0 && vertexViolationMap.size === 0) return;
 
     model.beginUpdate();
     try {
@@ -1063,6 +1072,54 @@ Draw.loadPlugin(function (ui) {
 
         graph.removeCellOverlays(edge);
         graph.addCellOverlay(edge, overlay);
+      });
+
+      vertexViolationMap.forEach(function(info, vertex){
+        violationHighlightedEdges.set(vertex, vertex.style || '');
+
+        var color = info.hasError ? '#ff4444' : '#ffaa00';
+        var base = (vertex.style || '')
+          .replace(/strokeColor=[^;]*(;|$)/g, '')
+          .replace(/strokeWidth=[^;]*(;|$)/g, '')
+          .replace(/;;+/g, ';')
+          .replace(/^;|;$/g, '');
+        var newStyle = (base ? base + ';' : '') +
+          'strokeColor=' + color + ';strokeWidth=4';
+        graph.setCellStyle(newStyle, [vertex]);
+
+        var label = info.indices.join(',');
+        var badgeH = 28;
+        var badgeW = Math.max(36, label.length * 10 + 24);
+
+        var svg = [
+          '<svg xmlns="http://www.w3.org/2000/svg" width="' + badgeW + '" height="' + badgeH + '">',
+          '  <defs>',
+          '    <filter id="s" x="-25%" y="-25%" width="150%" height="150%">',
+          '      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="rgba(0,0,0,0.55)"/>',
+          '    </filter>',
+          '  </defs>',
+          '  <rect x="1" y="1" width="' + (badgeW - 2) + '" height="' + (badgeH - 2) + '"',
+          '    rx="6" ry="6" fill="' + color + '" stroke="white" stroke-width="2"',
+          '    filter="url(#s)" opacity="0.97"/>',
+          '  <text x="' + (badgeW / 2) + '" y="19" text-anchor="middle"',
+          '    fill="white" font-size="13" font-weight="bold"',
+          '    font-family="Arial,sans-serif" letter-spacing="0.5">' + label + '</text>',
+          '</svg>',
+        ].join('');
+
+        var dataUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+
+        var overlay = new mxCellOverlay(
+          new mxImage(dataUrl, badgeW, badgeH),
+          info.indices.map(function(n) { return '#' + n; }).join(', '),
+          mxConstants.ALIGN_CENTER,
+          mxConstants.ALIGN_MIDDLE,
+          new mxPoint(0, 0)
+        );
+
+        graph.removeCellOverlays(vertex);
+        graph.addCellOverlay(vertex, overlay);
+      
       });
     } finally {
       model.endUpdate();
