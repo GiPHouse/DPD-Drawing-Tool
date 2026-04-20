@@ -1,11 +1,9 @@
 name: CI
 on:
-  push:
-    branches:
-      - '**'
   pull_request:
-    branches:
-      - '**'
+    types: [ready_for_review]
+      branches:
+        - '**'
   workflow_dispatch:
 permissions:
   contents: read
@@ -15,7 +13,6 @@ concurrency:
 jobs:
   unit-tests:
     name: Unit tests (Jest)
-    if: github.event.pull_request.draft == false || github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 1
     defaults:
@@ -45,7 +42,6 @@ jobs:
     name: E2E tests (Playwright)
     runs-on: ubuntu-latest
     timeout-minutes: 1
-    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
     defaults:
       run:
         working-directory: tests/e2e
