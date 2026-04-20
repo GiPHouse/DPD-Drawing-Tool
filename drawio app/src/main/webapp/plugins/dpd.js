@@ -1009,17 +1009,20 @@ Draw.loadPlugin(function (ui) {
       if (v.edge) {
         if (!edgeViolationMap.has(v.edge)) {
           edgeViolationMap.set(v.edge, { indices: [], hasError: false });
+          var entry = edgeViolationMap.get(v.edge);
+          entry.indices.push(i + 1);
+          if (v.severity === 'error') entry.hasError = true;
         }
-        var entry = edgeViolationMap.get(v.edge);
-        entry.indices.push(i + 1);
-        if (v.severity === 'error') entry.hasError = true;
       } else if (v.vertex) {
-          if (!vertexViolationMap.has(v.vertex)) {
-          vertexViolationMap.set(v.vertex, { indices: [], hasError: false });
+        if (!vertexViolationMap.has(v.vertex)) {
+          var vertexCell = graph.getModel().getCell(v.vertex);
+          if (vertexCell){
+            vertexViolationMap.set(vertexCell, { indices: [], hasError: false });
+            var entry = vertexViolationMap.get(vertexCell);
+            entry.indices.push(i + 1);
+            if (v.severity === 'error') entry.hasError = true;
+          }
         }
-        var entry = vertexViolationMap.get(v.vertex);
-        entry.indices.push(i + 1);
-        if (v.severity === 'error') entry.hasError = true;
       }
     });
 
@@ -1029,6 +1032,7 @@ Draw.loadPlugin(function (ui) {
     try {
       edgeViolationMap.forEach(function(info, edge) {
         violationHighlightedEdges.set(edge, edge.style || '');
+        console.log(edge, typeof edge, edge instanceof mxCell);
 
         var color = info.hasError ? '#ff4444' : '#ffaa00';
         var base = (edge.style || '')
@@ -1076,11 +1080,12 @@ Draw.loadPlugin(function (ui) {
 
       vertexViolationMap.forEach(function(info, vertex){
         violationHighlightedEdges.set(vertex, vertex.style || '');
+        console.log(vertex, typeof vertex, vertex instanceof mxCell);
 
         var color = info.hasError ? '#ff4444' : '#ffaa00';
         var base = (vertex.style || '')
-          .replace(/strokeColor=[^;]*(;|$)/g, '')
-          .replace(/strokeWidth=[^;]*(;|$)/g, '')
+          .replace(/lineColor=[^;]*(;|$)/g, '')
+          .replace(/lineWidth=[^;]*(;|$)/g, '')
           .replace(/;;+/g, ';')
           .replace(/^;|;$/g, '');
         var newStyle = (base ? base + ';' : '') +
@@ -1112,8 +1117,8 @@ Draw.loadPlugin(function (ui) {
         var overlay = new mxCellOverlay(
           new mxImage(dataUrl, badgeW, badgeH),
           info.indices.map(function(n) { return '#' + n; }).join(', '),
-          mxConstants.ALIGN_CENTER,
-          mxConstants.ALIGN_MIDDLE,
+          mxConstants.ALIGN_RIGHT,
+          mxConstants.ALIGN_BOTTOM,
           new mxPoint(0, 0)
         );
 
