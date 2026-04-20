@@ -2,6 +2,15 @@
  * Copyright (c) 2006-2017, JGraph Holdings Ltd
  * Copyright (c) 2006-2017, draw.io AG
  */
+/* 
+
++--------------------------------------------------------+
+| This file contains modified code by SE team,           |
+| refer to keywords: 'NOLAI'                             |
+|                                                        |
++--------------------------------------------------------+
+
+*/
 (function()
 {
 	/**
@@ -10177,6 +10186,7 @@
 	/**
 	 * Imports a local file from the device or local storage.
 	 */
+	// ======	NOLAI - /Sprint 3/ Task # 138	=====
 	EditorUi.prototype.importLocalFile = function(device, noSplash)
 	{
 		if (device && Graph.fileSupport)
@@ -10190,25 +10200,22 @@
 				{
 					if (input.files != null)
 					{
-						// Using null for position will disable crop of input file
-						// Pass barrierFn callback to trigger validation after import completes
 						this.importFiles(input.files, null, null, this.maxImageSize, null, null, null,
 							mxUtils.bind(this, function(queue)
 							{
-								// Trigger DPD validation after file import
-								if (this.editor && this.editor.graph && typeof window !== 'undefined' && window.ui && window.ui._dpdValidate)
+								//trigger DPD validation after file import
+								if (typeof this._dpdValidate === 'function')  
 								{
 									setTimeout(mxUtils.bind(this, function()
 									{
-										window.ui._dpdValidate();
-									}), 100);
+										this._dpdValidate();
+									}), 900);  // tried out multiple time limits, this worked reasonably good
 								}
 							}));
-						
-			    		// Resets input to force change event for same file (type reset required for IE)
+
 						input.type = '';
 						input.type = 'file';
-			    		input.value = '';
+						input.value = '';
 					}
 				}));
 				
@@ -10297,7 +10304,8 @@
 			}
 		}
 	};
-
+	// ====== end of changes by SE	======
+	
 	/**
 	 * Imports the given zip file.
 	 */
