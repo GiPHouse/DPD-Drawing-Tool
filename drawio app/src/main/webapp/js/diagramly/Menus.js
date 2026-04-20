@@ -5746,7 +5746,7 @@
 
 				if (urlParams['noDevice'] != '1')
 				{
-					menu.addItem(mxResources.get('device') + '...', null, function()
+					menu.addItem(mxResources.get('importFrom') + ' ' + mxResources.get('device') + '...', null, function()
 					{
 						editorUi.importLocalFile(true);
 					}, parent);
