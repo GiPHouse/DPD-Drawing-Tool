@@ -10191,7 +10191,19 @@
 					if (input.files != null)
 					{
 						// Using null for position will disable crop of input file
-						this.importFiles(input.files, null, null, this.maxImageSize);
+						// Pass barrierFn callback to trigger validation after import completes
+						this.importFiles(input.files, null, null, this.maxImageSize, null, null, null,
+							mxUtils.bind(this, function(queue)
+							{
+								// Trigger DPD validation after file import
+								if (this.editor && this.editor.graph && typeof window !== 'undefined' && window.ui && window.ui._dpdValidate)
+								{
+									setTimeout(mxUtils.bind(this, function()
+									{
+										window.ui._dpdValidate();
+									}), 100);
+								}
+							}));
 						
 			    		// Resets input to force change event for same file (type reset required for IE)
 						input.type = '';
@@ -10221,7 +10233,7 @@
 			{
 				StorageFile.getFileContent(this, title, success, error);
 			});
-			
+
 			window.deleteBrowserFile = mxUtils.bind(this, function(title, success, error)
 			{
 				StorageFile.deleteFile(this, title, success, error);
@@ -10280,6 +10292,8 @@
 						this.showSplash();
 					}
 				});
+
+				
 			}
 		}
 	};
