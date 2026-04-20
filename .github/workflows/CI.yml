@@ -1,9 +1,7 @@
 name: CI
 on:
-  push:
-    branches:
-      - '**'
   pull_request:
+    types: [ready_for_review, opened, synchronize]
     branches:
       - '**'
   workflow_dispatch:
@@ -16,7 +14,7 @@ jobs:
   unit-tests:
     name: Unit tests (Jest)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 1
     defaults:
       run:
         working-directory: tests/unit
@@ -43,8 +41,7 @@ jobs:
   e2e-tests:
     name: E2E tests (Playwright)
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-    if: github.event_name == 'pull_request'
+    timeout-minutes: 1
     defaults:
       run:
         working-directory: tests/e2e
