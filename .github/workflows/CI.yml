@@ -15,8 +15,9 @@ concurrency:
 jobs:
   unit-tests:
     name: Unit tests (Jest)
+    if: github.event.pull_request.draft == false || github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 1
     defaults:
       run:
         working-directory: tests/unit
@@ -43,8 +44,8 @@ jobs:
   e2e-tests:
     name: E2E tests (Playwright)
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-    if: github.event_name == 'pull_request'
+    timeout-minutes: 1
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
     defaults:
       run:
         working-directory: tests/e2e
