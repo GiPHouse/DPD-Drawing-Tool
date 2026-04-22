@@ -101,6 +101,7 @@ global.createMockModel = () => {
     getChildAt:    jest.fn((cell, i) => cell && cell._children ? cell._children[i] : null),
     beginUpdate:   jest.fn(),
     endUpdate:     jest.fn(),
+    getCell:       jest.fn((cell, id) => cell[id] || null),
 
     fireChange(changes) {
       const cb = listeners[mxEvent.CHANGE];

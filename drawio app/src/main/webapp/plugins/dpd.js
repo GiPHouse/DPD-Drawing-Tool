@@ -846,8 +846,8 @@ Draw.loadPlugin(function (ui) {
 
       // Accumulate outgoing process edges for R-I2
       if (st === 'process') {
-        if (!processOut[src.id]) processOut[src.id] = [];
-        processOut[src.id].push(identRank);
+        if (!processOut[src.id]) processOut[src.id] = { cell: src, ranks: [] };
+        processOut[src.id].ranks.push(identRank);
       }
 
       // Linkability rules 
@@ -915,10 +915,10 @@ Draw.loadPlugin(function (ui) {
 
     // R-I2 – outgoing flow exceeds process output constraint
     Object.keys(processOut).forEach(id => {
-      const output = Math.max(...processOut[id]);
-      const maxOut = getNodeProp(graph.getModel().getCell(id), 'outputs_max_identifiability');
+      const { cell: processCell, ranks } = processOut[id];
+      const output = Math.max(...ranks);
+      const maxOut = getNodeProp(processCell, 'outputs_max_identifiability');
       if (maxOut && output > (IDENT_RANK[maxOut] ?? 99)) {
-        const processCell = model.getCell(id);
         violations.push({
           rule: 'R-I2', severity: 'error', vertex: processCell || null,
           msg: `Flow is "${IDENT_ORDER[output]}" but process should output "${maxOut}" or lower.`
@@ -1087,7 +1087,6 @@ Draw.loadPlugin(function (ui) {
     try {
       edgeViolationMap.forEach(function (info, edge) {
         violationHighlightedEdges.set(edge, edge.style || '');
-        console.log(edge, typeof edge, edge instanceof mxCell);
 
         var color = info.hasError ? '#ff4444' : '#ffaa00';
         var base = (edge.style || '')
@@ -1135,7 +1134,6 @@ Draw.loadPlugin(function (ui) {
 
       vertexViolationMap.forEach(function (info, vertex) {
         violationHighlightedEdges.set(vertex, vertex.style || '');
-        console.log(vertex, typeof vertex, vertex instanceof mxCell);
 
         var color = info.hasError ? '#ff4444' : '#ffaa00';
         var base = (vertex.style || '')
