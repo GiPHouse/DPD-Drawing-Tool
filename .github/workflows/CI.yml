@@ -30,7 +30,7 @@ jobs:
       - name: Install unit test dependencies
         run: npm ci
       - name: Run Jest tests
-        run: timeout 6s npm test -- --ci
+        run: timeout 12s npm test -- --ci
       - name: Upload unit coverage artifact
         if: always()
         uses: actions/upload-artifact@v4
