@@ -71,6 +71,7 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('tests/e2e/package-lock.json') }}
+          save-always: true
 
       - name: Log Playwright cache status
         run: |
