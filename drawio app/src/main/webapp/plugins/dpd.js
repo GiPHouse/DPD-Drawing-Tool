@@ -747,6 +747,9 @@ Draw.loadPlugin(function (ui) {
     const storeIn = {}; // storeId -> [rank, …]
     const storeOut = {}; // storeId -> [rank, …]
 
+    const processIn = {}; // processId -> [rank, …]
+    const processOut = {}; // processId -> [rank, …]
+
     edges.forEach(edge => {
       const src = model.getTerminal(edge, true);
       const tgt = model.getTerminal(edge, false);
@@ -810,17 +813,6 @@ Draw.loadPlugin(function (ui) {
         }
       }
 
-      // R-I2 – outgoing flow exceeds process output constraint
-      if (st === 'process') {
-        const maxOut = getNodeProp(src, 'outputs_max_identifiability');
-        if (maxOut && identRank > (IDENT_RANK[maxOut] ?? 99)) {
-          violations.push({
-            rule: 'R-I2', severity: 'error', vertex: src,
-            msg: `Flow is "${props.identifiability}" but process should output "${maxOut}" or lower.`
-          });
-        }
-      }
-
       // R-I3 – incoming flow exceeds data store constraint
       if (tt === 'data_store') {
         const maxStore = getNodeProp(tgt, 'stores_max_identifiability');
@@ -850,6 +842,12 @@ Draw.loadPlugin(function (ui) {
       if (st === 'data_store') {
         if (!storeOut[src.id]) storeOut[src.id] = [];
         storeOut[src.id].push(identRank);
+      }
+
+      // Accumulate outgoing process edges for R-I2
+      if (st === 'process') {
+        if (!processOut[src.id]) processOut[src.id] = [];
+        processOut[src.id].push(identRank);
       }
 
       // Linkability rules 
@@ -912,6 +910,19 @@ Draw.loadPlugin(function (ui) {
             msg: 'Soft pseudonymous data is expected to be indirectly identifiable.'
           });
         }
+      }
+    });
+
+    // R-I2 – outgoing flow exceeds process output constraint
+    Object.keys(processOut).forEach(id => {
+      const output = Math.max(...processOut[id]);
+      const maxOut = getNodeProp(graph.getModel().getCell(id), 'outputs_max_identifiability');
+      if (maxOut && output > (IDENT_RANK[maxOut] ?? 99)) {
+        const processCell = model.getCell(id);
+        violations.push({
+          rule: 'R-I2', severity: 'error', vertex: processCell || null,
+          msg: `Flow is "${IDENT_ORDER[output]}" but process should output "${maxOut}" or lower.`
+        });
       }
     });
 
