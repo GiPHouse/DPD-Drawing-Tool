@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # +--------------------------------------------------------+
-# | This file contains modified code by SE team,          |
-# | refer to keywords: 'NOLAI'                            |
+# | This file contains modified code by SE team,           |
+# | refer to keywords: 'NOLAI'                             |
 # |                                                        |
 # +--------------------------------------------------------+
 

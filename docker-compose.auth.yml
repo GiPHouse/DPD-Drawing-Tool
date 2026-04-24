@@ -1,0 +1,213 @@
+# +--------------------------------------------------------+
+# | This file contains modified code by SE team,          |
+# | refer to keywords: 'NOLAI'                            |
+# |                                                        |
+# +--------------------------------------------------------+
+
+# ====== NOLAI - Infrastructure / Sprint 3 / Task: goauthentik Dev Auth Stack ======
+#
+# Compose OVERRIDE FILE — layer on top of docker-compose.yml to add a local
+# goauthentik instance for developing and testing the OIDC integration.
+#
+# DO NOT run this file on its own. It only makes sense merged with the base:
+#   bash start-auth.sh              ← recommended: handles /etc/hosts + bootstrap
+#   docker compose -f docker-compose.yml -f docker-compose.auth.yml up   ← raw
+#
+# WHAT THIS FILE DOES:
+#   1. Adds four new services: postgresql, redis, authentik-server, authentik-worker
+#   2. Extends the existing 'nextcloud' service with the OIDC environment variables
+#   3. Adds a healthcheck dependency so nextcloud waits for authentik-server
+#
+# HOSTNAME DESIGN:
+#   goauthentik is reachable at http://authentik-server:9000 from two places:
+#     - Inside Docker:    Docker Compose DNS resolves 'authentik-server' to the
+#                         container's IP automatically.
+#     - Developer browser: start-auth.sh adds '127.0.0.1 authentik-server' to
+#                         /etc/hosts, so the browser resolves the same hostname
+#                         to localhost, reaching goauthentik via the port mapping.
+#   One hostname — zero split-brain. AUTHENTIK_HOST, the Nextcloud discovery URL,
+#   and browser redirects all use http://authentik-server:9000.
+#
+# WHY HTTP (not HTTPS) for goauthentik in dev:
+#   Using goauthentik's native HTTPS would require the Nextcloud container and
+#   every developer's browser to trust goauthentik's self-signed certificate.
+#   HTTP avoids that overhead for a dev-only stack. Production always uses the
+#   client's real TLS-terminated goauthentik instance.
+#
+# NEW ENV VARS (add to .env — see .env.example):
+#   PG_PASS                      PostgreSQL password for goauthentik's database
+#   PG_USER                      PostgreSQL user        (default: authentik)
+#   PG_DB                        PostgreSQL database    (default: authentik)
+#   AUTHENTIK_SECRET_KEY         Random 50+ char string; signs sessions and tokens
+#   AUTHENTIK_BOOTSTRAP_PASSWORD Admin password created on first goauthentik start
+#   AUTHENTIK_BOOTSTRAP_TOKEN    Static API token used by start-auth.sh to
+#                                automate provider + application creation
+#   OIDC_CLIENT_ID               Populated automatically by start-auth.sh
+#   OIDC_CLIENT_SECRET           Populated automatically by start-auth.sh
+#
+# ====== end of changes by SE ======
+
+services:
+
+  # ------------------------------------------------------------------
+  # Extend the existing nextcloud service with OIDC environment variables.
+  #
+  # Compose deep-merges this block with the 'nextcloud' definition in
+  # docker-compose.yml. Only the keys listed here are changed; everything
+  # else (image, volumes, healthcheck, depends_on db) stays identical.
+  #
+  # WHY the discovery URL uses the service name:
+  #   Nextcloud's PHP process runs inside the Docker network and resolves
+  #   'authentik-server' via Compose DNS. It fetches the OIDC discovery
+  #   document server-side, then uses the endpoints published in that
+  #   document for token exchange — all server-to-server inside Docker.
+  # ------------------------------------------------------------------
+  nextcloud:
+    environment:
+      OIDC_PROVIDER_URL:  http://authentik-server:9000/application/o/nextcloud/
+      OIDC_CLIENT_ID:     ${OIDC_CLIENT_ID:-}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+    depends_on:
+      authentik-server:
+        condition: service_healthy
+
+  # ------------------------------------------------------------------
+  # PostgreSQL — goauthentik's database
+  #
+  # WHY not reuse MariaDB:
+  #   goauthentik requires PostgreSQL. It uses Postgres-specific features
+  #   (JSONB, advisory locks) and does not support MariaDB. The two
+  #   databases coexist; MariaDB continues to serve Nextcloud exclusively.
+  # ------------------------------------------------------------------
+  postgresql:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_DB:       ${PG_DB:-authentik}
+      POSTGRES_USER:     ${PG_USER:-authentik}
+      POSTGRES_PASSWORD: ${PG_PASS}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d ${PG_DB:-authentik} -U ${PG_USER:-authentik}"]
+      start_period: 20s
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ------------------------------------------------------------------
+  # Redis — goauthentik's task queue and session cache
+  # ------------------------------------------------------------------
+  redis:
+    image: redis:alpine
+    restart: always
+    # WHY --save 60 1: persist the cache to disk every 60s if at least
+    # one key changed, so sessions survive a container restart in dev.
+    command: --save 60 1 --loglevel warning
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      start_period: 10s
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ------------------------------------------------------------------
+  # goauthentik server — handles all HTTP traffic and the OIDC flow
+  #
+  # WHY service name 'authentik-server':
+  #   The service name doubles as the DNS hostname inside Docker and,
+  #   via the /etc/hosts entry added by start-auth.sh, also as the
+  #   hostname in the developer's browser. Setting AUTHENTIK_HOST to
+  #   http://authentik-server:9000 means every URL in the OIDC discovery
+  #   document uses this same resolvable name, so there is no mismatch
+  #   between server-side PHP calls and browser redirects.
+  #
+  # Pin the version tag. goauthentik follows YY.MM.patch versioning.
+  # Current: 2026.2.2 (latest stable as of April 2026).
+  # Update this value deliberately when upgrading.
+  # ------------------------------------------------------------------
+  authentik-server:
+    image: ghcr.io/goauthentik/server:2026.2.2
+    restart: always
+    command: server
+    environment:
+      AUTHENTIK_REDIS__HOST:              redis
+      AUTHENTIK_POSTGRESQL__HOST:           postgresql
+      AUTHENTIK_POSTGRESQL__USER:           ${PG_USER:-authentik}
+      AUTHENTIK_POSTGRESQL__NAME:           ${PG_DB:-authentik}
+      AUTHENTIK_POSTGRESQL__PASSWORD:       ${PG_PASS}
+      AUTHENTIK_SECRET_KEY:               ${AUTHENTIK_SECRET_KEY}
+
+      # WHY set AUTHENTIK_HOST to the service name:
+      #   This value is used as the 'iss' (issuer) claim in all OIDC tokens
+      #   and as the base URL for every endpoint in the discovery document
+      #   (authorization_endpoint, token_endpoint, jwks_uri, etc.).
+      #   By setting it to http://authentik-server:9000, all of those
+      #   endpoints resolve the same way whether called from Nextcloud's PHP
+      #   (Docker DNS) or from the browser (/etc/hosts).
+      AUTHENTIK_HOST:                     http://authentik-server:9000
+
+      # Bootstrap credentials — consumed only on the very first start to
+      # create the initial admin user and a static API token. After first
+      # boot they are ignored; changing them in .env has no effect.
+      AUTHENTIK_BOOTSTRAP_PASSWORD:       ${AUTHENTIK_BOOTSTRAP_PASSWORD}
+      AUTHENTIK_BOOTSTRAP_TOKEN:          ${AUTHENTIK_BOOTSTRAP_TOKEN}
+
+      AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+    ports:
+      # Bind to 127.0.0.1 only. Combined with the /etc/hosts entry that
+      # start-auth.sh adds (127.0.0.1 authentik-server), the browser reaches
+      # http://authentik-server:9000 without the port being open on all interfaces.
+      - "127.0.0.1:9000:9000"
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      # goauthentik's built-in readiness probe — returns 200 once the server
+      # has completed its database migrations and is ready to handle requests.
+      # WHY curl not wget: the goauthentik 2026.x image ships curl but not wget.
+      # WHY long start_period: on first boot goauthentik runs all Django
+      # migrations across ~50 apps before the health endpoint responds.
+      # 180s start_period + 10 retries = up to 8 minutes total, which covers
+      # even slow first-boot migration runs.
+      test: ["CMD-SHELL", "curl -sf http://localhost:9000/-/health/ready/ || exit 1"]
+      start_period: 180s
+      interval: 30s
+      timeout: 10s
+      retries: 10
+
+  # ------------------------------------------------------------------
+  # goauthentik worker — background job processor
+  #
+  # Runs in the same image as authentik-server but with the 'worker' command.
+  # Handles: blueprint processing, scheduled tasks, certificate rotation,
+  # event log cleanup, and outpost management.
+  # ------------------------------------------------------------------
+  authentik-worker:
+    image: ghcr.io/goauthentik/server:2026.2.2
+    restart: always
+    command: worker
+    environment:
+      AUTHENTIK_REDIS__HOST:              redis
+      AUTHENTIK_POSTGRESQL__HOST:           postgresql
+      AUTHENTIK_POSTGRESQL__USER:           ${PG_USER:-authentik}
+      AUTHENTIK_POSTGRESQL__NAME:           ${PG_DB:-authentik}
+      AUTHENTIK_POSTGRESQL__PASSWORD:       ${PG_PASS}
+      AUTHENTIK_SECRET_KEY:               ${AUTHENTIK_SECRET_KEY}
+      AUTHENTIK_HOST:                     http://authentik-server:9000
+      AUTHENTIK_BOOTSTRAP_PASSWORD:       ${AUTHENTIK_BOOTSTRAP_PASSWORD}
+      AUTHENTIK_BOOTSTRAP_TOKEN:          ${AUTHENTIK_BOOTSTRAP_TOKEN}
+      AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  pg_data:
+  redis_data:

@@ -34,7 +34,11 @@
 # ====== end of changes by SE ======
 
 {
-    local_certs
+    # local_certs is intentionally omitted here.
+    # With a real APP_DOMAIN set, Caddy will obtain a trusted Let's Encrypt
+    # certificate automatically. Only add local_certs back if you need to run
+    # this image against localhost without a real domain (e.g. for smoke testing
+    # the single-container build locally).
 }
 
 # -----------------------------------------------------------------------
