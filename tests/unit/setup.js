@@ -13,29 +13,49 @@ global.mxEvent = {
   CHANGE:      'CHANGE',
   CELLS_ADDED: 'CELLS_ADDED',
   CELLS_MOVED: 'CELLS_MOVED',
+  CONNECT:     'CONNECT',  // Used by connectionHandler to fire after drag-connect
 };
 
-// DPDConsole uses mxUtils.bind as a cross-browser alternative to Function.bind.
+// mxUtils stubs used by the plugin.
+// createXmlDocument is critical: setEdgeProps uses it to create proper
+// XML-namespace elements so mxCodec preserves custom attributes on save/reload.
+// Using document.createElement() instead would lowercase the tag name to
+// 'userobject', causing draw.io's codec to silently drop all DPD attributes.
 global.mxUtils = {
   bind: (ctx, fn) => fn.bind(ctx),
+  createXmlDocument: () => ({
+    createElement: (tag) => {
+      const store = {};
+      return {
+        tagName: tag,
+        getAttribute: jest.fn((k) => store[k] !== undefined ? store[k] : null),
+        setAttribute: jest.fn((k, v) => { store[k] = v; }),
+        cloneNode: jest.fn(function () {
+          const clone = global.mxUtils.createXmlDocument().createElement(tag);
+          Object.entries(store).forEach(([k, v]) => clone.setAttribute(k, v));
+          return clone;
+        }),
+      };
+    },
+  }),
 };
 
 // Overlay types used by highlightViolatingEdges to render numbered badges on edges.
-global.mxCellOverlay = jest.fn(function(image, tooltip, align, verticalAlign, offset) {
-  this.image          = image;
-  this.tooltip        = tooltip;
-  this.align          = align;
-  this.verticalAlign  = verticalAlign;
-  this.offset         = offset;
+global.mxCellOverlay = jest.fn(function (image, tooltip, align, verticalAlign, offset) {
+  this.image         = image;
+  this.tooltip       = tooltip;
+  this.align         = align;
+  this.verticalAlign = verticalAlign;
+  this.offset        = offset;
 });
 
-global.mxImage = jest.fn(function(src, width, height) {
+global.mxImage = jest.fn(function (src, width, height) {
   this.src    = src;
   this.width  = width;
   this.height = height;
 });
 
-global.mxPoint = jest.fn(function(x, y) {
+global.mxPoint = jest.fn(function (x, y) {
   this.x = x;
   this.y = y;
 });
@@ -81,6 +101,7 @@ global.createMockModel = () => {
     getChildAt:    jest.fn((cell, i) => cell && cell._children ? cell._children[i] : null),
     beginUpdate:   jest.fn(),
     endUpdate:     jest.fn(),
+    getCell:       jest.fn((cell, id) => cell[id] || null),
 
     fireChange(changes) {
       const cb = listeners[mxEvent.CHANGE];
@@ -89,8 +110,29 @@ global.createMockModel = () => {
   };
 };
 
+// Creates a connection handler stub with real listener/fire support.
+// The plugin registers its annotation-dialog trigger on mxEvent.CONNECT here
+// via graph.connectionHandler.addListener(), replacing the old mxTerminalChange
+// approach which broke in draw.io's minified build due to mangled class names.
+global.createMockConnectionHandler = () => {
+  const listeners = {};
+  return {
+    addListener: jest.fn((event, fn) => {
+      if (!listeners[event]) listeners[event] = [];
+      listeners[event].push(fn);
+    }),
+    // Mirrors how mxEventSource dispatches: fn(sender, eventObject)
+    // where eventObject.getProperty(key) returns the provided props value.
+    fireEvent: (event, props) => {
+      const evtObj = { getProperty: jest.fn((key) => (props[key] !== undefined ? props[key] : null)) };
+      (listeners[event] || []).forEach((fn) => fn(null, evtObj));
+    },
+  };
+};
+
 // Creates a minimal graph. Includes all methods that dpd.js calls during
-// validation and highlighting.
+// validation and highlighting, plus the connectionHandler the plugin needs
+// to detect newly drawn edges.
 global.createMockGraph = (model) => ({
   getModel:           jest.fn(() => model),
   isValidConnection:  jest.fn(() => true),
@@ -99,7 +141,8 @@ global.createMockGraph = (model) => ({
   setCellStyle:       jest.fn(),
   removeCellOverlays: jest.fn(),
   addCellOverlay:     jest.fn(),
-  popupMenuHandler: { factoryMethod: jest.fn(() => null) },
+  connectionHandler:  createMockConnectionHandler(),
+  popupMenuHandler:   { factoryMethod: jest.fn(() => null) },
 });
 
 // Stubs the DPD console panel that EditorUi creates before the plugin loads.
@@ -108,9 +151,9 @@ global.createMockDPDConsole = () => ({
   addViolation:            jest.fn(),
   clear:                   jest.fn(),
   setHighlightToggleState: jest.fn(),
-  _clearHookSet:  false,
-  onClear:        null,
-  onToggleHighlights: null,
+  _clearHookSet:           false,
+  onClear:                 null,
+  onToggleHighlights:      null,
 });
 
 // Captures the plugin function passed to Draw.loadPlugin so tests can invoke

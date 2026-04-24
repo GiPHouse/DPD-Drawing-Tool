@@ -1,0 +1,28 @@
+<mxfile host="localhost" agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36" version="29.3.6">
+  <diagram name="Page-1" id="idYTjLHzs15p429tX9ET">
+    <mxGraphModel dx="976" dy="755" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="8DumqIYe7mVVk9ti4QUY-1" parent="1" style="shape=ellipse;perimeter=ellipsePerimeter;shadow=0;strokeWidth=2;fillColor=#ffffff;strokeColor=#1e1e1e;opacity=100.0;dashed=1;fixDash=1;dashPattern=;html=1;nl2Br=0;verticalAlign=middle;align=center;spacingLeft=2.0;spacingRight=0;whiteSpace=wrap;gliffyId=186;" value="&lt;div style=&#39;width: 136.18274px;height:auto;word-break: break-word;line-height:1em;&#39;&gt;&lt;div align=&quot;center&quot;&gt;&lt;span style=&quot;font-family: Arial; font-size: 16px; line-height: 0;&quot;&gt;&lt;span style=&quot; line-height: 0;&quot;&gt;&lt;span style=&quot;color: #1e1e1e; font-size: 16px; line-height: 16.5px;&quot;&gt;Process&lt;/span&gt;&lt;br&gt;&lt;/span&gt;&lt;/span&gt;&lt;/div&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="140.1827392578125" width="140.1827392578125" x="60" y="230" as="geometry" />
+        </mxCell>
+        <mxCell id="8DumqIYe7mVVk9ti4QUY-2" connectable="0" parent="1" style="group" value="" vertex="1">
+          <mxGeometry height="154.4085693359375" width="168.65444946289062" x="360" y="230" as="geometry" />
+        </mxCell>
+        <mxCell id="8DumqIYe7mVVk9ti4QUY-3" parent="8DumqIYe7mVVk9ti4QUY-2" style="shape=ellipse;perimeter=ellipsePerimeter;shadow=0;strokeWidth=2;fillColor=#ffffff;strokeColor=#1e1e1e;opacity=100.0;dashed=1;fixDash=1;dashPattern=;gliffyId=178;" vertex="1">
+          <mxGeometry height="140.1827392578125" width="140.1827392578125" as="geometry" />
+        </mxCell>
+        <mxCell id="8DumqIYe7mVVk9ti4QUY-4" parent="8DumqIYe7mVVk9ti4QUY-2" style="shape=ellipse;perimeter=ellipsePerimeter;shadow=0;strokeWidth=2;fillColor=#ffffff;strokeColor=#1e1e1e;opacity=100.0;dashed=1;fixDash=1;dashPattern=;gliffyId=179;" vertex="1">
+          <mxGeometry height="140.1827392578125" width="140.1827392578125" x="14.18377685546875" y="7.1129150390625" as="geometry" />
+        </mxCell>
+        <mxCell id="8DumqIYe7mVVk9ti4QUY-5" parent="8DumqIYe7mVVk9ti4QUY-2" style="shape=ellipse;perimeter=ellipsePerimeter;shadow=0;strokeWidth=2;fillColor=#ffffff;strokeColor=#1e1e1e;opacity=100.0;dashed=1;fixDash=1;dashPattern=;html=1;nl2Br=0;verticalAlign=middle;align=center;spacingLeft=2.0;spacingRight=0;whiteSpace=wrap;gliffyId=180;" value="&lt;div style=&#39;width: 136.18274px;height:auto;word-break: break-word;line-height:1em;&#39;&gt;&lt;div align=&quot;center&quot;&gt;&lt;span style=&quot;font-family: Arial; font-size: 16px; line-height: 0;&quot;&gt;&lt;span style=&quot; line-height: 0;&quot;&gt;&lt;span style=&quot;color: #1e1e1e; font-size: 16px; line-height: 16.5px;&quot;&gt;Distributed&lt;br&gt;processes&lt;/span&gt;&lt;br&gt;&lt;/span&gt;&lt;/span&gt;&lt;/div&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="140.1827392578125" width="140.1827392578125" x="28.471710205078125" y="14.225830078125" as="geometry" />
+        </mxCell>
+        <mxCell id="2iIyQ0DjEv4mkcz7Gda7-1" parent="1" style="shape=rect;shadow=0;strokeWidth=2;fillColor=#ffffff;strokeColor=#1e1e1e;opacity=100.0;dashed=1;fixDash=1;dashPattern=;html=1;nl2Br=0;verticalAlign=middle;align=center;spacingLeft=2.0;spacingRight=0;whiteSpace=wrap;gliffyId=188;" value="&lt;div style=&#39;width: 196.28247px;height:auto;word-break: break-word;line-height:1em;&#39;&gt;&lt;div align=&quot;center&quot;&gt;&lt;span style=&quot;font-family: Arial; font-size: 16px; line-height: 0;&quot;&gt;&lt;span style=&quot; line-height: 0;&quot;&gt;&lt;span style=&quot;color: #1e1e1e; font-size: 16px; line-height: 16.5px;&quot;&gt;External entity&lt;/span&gt;&lt;br&gt;&lt;/span&gt;&lt;/span&gt;&lt;/div&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="96.33969116210938" width="200.282470703125" x="270" y="70" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
