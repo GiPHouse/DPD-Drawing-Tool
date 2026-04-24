@@ -5,6 +5,17 @@
 /**
  * Plugin for embed mode in Nextcloud
  */
+
+/* 
+
++--------------------------------------------------------+
+| This file contains modified code by SE team,           |
+| refer to keywords: 'NOLAI'                             |
+|                                                        |
++--------------------------------------------------------+
+
+ */
+
 Draw.loadPlugin(function(ui)
 {
     var loadDescriptor = null;
@@ -22,6 +33,8 @@ Draw.loadPlugin(function(ui)
             {
                 if (data.desc != null)
                 {
+                    /* NOLAI Version Control, task 148, sprint 3 */
+                    data.desc.versionsEnabled = true;  // enable revision history
                     loadDescriptor = data.desc;
                 }
 

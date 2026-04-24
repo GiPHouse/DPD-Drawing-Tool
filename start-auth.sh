@@ -53,6 +53,22 @@ else
 fi
 
 # -----------------------------------------------------------------------
+# Detect WSL (Windows Subsystem for Linux)
+#
+# WHY: When running inside WSL2, Docker containers still resolve
+# 'authentik-server' via Docker Compose DNS (handled automatically).
+# However, the developer's browser runs on *Windows*, which uses the
+# Windows hosts file (C:\Windows\System32\drivers\etc\hosts), not WSL's
+# /etc/hosts. The step below adds the entry to WSL's /etc/hosts for any
+# WSL-based tooling, but a separate manual step is needed for Windows.
+# This flag is used later to print Windows-specific instructions.
+# -----------------------------------------------------------------------
+IS_WSL=false
+if grep -qi microsoft /proc/version 2>/dev/null || grep -qi WSL /proc/version 2>/dev/null; then
+    IS_WSL=true
+fi
+
+# -----------------------------------------------------------------------
 # 0. Check dependencies
 # -----------------------------------------------------------------------
 for cmd in docker jq curl; do
@@ -70,6 +86,10 @@ done
 # must resolve 'authentik-server' to reach goauthentik. Docker Compose DNS
 # handles the in-container side automatically. For the browser, we add a
 # hosts file entry so http://authentik-server:9000 works on the host too.
+#
+# WSL NOTE: This adds the entry to WSL's /etc/hosts, which is sufficient
+# for in-WSL tooling and Docker. However, the Windows browser uses the
+# Windows hosts file — see the warning printed below if WSL is detected.
 # -----------------------------------------------------------------------
 echo "[1/7] Checking /etc/hosts for 'authentik-server' entry..."
 
@@ -79,6 +99,22 @@ else
     echo "      Adding '${HOSTS_ENTRY}' to /etc/hosts (requires sudo)..."
     echo "${HOSTS_ENTRY}" | sudo tee -a /etc/hosts > /dev/null
     echo "      Done."
+fi
+
+if [ "$IS_WSL" = true ]; then
+    echo ""
+    echo "  *** WINDOWS ACTION REQUIRED ***"
+    echo "  You are running inside WSL. The entry above was added to WSL's"
+    echo "  /etc/hosts, but your Windows browser uses a separate hosts file."
+    echo "  You must also add the entry to Windows — run this once in an"
+    echo "  Administrator PowerShell:"
+    echo ""
+    echo "    Add-Content -Path C:\\Windows\\System32\\drivers\\etc\\hosts \\"
+    echo "      -Value '127.0.0.1 authentik-server'"
+    echo ""
+    echo "  You only need to do this once per machine. After adding it,"
+    echo "  restart your browser so it picks up the change."
+    echo ""
 fi
 
 # -----------------------------------------------------------------------
