@@ -46,3 +46,4 @@ tests/e2e/test-results/
 /nextcloud_data/
 nextcloud_data/
 /nextcloud_data/*
+*.crt

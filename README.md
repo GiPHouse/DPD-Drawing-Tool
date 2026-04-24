@@ -10,6 +10,7 @@ A customised [draw.io](https://www.drawio.com/) diagramming environment built fo
 - [Architecture](#architecture)
 - [Prerequisites](#prerequisites)
 - [Quick start — development stack](#quick-start--development-stack)
+- [Development auth stack — Goauthentik SSO](#development-auth-stack--goauthentik-sso)
 - [Single-container deployment](#single-container-deployment)
 - [Deploy draw.io only](#deploy-drawio-only)
 - [Development setup](#development-setup)
@@ -153,6 +154,122 @@ After running the command, **restart your browser**. You only need to do this on
 | Nextcloud | [https://localhost](https://localhost) |
 
 Log in to Nextcloud with the `NEXTCLOUD_ADMIN_USER` and `NEXTCLOUD_ADMIN_PASSWORD` values you set in `.env`.
+
+---
+
+## Development auth stack — Goauthentik SSO
+
+The base dev stack (`bash start.sh`) uses Nextcloud's built-in username/password login. The auth stack layers a local [Goauthentik](https://goauthentik.io/) instance on top so you can develop and test the OIDC integration before pointing at the client's real Goauthentik server.
+
+It is controlled by two files:
+
+- `docker-compose.auth.yml` — a Compose override file that adds four new services (PostgreSQL, Redis, `authentik-server`, `authentik-worker`) and extends the `nextcloud` service with the OIDC environment variables.
+- `start-auth.sh` — a startup script that handles everything automatically: adding an `/etc/hosts` entry, starting the stack, waiting for services to be healthy, creating the OAuth2 provider in Goauthentik via its API, writing the generated credentials back to `.env`, and configuring Nextcloud's `user_oidc` plugin.
+
+> **Note:** This stack is for local development only. It runs an unencrypted Goauthentik instance over HTTP to avoid self-signed-certificate overhead. The client's production Goauthentik instance uses HTTPS — see [Goauthentik SSO (authentication)](#goauthentik-sso-authentication) for the production setup.
+
+### Architecture
+
+The auth stack extends the base four-container stack with four additional containers:
+
+```
+Browser
+  │
+  ├── https://localhost:5443  ──▶  Caddy  ──▶  Draw.io container   (port 8080)
+  │
+  ├── https://localhost       ──▶  Caddy  ──▶  Nextcloud container  (port 80)
+  │                                                │ (user_oidc plugin)
+  │                                                │ OIDC server-side calls (Docker DNS)
+  │                                                ▼
+  └── http://authentik-server:9000  ──▶  authentik-server container
+                                             ├── PostgreSQL container (port 5432)
+                                             └── Redis container      (in-memory)
+                                             └── authentik-worker container
+```
+
+`authentik-server` is reachable as `http://authentik-server:9000` from both Nextcloud's PHP (via Docker Compose DNS) and the developer's browser (via an `/etc/hosts` entry that `start-auth.sh` adds). This means all OIDC discovery document endpoints, token exchange calls, and browser redirects all use the same hostname — no split-brain between in-container and host resolution.
+
+### Prerequisites
+
+In addition to the base stack prerequisites, the auth stack requires:
+
+- **`jq`** — used by `start-auth.sh` to parse Goauthentik's API responses. Install with `brew install jq` (macOS) or `apt install jq` (Linux).
+- **`sudo` access** — needed once to add the `authentik-server` hostname to `/etc/hosts`. The script explains this when it runs.
+
+> **Windows users (WSL 2):** Run the script inside WSL 2, the same as the base stack. One extra step is needed because the browser runs on Windows and uses the Windows hosts file — see [Step 2](#step-2--start-the-auth-stack) below.
+
+### Environment variables
+
+These variables are only needed for the auth stack. Add them to your `.env` (they are already in `.env.example` with safe dev defaults):
+
+| Variable | Description |
+|---|---|
+| `PG_PASS` | Password for Goauthentik's PostgreSQL database |
+| `PG_USER` | PostgreSQL username (default: `authentik`) |
+| `PG_DB` | PostgreSQL database name (default: `authentik`) |
+| `AUTHENTIK_SECRET_KEY` | Random string (50+ chars) used to sign sessions and tokens |
+| `AUTHENTIK_BOOTSTRAP_PASSWORD` | Password for the initial `akadmin` admin account — only applied on first boot |
+| `AUTHENTIK_BOOTSTRAP_TOKEN` | Static API token used by `start-auth.sh` to create the OAuth2 provider without a browser login — only applied on first boot |
+| `OIDC_CLIENT_ID` | Written back to `.env` automatically by `start-auth.sh` — do not set by hand |
+| `OIDC_CLIENT_SECRET` | Written back to `.env` automatically by `start-auth.sh` — do not set by hand |
+
+### Step 1 — Fill in the auth variables
+
+Open `.env` and make sure `PG_PASS`, `AUTHENTIK_SECRET_KEY`, `AUTHENTIK_BOOTSTRAP_PASSWORD`, and `AUTHENTIK_BOOTSTRAP_TOKEN` are set. The defaults in `.env.example` are fine for local development.
+
+Leave `OIDC_CLIENT_ID` and `OIDC_CLIENT_SECRET` empty — `start-auth.sh` will populate them.
+
+### Step 2 — Start the auth stack
+
+```bash
+bash start-auth.sh
+```
+
+The script runs seven steps and prints progress as it goes:
+
+1. Adds `127.0.0.1 authentik-server` to `/etc/hosts` (once per machine, requires `sudo`).
+2. Validates that the required env vars are set.
+3. Builds and starts the full auth stack (`docker compose -f docker-compose.yml -f docker-compose.auth.yml up`).
+4. Waits for Nextcloud and Goauthentik to become healthy (Goauthentik's first boot runs database migrations and can take several minutes).
+5. Creates an OAuth2/OIDC provider and application in Goauthentik via the API, using `AUTHENTIK_BOOTSTRAP_TOKEN` — no browser login needed.
+6. Writes the generated `OIDC_CLIENT_ID` and `OIDC_CLIENT_SECRET` back to `.env`.
+7. Installs and configures Nextcloud's `user_oidc` app via `occ`, enables SSO-only login, and exports the Caddy certificate.
+
+**Windows / WSL 2 extra step:** After the script finishes step 1, it will print a warning if it detects WSL. You need to also add the hosts entry to Windows (the script cannot do this because it runs inside Linux). Open **PowerShell as Administrator** and run once:
+
+```powershell
+Add-Content -Path C:\Windows\System32\drivers\etc\hosts -Value '127.0.0.1 authentik-server'
+```
+
+Then restart your browser. Without this, the browser cannot resolve `http://authentik-server:9000` and the Goauthentik login redirect will fail.
+
+### Step 3 — Trust the certificate
+
+The same certificate trust step as the base stack applies here. Run the appropriate command for your OS from the repo root (see [Step 3 in Quick start](#step-3--trust-the-https-certificate)).
+
+### Step 4 — Open the application
+
+| Service | URL |
+|---|---|
+| Draw.io | [https://localhost:5443](https://localhost:5443) |
+| Nextcloud | [https://localhost](https://localhost) — login via **Login with Goauthentik** |
+| Goauthentik admin UI | [http://authentik-server:9000/if/admin/](http://authentik-server:9000/if/admin/) |
+
+Log in to Nextcloud using your Goauthentik credentials. The initial admin account in the local Goauthentik instance has username `akadmin` and the password you set as `AUTHENTIK_BOOTSTRAP_PASSWORD`.
+
+> **Direct admin access:** `start-auth.sh` disables Nextcloud's built-in password login so all users go through Goauthentik. If you need direct admin access (e.g. to recover a locked-out account), temporarily re-enable it: `docker exec --user www-data nextcloud-main php occ config:app:set user_oidc allow_multiple_user_backends --value=1`
+
+### Re-running the script
+
+`start-auth.sh` is idempotent — re-running it is safe. If the OAuth2 provider already exists in Goauthentik, the script fetches the existing credentials instead of creating new ones. The only step that cannot be re-run is the first-boot bootstrap (changing `AUTHENTIK_BOOTSTRAP_PASSWORD` or `AUTHENTIK_BOOTSTRAP_TOKEN` in `.env` after first boot has no effect — reset them via the Goauthentik admin UI instead).
+
+### Resetting the auth stack
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.auth.yml down -v
+```
+
+This stops all containers and deletes all volumes, including the Goauthentik database and the Nextcloud database. Re-running `bash start-auth.sh` afterwards starts from scratch.
 
 ---
 
