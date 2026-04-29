@@ -885,63 +885,120 @@
 			title.style.cssText = 'margin: 0 0 15px 0; color: ' + nolaiColor + '; font-size: 18px; border-bottom: 2px solid ' + nolaiColor + '; padding-bottom: 10px;';
 			div.appendChild(title);
 
-			// Helper function to create a labeled input field
-			function createField(label, type, defaultValue, placeholder) 
-			{
-				var group = document.createElement('div');
-				group.style.marginBottom = '12px';
+			// ====== NOLAI - {- Backend -} /Sprint 3/ Task 151 ======
+			// Nextcloud base URL — WebDAV paths are built from this + the uid returned by the banner.
+			var nextcloudBaseUrl = 'https://localhost';
+			var nextcloudUsername = null; // uid, populated by the session banner on connect
+			var nextcloudPassword = null; // app password for WebDAV Basic Auth, also from banner
 
-				var lbl = document.createElement('label');
-				lbl.innerHTML = label;
-				lbl.style.cssText = 'display: block; font-size: 12px; font-weight: bold; margin-bottom: 4px; color: #666;';
-
-				var input = document.createElement('input');
-				input.type = type;
-				input.value = defaultValue;
-				input.placeholder = placeholder || '';
-				input.style.cssText = 'width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; outline: none; font-size: 14px;';
-
-				input.onfocus = function()
-				{
-					this.style.borderColor = nolaiColor;
-					this.style.boxShadow = '0 0 3px ' + nolaiColor; 
-				};
-
-				input.onblur = function()
-				{
-					this.style.borderColor = '#ccc';
-					this.style.boxShadow = 'none'
-				};
-
-				group.appendChild(lbl);
-				group.appendChild(input);
-				div.appendChild(group);
-				return input
+			// Attach the session banner. It restores a cached session immediately if one
+			// exists, or shows a "Connect to Nextcloud" button for first-time login.
+			if (typeof attachNextcloudSessionBanner === 'function') {
+				attachNextcloudSessionBanner(div, nextcloudBaseUrl, function(username, appPassword) {
+					nextcloudUsername = username;
+					nextcloudPassword = appPassword;
+				});
 			}
-			
-			// Server URL includes the username — the WebDAV functions extract it automatically.
-			// Authentication uses the active session cookie; no password required.
-			var urlInput = createField('Server URL', 'text', 'https://localhost/remote.php/dav/files/akadmin/', 'WebDAV URL');
+			// ====== end of changes by SE ======
 
-			// Ensure filename always ends with .drawio
-			if (!filename.endsWith('.drawio')) { filename += '.drawio'; }
-			var filenameInput = createField('Filename', 'text', filename, 'file.drawio');
+			// ====== NOLAI - {- Frontend -} /Sprint 3/ Task 151 ======
+			// Filename input: the base name is editable; '.drawio' is a read-only greyed suffix.
+			// WHY split display rather than a single editable field:
+			//   Appending '.drawio' inside the input value looks editable and users tend to
+			//   delete or change it. Rendering the extension as a separate locked suffix makes
+			//   it visually clear that the extension is fixed, matching common IDE conventions.
+			var baseFilename = filename.endsWith('.drawio') ? filename.slice(0, -7) : filename;
+
+			var filenameGroup = document.createElement('div');
+			filenameGroup.style.marginBottom = '12px';
+
+			var filenameLbl = document.createElement('label');
+			filenameLbl.innerHTML = 'Filename';
+			filenameLbl.style.cssText = 'display:block; font-size:12px; font-weight:bold; margin-bottom:4px; color:#666;';
+
+			// Wrapper that visually looks like one input field.
+			var filenameWrapper = document.createElement('div');
+			filenameWrapper.style.cssText = [
+				'display:flex',
+				'align-items:stretch',
+				'border:1px solid #ccc',
+				'border-radius:4px',
+				'overflow:hidden',
+				'font-size:14px',
+				'box-sizing:border-box',
+			].join(';');
+
+			var filenameInput = document.createElement('input');
+			filenameInput.type = 'text';
+			filenameInput.value = baseFilename;
+			filenameInput.placeholder = 'my-diagram';
+			filenameInput.style.cssText = [
+				'flex:1',
+				'padding:8px',
+				'border:none',
+				'outline:none',
+				'font-size:14px',
+				'background:transparent',
+				'min-width:0',
+			].join(';');
+
+			// Highlight the wrapper border on focus, matching the createField behaviour.
+			filenameInput.addEventListener('focus', function() {
+				filenameWrapper.style.borderColor = nolaiColor;
+				filenameWrapper.style.boxShadow = '0 0 3px ' + nolaiColor;
+			});
+			filenameInput.addEventListener('blur', function() {
+				filenameWrapper.style.borderColor = '#ccc';
+				filenameWrapper.style.boxShadow = 'none';
+			});
+
+			var filenameSuffix = document.createElement('span');
+			filenameSuffix.innerHTML = '.drawio';
+			filenameSuffix.style.cssText = [
+				'padding:8px 10px',
+				'background:#f0f0f0',
+				'color:#999',
+				'font-size:14px',
+				'border-left:1px solid #ccc',
+				'user-select:none',
+				'flex-shrink:0',
+				'display:flex',
+				'align-items:center',
+			].join(';');
+
+			filenameWrapper.appendChild(filenameInput);
+			filenameWrapper.appendChild(filenameSuffix);
+			filenameGroup.appendChild(filenameLbl);
+			filenameGroup.appendChild(filenameWrapper);
+			div.appendChild(filenameGroup);
+			// ====== end of changes by SE ======
 
 			// Dialog logic
 			var dlg = new CustomDialog(editorUi, div, function()
 			{
-				var url = urlInput.value.trim();
+				// Build the WebDAV URL from the base URL and the username detected by the banner.
+				if (!nextcloudUsername) {
+					editorUi.handleError({message: 'Please log in to Nextcloud before saving.'});
+					return;
+				}
+				var url = nextcloudBaseUrl + '/remote.php/dav/files/' + encodeURIComponent(nextcloudUsername) + '/';
 
-				var fname = filenameInput.value.trim();
-				// Force .drawio extension
-				if (!fname.endsWith('.drawio')) { fname += '.drawio'; }
+				// ====== NOLAI - {- Frontend -} /Sprint 3/ Task 151 ======
+				// Build the full filename from the base-name input + forced extension.
+				var baseVal = filenameInput.value.trim().replace(/\.drawio$/i, '');
+				if (!baseVal) {
+					editorUi.handleError({message: 'Please enter a filename.'});
+					return;
+				}
+				var fname = baseVal + '.drawio';
+				// ====== end of changes by SE ======
 
 				if (typeof saveDrawIOToNextcloudXML === 'function')
 				{
 					editorUi.spinner.spin(document.body, 'Saving to Nextcloud...');
 
-					// Username extracted from URL; null password — session cookie authenticates.
-					saveDrawIOToNextcloudXML(fname, xmlContent, url, null, null, '/').then(function(success)
+					// App password used for Basic Auth; session cookie deliberately omitted (see buildNextcloudWebdavBaseContext).
+					saveDrawIOToNextcloudXML(fname, xmlContent, url, null, nextcloudPassword, '/').then(function(success)
 					{
 						editorUi.spinner.stop();
 						if (success)
@@ -990,49 +1047,31 @@
 			title.style.cssText = 'margin: 0 0 15px 0; color: ' + nolaiColor + '; font-size: 18px; border-bottom: 2px solid ' + nolaiColor + '; padding-bottom: 10px;';
 			div.appendChild(title);
 
-			// Helper function to create a labeled input field
-			function createField(label, type, defaultValue, placeholder)
-			{
-				var group = document.createElement('div');
-				group.style.marginBottom = '12px';
+			// ====== NOLAI - {- Backend -} /Sprint 3/ Task 151 ======
+			// Nextcloud base URL — WebDAV paths are built from this + the uid returned by the banner.
+			var nextcloudBaseUrl = 'https://localhost';
+			var nextcloudUsername = null; // uid, populated by the session banner on connect
+			var nextcloudPassword = null; // app password for WebDAV Basic Auth, also from banner
 
-				var lbl = document.createElement('label');
-				lbl.innerHTML = label;
-				lbl.style.cssText = 'display: block; font-size: 12px; font-weight: bold; margin-bottom: 4px; color: #666;';
-
-				var input = document.createElement('input');
-				input.type = type;
-				input.value = defaultValue;
-				input.placeholder = placeholder || '';
-				input.style.cssText = 'width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; outline: none; font-size: 14px;';
-
-				input.onfocus = function()
-				{
-					this.style.borderColor = nolaiColor;
-					this.style.boxShadow = '0 0 3px ' + nolaiColor; 
-				};
-
-				input.onblur = function()
-				{
-					this.style.borderColor = '#ccc';
-					this.style.boxShadow = 'none'
-				};
-
-				group.appendChild(lbl);
-				group.appendChild(input);
-				div.appendChild(group);
-				return input
+			// Attach the session banner. It restores a cached session immediately if one
+			// exists, or shows a "Connect to Nextcloud" button for first-time login.
+			if (typeof attachNextcloudSessionBanner === 'function') {
+				attachNextcloudSessionBanner(div, nextcloudBaseUrl, function(username, appPassword) {
+					nextcloudUsername = username;
+					nextcloudPassword = appPassword;
+				});
 			}
-
-			// Server URL includes the username — the WebDAV functions extract it automatically.
-			// Authentication uses the active session cookie; no password required.
-			var urlInput = createField('Server URL', 'text', 'https://localhost/remote.php/dav/files/akadmin/', 'WebDAV URL');
+			// ====== end of changes by SE ======
 
 			// When user confirms: fetch all .drawio files from Nextcloud.
 			var dlg = new CustomDialog(editorUi, div, function()
 			{
-				var url = urlInput.value.trim();
-				// null password — session cookie authenticates all WebDAV requests.
+				// Build the WebDAV URL from the base URL and the username detected by the banner.
+				if (!nextcloudUsername) {
+					editorUi.handleError({message: 'Please log in to Nextcloud before loading files.'});
+					return;
+				}
+				var url = nextcloudBaseUrl + '/remote.php/dav/files/' + encodeURIComponent(nextcloudUsername) + '/';
 
 				// Check if Nextcloud helper functions are loaded.
 				if (typeof listDrawIOFilesInNextcloud !== 'function' || typeof getDrawIOFromNextcloudXML !== 'function' || typeof deleteFileInNextcloud !== 'function')
@@ -1043,7 +1082,7 @@
 
 				editorUi.spinner.spin(document.body, 'Loading file list from Nextcloud...');
 
-				listDrawIOFilesInNextcloud(url, null, null, '/').then(function(files)
+				listDrawIOFilesInNextcloud(url, null, nextcloudPassword, '/').then(function(files)
 				{
 					editorUi.spinner.stop();
 
@@ -1093,7 +1132,7 @@
 						{
 							editorUi.spinner.spin(document.body, 'Loading file from Nextcloud...');
 
-							getDrawIOFromNextcloudXML(selected.name, url, null, null, selected.remotePath).then(function(xml)
+							getDrawIOFromNextcloudXML(selected.name, url, null, nextcloudPassword, selected.remotePath).then(function(xml)
 							{
 								editorUi.spinner.stop();
 
@@ -1149,7 +1188,7 @@
 						{
 							editorUi.spinner.spin(document.body, 'Deleting file from Nextcloud...');
 
-							deleteFileInNextcloud(url, null, null, selected.remotePath, selected.name).then(function(success)
+							deleteFileInNextcloud(url, null, nextcloudPassword, selected.remotePath, selected.name).then(function(success)
 							{
 								editorUi.spinner.stop();
 
@@ -1220,7 +1259,6 @@
 			dlg.okButton.style.backgroundImage = 'none';
 
 			editorUi.showDialog(dlg.container, 450, 240, true, true);
-			urlInput.focus();
 		});
 
 		// ====== end of changes by SE	======

@@ -7,7 +7,44 @@
 +--------------------------------------------------------+
 
 */
-// Build basic authentication header and returns shared request context (url, path, headers) for Nextcloud WebDAV function calls.
+
+// ====== NOLAI - {- Backend -} /Sprint 3/ Task 151 ======
+//
+// In-memory credential cache for the current browser tab session.
+//
+// WHY a module-level variable rather than localStorage:
+//   App passwords are sensitive credentials that must not be persisted to disk.
+//   A plain JS variable lives only in memory and is cleared on page reload,
+//   giving a reasonable session lifetime without any storage risk.
+//   This cache allows both the Save and Load dialogs to restore the connection
+//   status without requiring the user to re-authenticate on every dialog open.
+//
+// Structure: { username: string|null, password: string|null }
+// ====== end of changes by SE ======
+var _nextcloudSessionCache = { username: null, password: null };
+// ====== NOLAI - {- Backend -} /Sprint 3/ Task 151 ======
+//
+// buildNextcloudWebdavBaseContext(nextcloudUrl, username, password, remotePath)
+//
+// Builds the shared request context used by all WebDAV functions: the auth
+// header, fetch options, base URL, and encoded path/username values.
+//
+// Authentication strategy:
+//   When an app password is provided, Basic Auth is used and the session cookie
+//   is deliberately omitted (credentials:'omit'). Sending both the OIDC session
+//   cookie AND an Authorization header causes Nextcloud to evaluate the cookie
+//   first; the OIDC session lacks WebDAV write permissions, so the request is
+//   rejected with 401 even though the app password is valid.
+//   When no password is available, cookie-only mode is used (credentials:'include').
+//
+// Username resolution:
+//   If the caller passes null for username, the uid is parsed from the WebDAV
+//   URL path (/remote.php/dav/files/{uid}/). This keeps callers simple: they
+//   only need to provide the pre-built URL with the uid embedded.
+//
+// Returns null if no username can be determined; otherwise returns an object
+// with authHeader, requestBase, baseUrl, encodedUsername, encodedPath, etc.
+// ====== end of changes by SE ======
 function buildNextcloudWebdavBaseContext(nextcloudUrl, username, password, remotePath) {
     const parsedUrl = new URL(nextcloudUrl, window.location.origin);
     const davPathMatch = parsedUrl.pathname.match(/^(.*)\/remote\.php\/dav\/files\/([^/]+)\/?$/);
@@ -31,15 +68,22 @@ function buildNextcloudWebdavBaseContext(nextcloudUrl, username, password, remot
     }).join('/');
     const encodedUsername = encodeURIComponent(effectiveUsername);
 
-    // Use session cookies so the active goauthentik SSO session authenticates WebDAV calls.
-    // No password is required — the browser sends the Nextcloud session cookie automatically.
-    // Set to false to fall back to Basic Auth (re-add password field in Menus.js).
-    const useCookieSession = true;
+    // If no password is provided, fall back to cookie-only authentication.
+    const useCookieSession = !password;
+
+    // WHY credentials differ by auth mode:
+    //   When an app password is available we set credentials:'omit' so the browser does NOT
+    //   send the OIDC session cookie alongside the Authorization header. If both are present
+    //   Nextcloud's auth chain evaluates the session cookie first; the OIDC session does not
+    //   carry WebDAV write permissions, so the request is rejected with 401 even though the
+    //   app password is valid. Omitting cookies forces Nextcloud to use only Basic Auth.
+    //   When cookie-only mode is active (no password) we keep 'include' so the OIDC session
+    //   cookie is the sole authentication mechanism.
     const requestBase = {
         mode: 'cors',
         credentials: useCookieSession ? 'include' : 'omit',
     };
-    const authHeader = useCookieSession ? null : `Basic ${btoa(`${effectiveUsername}:${password}`)}`;
+    const authHeader = useCookieSession ? null : ('Basic ' + btoa(effectiveUsername + ':' + password));
 
     return {
         authHeader: authHeader,
@@ -53,8 +97,8 @@ function buildNextcloudWebdavBaseContext(nextcloudUrl, username, password, remot
     };
 }
 
-// Uses base context from buildNextcloudWebdavBaseContext and adds final WebDAV URL for the specific file.
-// Returns null if base context can't be built. Otherwise returns object with auth header, request options, and full WebDAV URL for the file.
+// Extends buildNextcloudWebdavBaseContext with the final per-file WebDAV URL.
+// Returns null if the base context cannot be built.
 function buildNextcloudWebdavContext(filename, nextcloudUrl, username, password, remotePath) {
     const baseContext = buildNextcloudWebdavBaseContext(nextcloudUrl, username, password, remotePath);
     if (!baseContext) {
@@ -72,55 +116,72 @@ function buildNextcloudWebdavContext(filename, nextcloudUrl, username, password,
     };
 }
 
-// ====== NOLAI - Infrastructure / Sprint 3 / Task: SSO Session Detection ======
-// Queries the Nextcloud OCS API to find out which user is currently logged in
-// via the browser's session cookie (set by goauthentik SSO).
-// Returns the username string on success, or null if not authenticated / on error.
-// Used by Menus.js to auto-detect the logged-in user so no manual username
-// entry is needed in the Save / Load dialogs.
-async function getNextcloudCurrentUser(nextcloudBaseUrl) {
-    // Strip any WebDAV path suffix — the OCS endpoint lives at the Nextcloud root.
-    let origin;
-    try {
-        const parsed = new URL(nextcloudBaseUrl, window.location.origin);
-        const davMatch = parsed.pathname.match(/^(.*)\/remote\.php\//);
-        const basePath = davMatch ? davMatch[1] : '';
-        origin = `${parsed.origin}${basePath}`;
-    } catch (e) {
-        console.error('getNextcloudCurrentUser: invalid URL', nextcloudBaseUrl);
-        return null;
-    }
 
-    try {
-        const response = await fetch(`${origin}/ocs/v2.php/cloud/user?format=json`, {
-            method: 'GET',
-            mode: 'cors',
-            credentials: 'include',
-            headers: {
-                // OCS-APIREQUEST tells Nextcloud this is a programmatic call,
-                // not a browser page load, so it returns JSON instead of HTML.
-                'OCS-APIREQUEST': 'true',
-            },
-        });
-
-        if (!response.ok) {
-            console.warn(`getNextcloudCurrentUser: OCS API returned ${response.status}`);
-            return null;
-        }
-
-        const json = await response.json();
-        const userId = json && json.ocs && json.ocs.data && json.ocs.data.id;
-        if (userId) {
-            console.log(`getNextcloudCurrentUser: detected user '${userId}'`);
-            return userId;
-        }
-        return null;
-    } catch (e) {
-        console.warn('getNextcloudCurrentUser: request failed', e);
-        return null;
-    }
-}
+// ====== NOLAI - {- Backend -} /Sprint 3/ Task 151 ======
+//
+// initiateNextcloudLoginFlowV2(nextcloudBaseUrl)
+//
+// Starts a Nextcloud Login Flow v2 session by POSTing to /index.php/login/v2.
+// This is the official Nextcloud mechanism for third-party apps to acquire
+// credentials (username + app password) without knowing the user's raw password.
+//
+// WHY Login Flow v2 instead of the OCS /core/apppassword endpoint:
+//   The OCS endpoint returns 405 for OIDC-authenticated users (GoAuthentik).
+//   Nextcloud requires password re-confirmation to generate app passwords, but
+//   OIDC users have no Nextcloud password to provide. Login Flow v2 is the only
+//   Nextcloud-supported path that works for SSO users — the server handles
+//   credential issuance internally after the user completes their SSO login.
+//
+// Returns a Promise resolving to { pollToken, pollEndpoint, loginUrl }.
 // ====== end of changes by SE ======
+async function initiateNextcloudLoginFlowV2(nextcloudBaseUrl) {
+    var response = await fetch(nextcloudBaseUrl + '/index.php/login/v2', {
+        method: 'POST',
+        mode: 'cors',
+        credentials: 'include',
+    });
+    if (!response.ok) {
+        throw new Error('Login Flow v2 initiation failed: ' + response.status);
+    }
+    var json = await response.json();
+    return {
+        pollToken: json.poll.token,
+        pollEndpoint: json.poll.endpoint,
+        loginUrl: json.login,
+    };
+}
+
+// ====== NOLAI - {- Backend -} /Sprint 3/ Task 151 ======
+//
+// pollNextcloudLoginFlowV2(pollEndpoint, pollToken)
+//
+// Checks whether the user has completed the Login Flow v2 authentication by
+// POSTing the poll token to Nextcloud's poll endpoint.
+//
+// WHY POST with x-www-form-urlencoded:
+//   The Nextcloud Login Flow v2 poll endpoint expects the token as a form body,
+//   not a query parameter or JSON. Using the wrong content type causes the server
+//   to ignore the token and always return 404.
+//
+// Returns { loginName, appPassword } when the user has completed login,
+// or null if the flow is still pending (Nextcloud returns 404 until done).
+// ====== end of changes by SE ======
+async function pollNextcloudLoginFlowV2(pollEndpoint, pollToken) {
+    var response = await fetch(pollEndpoint, {
+        method: 'POST',
+        mode: 'cors',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'token=' + encodeURIComponent(pollToken),
+    });
+    // 404 means the user has not yet completed the login — not an error.
+    if (response.status === 404) { return null; }
+    if (!response.ok) {
+        throw new Error('Login Flow v2 poll failed: ' + response.status);
+    }
+    var json = await response.json();
+    return { loginName: json.loginName, appPassword: json.appPassword };
+}
 
 // WebDAV PUT function that saves the file as XML content to the Nextcloud server. Returns true if successful, false otherwise.
 async function saveDrawIOToNextcloudXML(filename, xmlContent, nextcloudUrl, username, password, remotePath = '/') {
@@ -414,7 +475,14 @@ async function listDrawIOFilesInNextcloud(nextcloudUrl, username, password, remo
     return files;
 }
 
-// ======	NOLAI - {- Backend -} /Sprint 2/ Task 117	=====
+// ====== NOLAI - {- Backend -} /Sprint 2/ Task 117 ======
+//
+// deleteFileInNextcloud(nextcloudUrl, username, password, remotePath, filename)
+//
+// Deletes a file from Nextcloud via WebDAV DELETE (preceded by an optional
+// LOCK to prevent concurrent modification, with UNLOCK in the finally block).
+// Falls back to unlocked DELETE if the server does not support LOCK.
+// ====== end of changes by SE ======
 async function deleteFileInNextcloud(nextcloudUrl, username, password, remotePath = '/', filename) {
 
     const webdavContext = buildNextcloudWebdavContext(filename, nextcloudUrl, username, password, remotePath);
@@ -455,17 +523,16 @@ async function deleteFileInNextcloud(nextcloudUrl, username, password, remotePat
             body: lockInfo,
         });
 
-        // If LOCK isn't supported, log a warning and still continue with PUT to save.
+        // If LOCK is not supported, fall back to an unlocked DELETE.
         if (!lockResponse.ok) {
             if (lockResponse.status === 405 || lockResponse.status === 501) {
                 lockSupported = false;
-                console.warn(`LOCK not supported by server (${lockResponse.status}). Falling back to unlocked PUT.`);
+                console.warn(`LOCK not supported by server (${lockResponse.status}). Falling back to unlocked DELETE.`);
             } else {
                 console.error(`LOCK failed: ${lockResponse.status} ${lockResponse.statusText}`);
                 return false;
             }
         } else {
-            // Lock token extraction
             // Some servers return Lock-Token as a header, others only in XML response body.
             // Handle both formats to keep interoperability across WebDAV implementations.
             const lockTokenHeader = lockResponse.headers.get('Lock-Token');
@@ -479,14 +546,13 @@ async function deleteFileInNextcloud(nextcloudUrl, username, password, remotePat
                 }
             }
 
-            // If attempted to obtain a lock but didn't get a token, abort.
             if (!lockToken) {
-                console.error('No lock token acquired. Aborting PUT to prevent data loss.');
+                console.error('No lock token acquired. Aborting DELETE to prevent data loss.');
                 return false;
             }
         }
 
-        // WebDAV DELETE request
+        // WebDAV DELETE request.
         const deleteHeaders = {
             ...(authHeader ? {'Authorization': authHeader} : {}),
             'Content-Type': 'application/xml',
@@ -567,4 +633,225 @@ function buildNextcloudWebdavDirectoryContext(nextcloudUrl, username, password, 
         userDavPrefix: userDavPrefix,
         baseOrigin: baseContext.baseOrigin,
     };
+}
+
+// ====== NOLAI - {- Backend -} /Sprint 3/ Task 151 ======
+//
+// openNextcloudLoginPopup(nextcloudBaseUrl)
+//
+// Implements the Nextcloud Login Flow v2 to obtain app credentials for a user
+// authenticating via GoAuthentik SSO.
+//
+// Flow:
+//   1. POST /index.php/login/v2 → receive { pollToken, pollEndpoint, loginUrl }
+//   2. Open loginUrl in a popup (Nextcloud redirects through GoAuthentik SSO)
+//   3. Poll pollEndpoint every 2 s with pollToken
+//   4. When the user completes login, the poll returns { loginName, appPassword }
+//
+// WHY a popup rather than a full-page redirect:
+//   draw.io (port 5443) and Nextcloud (port 443) are separate origins. Redirecting
+//   the main window would discard any unsaved diagram state.
+//
+// WHY Login Flow v2 instead of OCS session polling:
+//   OCS /core/apppassword returns 405 for OIDC users (no Nextcloud password to
+//   confirm). Login Flow v2 is the official Nextcloud mechanism for apps to acquire
+//   credentials for SSO users — the server issues the app password directly after
+//   the GoAuthentik flow completes, without requiring a Nextcloud password.
+//
+// Returns a Promise resolving to { username, appPassword } on success,
+// or rejecting if the popup is blocked or the user cancels.
+// ====== end of changes by SE ======
+function openNextcloudLoginPopup(nextcloudBaseUrl) {
+    return new Promise(function(resolve, reject) {
+
+        initiateNextcloudLoginFlowV2(nextcloudBaseUrl).then(function(flow) {
+
+            var popup = window.open(
+                flow.loginUrl,
+                'nextcloud_sso_login',
+                'width=900,height=650,scrollbars=yes,resizable=yes,toolbar=no,menubar=no,location=yes'
+            );
+
+            if (!popup || popup.closed) {
+                reject(new Error(
+                    'The login popup was blocked. Allow popups for this site and try again.'
+                ));
+                return;
+            }
+
+            var POLL_MS = 2000;
+            var poll = setInterval(function() {
+
+                // If the user closed the popup before finishing, stop polling.
+                if (popup.closed) {
+                    clearInterval(poll);
+                    reject(new Error('Login was cancelled.'));
+                    return;
+                }
+
+                // Poll the Login Flow v2 endpoint — null means still pending.
+                pollNextcloudLoginFlowV2(flow.pollEndpoint, flow.pollToken).then(function(creds) {
+                    if (creds) {
+                        clearInterval(poll);
+                        try { popup.close(); } catch (e) { /* ignore if already closed */ }
+                        resolve({ username: creds.loginName, appPassword: creds.appPassword });
+                    }
+                    // null means the user has not completed login yet — keep polling.
+                }).catch(function(err) {
+                    clearInterval(poll);
+                    try { popup.close(); } catch (e) { /* ignore */ }
+                    reject(err);
+                });
+
+            }, POLL_MS);
+
+        }).catch(function(err) {
+            reject(new Error('Could not start login flow: ' + err.message));
+        });
+    });
+}
+
+// ====== NOLAI - {- Frontend -} /Sprint 3/ Task 151 ======
+//
+// attachNextcloudSessionBanner(container, nextcloudBaseUrl, onLoggedIn)
+//
+// Builds and attaches a session-status banner to a draw.io dialog container.
+// Both the Save and Load dialogs call this so the login UX is identical.
+//
+// Parameters:
+//   container        — the dialog <div> to insert the banner into (after <h2>)
+//   nextcloudBaseUrl — Nextcloud root URL, e.g. 'https://localhost'
+//   onLoggedIn       — callback(username, appPassword) fired once Login Flow v2
+//                      completes; the caller stores both values and passes them
+//                      to WebDAV functions as Basic Auth credentials
+//
+// Banner states:
+//   ready      — amber,  "Not connected" + "Connect" button (initial state)
+//   connecting — grey,   "Opening login…" (while popup is open)
+//   confirmed  — green,  "Logged in as <username>"
+//
+// WHY always show the Connect button (no initial session check):
+//   Even if a Nextcloud session cookie exists, Nextcloud returns 405 when the
+//   OCS /core/apppassword endpoint is called for OIDC users — so a session alone
+//   is not enough. We always need Login Flow v2 to get a usable app password.
+//   Removing the initial OCS check simplifies the flow and avoids a spurious
+//   CORS preflight on dialog open.
+//
+// ====== end of changes by SE ======
+function attachNextcloudSessionBanner(container, nextcloudBaseUrl, onLoggedIn) {
+    var nolaiColor = '#008f89';
+
+    // Build the banner DOM — flex row: icon | status text | login button.
+    var banner = document.createElement('div');
+    banner.style.cssText = [
+        'display:flex',
+        'align-items:center',
+        'gap:10px',
+        'padding:10px 14px',
+        'margin-bottom:16px',
+        'border-radius:6px',
+        'font-size:13px',
+        'font-family:Helvetica,Arial,sans-serif',
+        'background:#f5f5f5',
+        'border:1px solid #ddd',
+        'min-height:38px',
+        'box-sizing:border-box',
+    ].join(';');
+
+    var icon = document.createElement('span');
+    icon.style.cssText = 'font-size:16px;flex-shrink:0;';
+
+    var statusText = document.createElement('span');
+    statusText.style.cssText = 'flex:1;';
+
+    // Login button — hidden until a logged-out state is detected.
+    var loginBtn = document.createElement('button');
+    loginBtn.innerHTML = 'Connect to Nextcloud';
+    loginBtn.style.cssText = [
+        'padding:5px 12px',
+        'background:' + nolaiColor,
+        'color:#fff',
+        'border:none',
+        'border-radius:4px',
+        'cursor:pointer',
+        'font-size:12px',
+        'font-weight:bold',
+        'flex-shrink:0',
+        'display:none',
+    ].join(';');
+
+    banner.appendChild(icon);
+    banner.appendChild(statusText);
+    banner.appendChild(loginBtn);
+
+    // Insert the banner immediately after the dialog's <h2> title element.
+    var titleEl = container.querySelector('h2');
+    if (titleEl && titleEl.nextSibling) {
+        container.insertBefore(banner, titleEl.nextSibling);
+    } else {
+        container.appendChild(banner);
+    }
+
+    // setChecking — shown while the Login Flow v2 popup is open and polling.
+    function setChecking() {
+        banner.style.background = '#f5f5f5';
+        banner.style.borderColor = '#ddd';
+        icon.innerHTML = '⏳';
+        statusText.innerHTML = 'Opening Nextcloud login&hellip;';
+        loginBtn.style.display = 'none';
+    }
+
+    // setLoggedOut — shown on initial load or after a cancelled / failed login attempt.
+    // errorMsg is displayed so the user understands why the button is visible.
+    function setLoggedOut(errorMsg) {
+        banner.style.background = '#fff8e1';
+        banner.style.borderColor = '#ffb300';
+        icon.innerHTML = '⚠️';
+        statusText.innerHTML = errorMsg || 'Not connected to Nextcloud.';
+        loginBtn.style.display = 'inline-block';
+    }
+
+    // confirmLogin — called once Login Flow v2 resolves with credentials, or when
+    // a cached session is restored on dialog open. Writes to the session cache,
+    // updates the banner to its confirmed (green) state, and fires onLoggedIn.
+    function confirmLogin(username, appPassword) {
+        // Persist credentials so subsequent dialog opens skip the login popup.
+        _nextcloudSessionCache.username = username;
+        _nextcloudSessionCache.password = appPassword;
+
+        banner.style.background = '#edfaf4';
+        banner.style.borderColor = '#4caf50';
+        icon.innerHTML = '✅';
+        statusText.innerHTML = 'Logged in as <strong>' + username + '</strong>';
+        loginBtn.style.display = 'none';
+        if (typeof onLoggedIn === 'function') { onLoggedIn(username, appPassword); }
+    }
+
+    // Login button starts the Login Flow v2 popup.
+    loginBtn.addEventListener('click', function() {
+        loginBtn.disabled = true;
+        loginBtn.innerHTML = 'Opening login&hellip;';
+        setChecking();
+
+        openNextcloudLoginPopup(nextcloudBaseUrl).then(function(creds) {
+            confirmLogin(creds.username, creds.appPassword);
+        }).catch(function(err) {
+            // Re-enable the button so the user can try again without reopening the dialog.
+            loginBtn.disabled = false;
+            loginBtn.innerHTML = 'Connect to Nextcloud';
+            setLoggedOut(err.message);
+        });
+    });
+
+    // On banner creation, restore from cache if credentials exist from a previous
+    // dialog in this browser session — no popup required. Otherwise show the
+    // Connect button so the user can authenticate for the first time.
+    if (_nextcloudSessionCache.username && _nextcloudSessionCache.password) {
+        confirmLogin(_nextcloudSessionCache.username, _nextcloudSessionCache.password);
+    } else {
+        setLoggedOut('Not connected — click the button to authenticate via GoAuthentik.');
+    }
+
+    // Expose state-setter functions so callers can drive the banner externally if needed.
+    return { confirmLogin: confirmLogin, setLoggedOut: setLoggedOut, setChecking: setChecking };
 }
