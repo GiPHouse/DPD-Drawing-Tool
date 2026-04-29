@@ -218,7 +218,7 @@ Draw.loadPlugin(function (ui) {
           sourceType: st,
           targetType: tt,
         });
-        return false;
+        return true;
       }
 
       if (st === 'external_entity' && tt === 'external_entity') {
@@ -226,7 +226,7 @@ Draw.loadPlugin(function (ui) {
           sourceType: st,
           targetType: tt,
         });
-        return false;
+        return true;
       }
 
       if (
@@ -237,7 +237,7 @@ Draw.loadPlugin(function (ui) {
           sourceType: st,
           targetType: tt,
         });
-        return false;
+        return true;
       }
     }
 
