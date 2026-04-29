@@ -1039,43 +1039,22 @@
 		{
 			var nolaiColor = '#008f89';
 
-			// Main container for dialog UI
-			var div = document.createElement('div');
-			div.style.cssText = 'padding: 20px; font-family: Helvetica, Arial, sans-serif; color: #333;';
-
-			// The title for the dialog
-			var title = document.createElement('h2');
-			title.innerHTML = 'Load diagram from Nextcloud';
-			title.style.cssText = 'margin: 0 0 15px 0; color: ' + nolaiColor + '; font-size: 18px; border-bottom: 2px solid ' + nolaiColor + '; padding-bottom: 10px;';
-			div.appendChild(title);
-
 			// ====== NOLAI - {- Backend -} /Sprint 3/ Task 151 ======
 			// Nextcloud base URL — WebDAV paths are built from this + the uid returned by the banner.
 			var nextcloudBaseUrl = 'https://localhost';
 			var nextcloudUsername = null; // uid, populated by the session banner on connect
 			var nextcloudPassword = null; // app password for WebDAV Basic Auth, also from banner
 
-			// Attach the session banner. It restores a cached session immediately if one
-			// exists, or shows a "Connect to Nextcloud" button for first-time login.
-			if (typeof attachNextcloudSessionBanner === 'function') {
-				attachNextcloudSessionBanner(div, nextcloudBaseUrl, function(username, appPassword) {
-					nextcloudUsername = username;
-					nextcloudPassword = appPassword;
-				});
-			}
-			// ====== end of changes by SE ======
-
-			// When user confirms: fetch all .drawio files from Nextcloud.
-			var dlg = new CustomDialog(editorUi, div, function()
+			/**
+			 * Fetches all .drawio files from Nextcloud via WebDAV and opens the
+			 * file-picker dialog. Called automatically once the session banner
+			 * confirms credentials are available — no button click required.
+			 */
+			var fetchNextcloudFiles = function()
 			{
-				// Build the WebDAV URL from the base URL and the username detected by the banner.
-				if (!nextcloudUsername) {
-					editorUi.handleError({message: 'Please log in to Nextcloud before loading files.'});
-					return;
-				}
 				var url = nextcloudBaseUrl + '/remote.php/dav/files/' + encodeURIComponent(nextcloudUsername) + '/';
 
-				// Check if Nextcloud helper functions are loaded.
+				// Guard: verify all helper functions are present before proceeding.
 				if (typeof listDrawIOFilesInNextcloud !== 'function' || typeof getDrawIOFromNextcloudXML !== 'function' || typeof deleteFileInNextcloud !== 'function')
 				{
 					editorUi.handleError({message: 'NextcloudFile.js is not loaded'});
@@ -1088,14 +1067,14 @@
 				{
 					editorUi.spinner.stop();
 
-					// Stop if no matching draw.io files were found.
+					// Abort if no .drawio files were found.
 					if (files == null || files.length === 0)
 					{
 						editorUi.handleError({message: 'No .drawio files found in Nextcloud.'});
 						return;
 					}
 
-					// Build second UI containing selectable file list.
+					// Build the file-picker dialog.
 					var listDiv = document.createElement('div');
 					listDiv.style.cssText = 'padding: 20px; font-family: Helvetica, Arial, sans-serif;';
 
@@ -1108,7 +1087,7 @@
 					select.style.cssText = 'width: 100%; height: 220px; padding: 5px;';
 					select.size = 12;
 
-					// List all file options
+					// Populate the list with all discovered .drawio files.
 					files.forEach(function(file, i)
 					{
 						var option = document.createElement('option');
@@ -1119,6 +1098,10 @@
 
 					listDiv.appendChild(select);
 
+					/**
+					 * Loads the currently selected file into the editor.
+					 * Prompts the user to confirm if there are unsaved local changes.
+					 */
 					var loadSelected = function()
 					{
 						if (select.selectedIndex < 0)
@@ -1128,8 +1111,8 @@
 						}
 
 						var selected = files[parseInt(select.value, 10)];
-						
-						// Performs actual fetch+load into current editor state.
+
+						// Performs the actual WebDAV fetch and loads the XML into the editor.
 						var performLoad = function()
 						{
 							editorUi.spinner.spin(document.body, 'Loading file from Nextcloud...');
@@ -1146,7 +1129,7 @@
 
 								try
 								{
-									// Load XML as a fresh document and clear modified flag.
+									// Load XML as a fresh document and clear the modified flag.
 									editorUi.fileLoaded(new LocalFile(editorUi, xml, selected.name, true), true);
 									editorUi.editor.modified = false;
 									editorUi.editor.setStatus('Loaded from Nextcloud successfully');
@@ -1164,7 +1147,7 @@
 							});
 						};
 
-						// Protect unsaved local changes before replacing current diagram.
+						// Warn about unsaved changes before replacing the current diagram.
 						if (editorUi.editor.modified)
 						{
 							editorUi.confirm(mxResources.get('allChangesLost'), null, performLoad,
@@ -1178,6 +1161,10 @@
 
 					// ======	NOLAI - {- Backend -} /Sprint 2/ Task 117	=====
 					// ======	NOLAI - {- Frontend -} /Sprint 2/ Task 108	=====
+					/**
+					 * Deletes the currently selected file from Nextcloud after confirmation.
+					 * Removes the entry from the list on success; closes the dialog if the list is empty.
+					 */
 					var deleteSelected = function()
 					{
 						if (select.selectedIndex < 0)
@@ -1202,6 +1189,7 @@
 									return;
 								}
 
+								// Remove the deleted entry from both the data array and the UI list.
 								files.splice(select.selectedIndex, 1);
 								select.remove(select.selectedIndex);
 
@@ -1212,6 +1200,7 @@
 									return;
 								}
 
+								// Keep the selection valid after removal.
 								if (select.selectedIndex < 0)
 								{
 									select.selectedIndex = 0;
@@ -1233,15 +1222,15 @@
 					deleteBtn.innerHTML = 'Delete';
 					deleteBtn.style.cssText = 'padding: 8px 12px; border: none; border-radius: 4px; background-color: #e74c3c; color: white; cursor: pointer;';
 					deleteBtn.onclick = deleteSelected;
-					deleteBtn.onmouseover = function() { this.style.opacity = '0.85';};
-					deleteBtn.onmouseout = function() { this.style.opacity = '1';};
+					deleteBtn.onmouseover = function() { this.style.opacity = '0.85'; };
+					deleteBtn.onmouseout = function() { this.style.opacity = '1'; };
 
 					buttonRow.appendChild(deleteBtn);
 					listDiv.appendChild(buttonRow);
 
 					var listDlg = new CustomDialog(editorUi, listDiv, loadSelected);
 
-					// Add OK-button to load the diagram selected
+					// Style the OK button for loading the selected diagram.
 					listDlg.okButton.innerHTML = 'Load Diagram';
 					listDlg.okButton.style.backgroundColor = nolaiColor;
 					listDlg.okButton.style.color = '#fff';
@@ -1254,15 +1243,52 @@
 					editorUi.spinner.stop();
 					editorUi.handleError({message: 'Error loading file list: ' + error.message});
 				});
+			};
+
+			// Container for the session banner — only shown when the user is not yet logged in.
+			var bannerDiv = document.createElement('div');
+			bannerDiv.style.cssText = 'padding: 20px; font-family: Helvetica, Arial, sans-serif; color: #333;';
+
+			var bannerTitle = document.createElement('h2');
+			bannerTitle.innerHTML = 'Load diagram from Nextcloud';
+			bannerTitle.style.cssText = 'margin: 0 0 15px 0; color: ' + nolaiColor + '; font-size: 18px; border-bottom: 2px solid ' + nolaiColor + '; padding-bottom: 10px;';
+			bannerDiv.appendChild(bannerTitle);
+
+			if (typeof attachNextcloudSessionBanner !== 'function')
+			{
+				editorUi.handleError({message: 'Nextcloud session banner is not available.'});
+				return;
+			}
+
+			// Track whether the banner callback fired synchronously (i.e., user already
+			// has a cached session). This avoids showing the login dialog unnecessarily.
+			var sessionReady = false;
+
+			// Attach the session banner. The callback fires immediately for cached sessions
+			// or after the user completes login. Either way, fetchNextcloudFiles() is called
+			// automatically — no "Fetch Files" button click required.
+			attachNextcloudSessionBanner(bannerDiv, nextcloudBaseUrl, function(username, appPassword)
+			{
+				nextcloudUsername = username;
+				nextcloudPassword = appPassword;
+				sessionReady = true;
+				// Close the login dialog if it is currently open, then start fetching.
+				editorUi.hideDialog();
+				fetchNextcloudFiles();
 			});
 
-			// Add OK-button to show all saved files
-			dlg.okButton.innerHTML = 'Fetch Files';
-			dlg.okButton.style.backgroundColor = nolaiColor;
-			dlg.okButton.style.color = '#fff';
-			dlg.okButton.style.backgroundImage = 'none';
+			// Only show the login dialog if credentials were not already available
+			// synchronously (i.e., the user still needs to authenticate).
+			if (!sessionReady)
+			{
+				var loginDlg = new CustomDialog(editorUi, bannerDiv, null);
 
-			editorUi.showDialog(dlg.container, 450, 240, true, true);
+				// Hide the OK button — the fetch is triggered automatically by the
+				// session banner callback once the user authenticates.
+				loginDlg.okButton.style.display = 'none';
+
+				editorUi.showDialog(loginDlg.container, 450, 240, true, true);
+			}
 		});
 
 		// ====== end of changes by SE	======
