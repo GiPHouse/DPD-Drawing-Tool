@@ -19,9 +19,9 @@
 //   This cache allows both the Save and Load dialogs to restore the connection
 //   status without requiring the user to re-authenticate on every dialog open.
 //
-// Structure: { username: string|null, password: string|null }
+// Structure: { username: string|null, password: string|null, baseUrl: string|null }
 // ====== end of changes by SE ======
-var _nextcloudSessionCache = { username: null, password: null };
+var _nextcloudSessionCache = { username: null, password: null, baseUrl: null };
 // ====== NOLAI - {- Backend -} /Sprint 3/ Task 151 ======
 //
 // buildNextcloudWebdavBaseContext(nextcloudUrl, username, password, remotePath)
@@ -818,6 +818,7 @@ function attachNextcloudSessionBanner(container, nextcloudBaseUrl, onLoggedIn) {
         // Persist credentials so subsequent dialog opens skip the login popup.
         _nextcloudSessionCache.username = username;
         _nextcloudSessionCache.password = appPassword;
+        _nextcloudSessionCache.baseUrl  = nextcloudBaseUrl;
 
         banner.style.background = '#edfaf4';
         banner.style.borderColor = '#4caf50';
@@ -855,3 +856,125 @@ function attachNextcloudSessionBanner(container, nextcloudBaseUrl, onLoggedIn) {
     // Expose state-setter functions so callers can drive the banner externally if needed.
     return { confirmLogin: confirmLogin, setLoggedOut: setLoggedOut, setChecking: setChecking };
 }
+
+// ====== NOLAI - {- Backend -} /Sprint 3/ Task 151 ======
+// renameFileInNextcloud — renames a file on Nextcloud via a WebDAV MOVE request.
+//
+// WebDAV MOVE atomically renames/moves a resource. The Destination header carries the full
+// absolute URL of the new resource path. Overwrite:F prevents accidental overwrites if a
+// file with the new name already exists (server returns 412 in that case).
+//
+// Parameters:
+//   oldFilename    {string} — current filename, e.g. "OldName.drawio"
+//   newFilename    {string} — desired filename, e.g. "NewName.drawio"
+//   nextcloudUrl   {string} — Nextcloud base URL, e.g. "https://localhost"
+//   username       {string} — Nextcloud login name (app-password owner)
+//   password       {string} — app password
+//   remotePath     {string} — subfolder within the user DAV root, e.g. "/" for root
+//
+// Returns a Promise that resolves to true on success or rejects with an Error.
+// ====== end of changes by SE ======
+function renameFileInNextcloud(oldFilename, newFilename, nextcloudUrl, username, password, remotePath) {
+    var ctx = buildNextcloudWebdavBaseContext(nextcloudUrl, username, password, remotePath);
+    if (!ctx) { return Promise.reject(new Error('Could not build WebDAV context for rename')); }
+
+    var prefix = ctx.baseUrl + '/remote.php/dav/files/' + ctx.encodedUsername +
+                 (ctx.encodedPath ? '/' + ctx.encodedPath : '');
+    var oldUrl = prefix + '/' + encodeURIComponent(oldFilename);
+    var newUrl = prefix + '/' + encodeURIComponent(newFilename);
+
+    var headers = { 'Destination': newUrl, 'Overwrite': 'F' };
+    if (ctx.authHeader) { headers['Authorization'] = ctx.authHeader; }
+
+    return fetch(oldUrl, Object.assign({}, ctx.requestBase, { method: 'MOVE', headers: headers }))
+        .then(function(response) {
+            // 201 Created or 204 No Content both indicate a successful MOVE.
+            if (response.status === 201 || response.status === 204) { return true; }
+            throw new Error('WebDAV MOVE failed: HTTP ' + response.status);
+        });
+}
+
+// ====== NOLAI - {- Backend -} /Sprint 3/ Task 151 ======
+// LocalFile.prototype.rename override — adds Nextcloud persistence to draw.io's in-memory rename.
+//
+// draw.io's default LocalFile.prototype.rename updates only the in-memory title; it has no
+// knowledge of Nextcloud. This override wraps the original so the in-memory update still
+// happens, then additionally performs a WebDAV MOVE if session credentials are cached.
+//
+// The override reads baseUrl/username/password from _nextcloudSessionCache so that it works
+// without any extra wiring in Menus.js — the banner login flow already populates the cache.
+//
+// Assumptions:
+//   - Files are always saved at the root of the user's DAV folder (remotePath = '/').
+//   - _nextcloudSessionCache.baseUrl is set when the user connects via the session banner.
+// ====== end of changes by SE ======
+(function() {
+    // Guard: LocalFile may not yet be defined if scripts load out of order.
+    if (typeof LocalFile === 'undefined') { return; }
+
+    var _originalRename = LocalFile.prototype.rename;
+
+    LocalFile.prototype.rename = function(newTitle, success, error) {
+        var oldTitle = this.title;
+
+        // Always apply the in-memory rename so draw.io's toolbar updates immediately.
+        _originalRename.call(this, newTitle, null, null);
+
+        var cache = _nextcloudSessionCache;
+        var titleChanged = oldTitle && newTitle && oldTitle !== newTitle;
+
+        if (cache.username && cache.password && cache.baseUrl && titleChanged) {
+            // Perform WebDAV MOVE then fire the caller's callbacks.
+            renameFileInNextcloud(oldTitle, newTitle, cache.baseUrl, cache.username, cache.password, '/')
+                .then(function() {
+                    updateNolaiFileTitle(newTitle);
+                    if (typeof success === 'function') { success(); }
+                })
+                .catch(function(err) {
+                    console.error('NOLAI: Nextcloud rename (MOVE) failed', err);
+                    if (typeof error === 'function') { error(err); }
+                });
+        } else {
+            // No Nextcloud session — just update the title bar and fire success.
+            updateNolaiFileTitle(newTitle);
+            if (typeof success === 'function') { success(); }
+        }
+    };
+})();
+
+// ====== NOLAI - {- Frontend -} /Sprint 3/ Task 151 ======
+// updateNolaiFileTitle — updates the filename shown in draw.io's native menu bar element and
+// in the browser tab title.
+//
+// draw.io already renders a ".geFilename" <a> element in its top menu bar. We write directly
+// to that element so the filename is styled and positioned correctly by draw.io itself — no
+// overlay div is needed or created. document.title is updated in all cases.
+//
+// If ".geFilename" is not in the DOM yet (draw.io still initialising), the function silently
+// retries every 300 ms until the element appears — no temporary UI is injected.
+//
+// Behaviour:
+//   - Non-empty filename  → shows that filename in the menu bar and browser tab.
+//   - null / empty string → shows "Untitled" in both places.
+//
+// Parameters:
+//   filename {string|null} — full filename, e.g. "MyDiagram.drawio", or null for Untitled.
+// ====== end of changes by SE ======
+function updateNolaiFileTitle(filename) {
+    var display = (filename && filename.trim()) ? filename.trim() : 'Untitled';
+
+    // Always keep the browser tab title in sync.
+    document.title = display + ' — NOLAI';
+
+    // Write to draw.io's native menu-bar filename element. If it isn't in the DOM yet
+    // (draw.io still initialising), schedule a retry — no overlay is used.
+    var fnameEl = document.querySelector('.geFilename');
+    if (fnameEl) {
+        fnameEl.innerText = display;
+    } else {
+        setTimeout(function() { updateNolaiFileTitle(filename); }, 300);
+    }
+}
+
+// Show "Untitled" once draw.io has had time to render its toolbar (~1 s after script load).
+setTimeout(function() { updateNolaiFileTitle(null); }, 1000);

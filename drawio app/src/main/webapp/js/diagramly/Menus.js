@@ -1004,6 +1004,8 @@
 						if (success)
 						{
 							editorUi.editor.setStatus('Saved to Nextcloud successfully');
+							// Update the title bar overlay to reflect the saved filename.
+							if (typeof updateNolaiFileTitle === 'function') { updateNolaiFileTitle(fname); }
 						}
 						else
 						{
@@ -1148,6 +1150,8 @@
 									editorUi.fileLoaded(new LocalFile(editorUi, xml, selected.name, true), true);
 									editorUi.editor.modified = false;
 									editorUi.editor.setStatus('Loaded from Nextcloud successfully');
+									// Update the title bar overlay to reflect the loaded filename.
+									if (typeof updateNolaiFileTitle === 'function') { updateNolaiFileTitle(selected.name); }
 								}
 								catch (e)
 								{
@@ -3627,37 +3631,83 @@
 				}
 				else
 				{
-					var filename = (file.getTitle() != null) ? file.getTitle() : this.editorUi.defaultFilename;
-					
-					var dlg = new FilenameDialog(this.editorUi, filename, mxResources.get('rename'), mxUtils.bind(this, function(title)
+					// ====== NOLAI - {- Frontend -} /Sprint 3/ Task 151 ======
+					// Custom rename dialog — replaces FilenameDialog with a split-input layout so
+					// the .drawio extension is greyed out and non-editable, matching the save dialog.
+					// ====== end of changes by SE ======
+					var currentTitle = (file.getTitle() != null) ? file.getTitle() : this.editorUi.defaultFilename;
+					var currentBase  = currentTitle.endsWith('.drawio') ? currentTitle.slice(0, -7) : currentTitle;
+					var self = this;
+
+					var renameDiv = document.createElement('div');
+					renameDiv.style.cssText = 'padding:20px;font-family:Helvetica,Arial,sans-serif;';
+
+					var label = document.createElement('div');
+					label.innerHTML = '<strong>Rename diagram</strong>';
+					label.style.cssText = 'margin-bottom:12px;font-size:14px;';
+					renameDiv.appendChild(label);
+
+					var inputWrapper = document.createElement('div');
+					inputWrapper.style.cssText = 'display:flex;align-items:stretch;border:1px solid #ccc;border-radius:4px;overflow:hidden;font-size:14px;box-sizing:border-box;margin-bottom:16px;';
+
+					var renameInput = document.createElement('input');
+					renameInput.type  = 'text';
+					renameInput.value = currentBase;
+					renameInput.style.cssText = 'flex:1;border:none;outline:none;padding:8px 10px;font-size:14px;box-sizing:border-box;';
+
+					var renameSuffix = document.createElement('span');
+					renameSuffix.innerHTML = '.drawio';
+					renameSuffix.style.cssText = 'padding:8px 10px;background:#f0f0f0;color:#999;border-left:1px solid #ccc;white-space:nowrap;cursor:default;user-select:none;font-size:14px;';
+
+					inputWrapper.appendChild(renameInput);
+					inputWrapper.appendChild(renameSuffix);
+					renameDiv.appendChild(inputWrapper);
+
+					var btnRow = document.createElement('div');
+					btnRow.style.cssText = 'display:flex;justify-content:flex-end;gap:8px;';
+
+					var cancelBtn = document.createElement('button');
+					cancelBtn.innerHTML = 'Cancel';
+					cancelBtn.style.cssText = 'padding:8px 16px;border:1px solid #ccc;border-radius:4px;background:#fff;cursor:pointer;font-size:13px;';
+
+					var okBtn = document.createElement('button');
+					okBtn.innerHTML = 'Rename';
+					okBtn.style.cssText = 'padding:8px 16px;border:none;border-radius:4px;background:#008f89;color:#fff;cursor:pointer;font-size:13px;';
+
+					btnRow.appendChild(cancelBtn);
+					btnRow.appendChild(okBtn);
+					renameDiv.appendChild(btnRow);
+
+					// Show dialog using draw.io's built-in dialog wrapper.
+					self.editorUi.showDialog(renameDiv, 360, 140, true, true);
+					renameInput.focus();
+					renameInput.select();
+
+					var doRename = mxUtils.bind(self, function()
 					{
-						if (title != null && title.length > 0 && file != null && title != file.getTitle() &&
-							this.editorUi.spinner.spin(document.body, mxResources.get('renaming')))
+						var baseVal  = renameInput.value.trim().replace(/\.drawio$/i, '');
+						if (!baseVal) { editorUi.handleError({message: 'Please enter a filename.'}); return; }
+						var newTitle = baseVal + '.drawio';
+						if (newTitle === file.getTitle()) { self.editorUi.hideDialog(); return; }
+						self.editorUi.hideDialog();
+						if (self.editorUi.spinner.spin(document.body, mxResources.get('renaming')))
 						{
-							// Delete old file, save new file in dropbox if autosize is enabled
-							file.rename(title, mxUtils.bind(this, function(resp)
-							{
-								this.editorUi.spinner.stop();
-							}),
-							mxUtils.bind(this, function(resp)
-							{
-								this.editorUi.handleError(resp, (resp != null) ? mxResources.get('errorRenamingFile') : null);
-							}));
+							file.rename(newTitle,
+								mxUtils.bind(self, function() { self.editorUi.spinner.stop(); }),
+								mxUtils.bind(self, function(resp) {
+									self.editorUi.spinner.stop();
+									self.editorUi.handleError(resp, (resp != null) ? mxResources.get('errorRenamingFile') : null);
+								})
+							);
 						}
-					}), (file.constructor == DriveFile || file.constructor == StorageFile) ?
-						mxResources.get('diagramName') : null, function(name)
-					{
-						if (name != null && name.length > 0)
-						{
-							return true;
-						}
-						
-						editorUi.showError(mxResources.get('error'), mxResources.get('invalidName'), mxResources.get('ok'));
-						
-						return false;
-					}, null, FilenameDialog.filenameHelpLink, null, null, editorUi.editor.fileExtensions);
-					this.editorUi.showDialog(dlg.container, 340, 100, true, true);
-					dlg.init();
+					});
+
+					okBtn.addEventListener('click', doRename);
+					cancelBtn.addEventListener('click', function() { self.editorUi.hideDialog(); });
+					renameInput.addEventListener('keydown', function(e) {
+						if (e.key === 'Enter') { doRename(); }
+						if (e.key === 'Escape') { self.editorUi.hideDialog(); }
+					});
 				}
 			}
 		}));
