@@ -10190,13 +10190,22 @@
 				{
 					if (input.files != null)
 					{
-						// Using null for position will disable crop of input file
-						this.importFiles(input.files, null, null, this.maxImageSize);
-						
-			    		// Resets input to force change event for same file (type reset required for IE)
+						this.importFiles(input.files, null, null, this.maxImageSize, null, null, null,
+							mxUtils.bind(this, function(queue)
+							{
+								//trigger DPD validation after file import
+								if (typeof this._dpdValidate === 'function')
+								{
+									setTimeout(mxUtils.bind(this, function()
+									{
+										this._dpdValidate();
+									}), 900);  // tried out multiple time limits, this worked reasonably good
+								}
+							}));
+
 						input.type = '';
 						input.type = 'file';
-			    		input.value = '';
+						input.value = '';
 					}
 				}));
 				

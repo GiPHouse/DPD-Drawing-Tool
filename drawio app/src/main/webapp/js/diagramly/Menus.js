@@ -867,12 +867,12 @@
 			var filename = (currentFile != null && currentFile.getTitle() != null) ?
 				currentFile.getTitle() : editorUi.defaultFilename;
 			
-			if (!filename.endsWith('.drawio') && !filename.endsWith('.xml'))
+			// Always ensure the default filename ends with .drawio
+			if (!filename.endsWith('.drawio'))
 			{
-				filename += '.drawio';
+				filename = filename.replace(/\.[^/.]+$/, '') + '.drawio';
 			}
-			
-			var xmlContent = editorUi.getFileData(true);
+
 			var nolaiColor = '#008f89';
 
 			// Main container for dialog UI
@@ -923,9 +923,37 @@
 			// Authentication uses the active session cookie; no password required.
 			var urlInput = createField('Server URL', 'text', 'https://localhost/remote.php/dav/files/akadmin/', 'WebDAV URL');
 
-			// Ensure filename always ends with .drawio
-			if (!filename.endsWith('.drawio')) { filename += '.drawio'; }
-			var filenameInput = createField('Filename', 'text', filename, 'file.drawio');
+			var filenameInput = createField('Filename (.drawio only)', 'text', filename, 'file.drawio');
+
+			// Warning message shown when user types a wrong extension
+			var extWarning = document.createElement('div');
+			extWarning.style.cssText = [
+				'display: none',
+				'margin-top: -8px',
+				'margin-bottom: 10px',
+				'padding: 8px 12px',
+				'background: #fff3e0',
+				'border-left: 4px solid #e65100',
+				'border-radius: 0 4px 4px 0',
+				'font-size: 12px',
+				'color: #e65100',
+			].join(';');
+			extWarning.innerHTML = '&#9888; Only <strong>.drawio</strong> files are supported. The extension will be corrected automatically.';
+			div.appendChild(extWarning);
+
+			// Live enforcement: correct extension and show warning as user types
+			filenameInput.addEventListener('input', function()
+			{
+				var val = filenameInput.value;
+				if (val.includes('.') && !val.endsWith('.drawio'))
+				{
+					extWarning.style.display = 'block';
+				}
+				else
+				{
+					extWarning.style.display = 'none';
+				}
+			});
 
 			// Dialog logic
 			var dlg = new CustomDialog(editorUi, div, function()
@@ -933,8 +961,14 @@
 				var url = urlInput.value.trim();
 
 				var fname = filenameInput.value.trim();
-				// Force .drawio extension
-				if (!fname.endsWith('.drawio')) { fname += '.drawio'; }
+				// Strip any extension and enforce .drawio before saving
+				if (!fname.endsWith('.drawio'))
+				{
+					fname = fname.replace(/\.[^/.]+$/, '').replace(/\.$/, '') + '.drawio';
+				}
+
+				// Capture XML at confirm time so all model changes are included
+				var xmlContent = editorUi.getFileData(true);
 
 				if (typeof saveDrawIOToNextcloudXML === 'function')
 				{
@@ -1109,6 +1143,15 @@
 									editorUi.fileLoaded(new LocalFile(editorUi, xml, selected.name, true), true);
 									editorUi.editor.modified = false;
 									editorUi.editor.setStatus('Loaded from Nextcloud successfully');
+
+									// Re-run DPD validation after model has fully settled
+									setTimeout(function()
+									{
+										if (typeof editorUi._dpdValidate === 'function')
+										{
+											editorUi._dpdValidate();
+										}
+									}, 900);
 								}
 								catch (e)
 								{
@@ -5694,7 +5737,7 @@
 
 				if (urlParams['noDevice'] != '1')
 				{
-					menu.addItem(mxResources.get('device') + '...', null, function()
+					menu.addItem(mxResources.get('importFrom') + ' ' + mxResources.get('device') + '...', null, function()
 					{
 						editorUi.importLocalFile(true);
 					}, parent);

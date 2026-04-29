@@ -262,47 +262,47 @@ describe('Console violation helpers', () => {
 // is drawn. The connection is rejected and a violation is logged to the console.
 // ---------------------------------------------------------------------------
 
-describe('Structural connection blocking (R-S1, R-S2, R-S3)', () => {
+describe('Structural connection violations (R-S1, R-S2, R-S3)', () => {
   beforeEach(() => { jest.useFakeTimers(); global.alert.mockClear(); });
   afterEach(() => { jest.runOnlyPendingTimers(); jest.useRealTimers(); });
 
-  it('rejects data_store → data_store and reports R-S1', () => {
+  it('allows data_store → data_store but reports R-S1 violation', () => {
     const { graph, dpdConsole } = loadSemanticPlugin();
     const result = graph.isValidConnection(
       makeSemanticNode({ id: 1, type: 'data_store' }),
       makeSemanticNode({ id: 2, type: 'data_store' }),
     );
-    expect(result).toBe(false);
+    expect(result).toBe(true);
     expect(dpdConsole.addViolation).toHaveBeenCalledWith('R-S1', expect.any(String), 'error', expect.any(Object));
   });
 
-  it('rejects external_entity → external_entity and reports R-S2', () => {
+  it('allows external_entity → external_entity but reports R-S2 violation', () => {
     const { graph, dpdConsole } = loadSemanticPlugin();
     const result = graph.isValidConnection(
       makeSemanticNode({ id: 10, type: 'external_entity' }),
       makeSemanticNode({ id: 11, type: 'external_entity' }),
     );
-    expect(result).toBe(false);
+    expect(result).toBe(true);
     expect(dpdConsole.addViolation).toHaveBeenCalledWith('R-S2', expect.any(String), 'error', expect.any(Object));
   });
 
-  it('rejects data_store → external_entity and reports R-S3', () => {
+  it('allows data_store → external_entity but reports R-S3 violation', () => {
     const { graph, dpdConsole } = loadSemanticPlugin();
     const result = graph.isValidConnection(
       makeSemanticNode({ id: 12, type: 'data_store' }),
       makeSemanticNode({ id: 13, type: 'external_entity' }),
     );
-    expect(result).toBe(false);
+    expect(result).toBe(true);
     expect(dpdConsole.addViolation).toHaveBeenCalledWith('R-S3', expect.any(String), 'error', expect.any(Object));
   });
 
-  it('rejects external_entity → data_store (R-S3 applies in both directions)', () => {
+  it('allows external_entity → data_store but reports R-S3 violation (applies in both directions)', () => {
     const { graph, dpdConsole } = loadSemanticPlugin();
     const result = graph.isValidConnection(
       makeSemanticNode({ id: 14, type: 'external_entity' }),
       makeSemanticNode({ id: 15, type: 'data_store' }),
     );
-    expect(result).toBe(false);
+    expect(result).toBe(true);
     expect(dpdConsole.addViolation).toHaveBeenCalledWith('R-S3', expect.any(String), 'error', expect.any(Object));
   });
 
