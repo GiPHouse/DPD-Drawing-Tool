@@ -1259,14 +1259,26 @@ Draw.loadPlugin(function (ui) {
 
   // Right-click popup menu extension
 
+  // ====== NOLAI - {Frontend} /Sprint 3/ Task #134 ======
   const origPopup = graph.popupMenuHandler.factoryMethod.bind(graph.popupMenuHandler);
   graph.popupMenuHandler.factoryMethod = function (menu, cell, evt) {
     if (cell && model.isEdge(cell)) {
       menu.addItem('Annotate Data Flow…', null, () => showEdgeAnnotationDialog(cell), null, null, true);
       menu.addSeparator();
     }
+    if (cell && model.isVertex(cell)) {
+      const nodeType = getComponentType(cell);
+      if (nodeType === 'process') {
+        menu.addItem('Edit Properties…', null, () => showProcessAnnotationDialog(cell), null, null, true);
+        menu.addSeparator();
+      } else if (nodeType === 'data_store') {
+        menu.addItem('Edit Properties…', null, () => showDataAnnotationDialog(cell), null, null, true);
+        menu.addSeparator();
+      }
+    }
     return origPopup(menu, cell, evt);
   };
+  // ====== end of changes by SE ======
 
   console.log('DPD Plugin Loaded');
   console.log('[DPD] Plugin loaded — 15 rules active (R-S1–4, R-I1–5, R-L1–2, R-P1–4)');
