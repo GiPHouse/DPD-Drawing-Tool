@@ -5696,9 +5696,9 @@
 				{
 					this.addMenuItems(menu, ['new'], parent);
 				}
-				// ======	NOLAI - {- Frontend -} /Sprint 2/ Task 98 and Task 100	=====
+				// ======	NOLAI - {- Frontend -} /Sprint 2 & 3/ Task 98, Task 100 and Task 151	=====
 				menu.addSeparator(parent);
-				this.addMenuItems(menu, ['Save', 'My Files'], parent);
+				this.addMenuItems(menu, ['Save', 'My Files', 'share'], parent);
 				// ====== end of changes by SE	======
 			
 				if (file != null && file.constructor == DriveFile)

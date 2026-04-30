@@ -6321,35 +6321,30 @@ App.prototype.updateButtonContainer = function()
 				this.commentButton.style.display = (this.commentsSupported()) ? '' : 'none';
 			}
 
-			// Share
-			if (this.shareButton == null)
+			// ======	NOLAI - {"Backend"} /Sprint 3/ Task 151	=====
+
+			// Login
+			if (this.loginButton == null)
 			{
-				this.shareButton = document.createElement('button');
-				this.shareButton.className = 'geBtn gePrimaryBtn';
+				var nextcloudBaseUrl = 'https://localhost';
+				var nextcloudUsername = null; // uid, populated by the session banner on connect
+				var nextcloudPassword = null; // app password for WebDAV Basic Auth, also from banner
 
-				var label = document.createElement('div');
-				label.className = 'geButton';
-				label.style.backgroundImage = 'url(' + Editor.groupImage + ')';
-				this.shareButton.appendChild(label);
-
-				this.dependsOnLanguage(mxUtils.bind(this, function()
+				this.loginButton = document.createElement('div');
+				attachNextcloudSessionBanner(this.loginButton, nextcloudBaseUrl, function(username, appPassword)
 				{
-					label.innerHTML = '';
-					mxUtils.write(label, mxResources.get('share'));
-					this.shareButton.setAttribute('title', mxResources.get('share'));
-				}));
+					nextcloudUsername = username;
+					nextcloudPassword = appPassword;
+				});
 				
-				mxEvent.addListener(this.shareButton, 'click', mxUtils.bind(this, function()
-				{
-					this.actions.get('share').funct();
-				}));
-				
-				this.buttonContainer.appendChild(this.shareButton);
+				this.buttonContainer.appendChild(this.loginButton);
 			}
 
-			this.shareButton.style.display = (file != null &&
+			this.loginButton.style.display = (file != null &&
 				Editor.currentTheme == 'kennedy' &&
 				urlParams['embed'] != '1') ? '' : 'none';
+			
+			// ====== end of changes by SE	======
 			
 			// User
 			if (Editor.currentTheme != 'simple')
