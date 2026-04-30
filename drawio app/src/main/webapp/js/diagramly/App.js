@@ -6321,29 +6321,38 @@ App.prototype.updateButtonContainer = function()
 				this.commentButton.style.display = (this.commentsSupported()) ? '' : 'none';
 			}
 
-			// ======	NOLAI - {"Backend"} /Sprint 3/ Task 151	=====
+			// ======	NOLAI - {"Frontend"} /Sprint 3/ Task 151	=====
+			//
+			// Top-bar Nextcloud authentication widget.
+			// attachNextcloudTopBarButton renders a professional pill/chip that shows:
+			//   • A "Sign in to Nextcloud" pill button when the user is not authenticated.
+			//   • A rounded chip with the Nextcloud avatar + display name after login.
+			// The widget registers _nolaiTopBarRefresh so Save/Load dialog sign-in
+			// buttons can update it in real time without a page reload.
+			//
+			// WHY we switched from attachNextcloudSessionBanner:
+			//   The session banner was designed for dialog containers (full-width,
+			//   multi-state row). The top bar needs a compact, self-contained widget
+			//   that blends with the other icon buttons and shows user identity clearly.
 
-			// Login
 			if (this.loginButton == null)
 			{
 				var nextcloudBaseUrl = 'https://localhost';
-				var nextcloudUsername = null; // uid, populated by the session banner on connect
-				var nextcloudPassword = null; // app password for WebDAV Basic Auth, also from banner
 
 				this.loginButton = document.createElement('div');
-				attachNextcloudSessionBanner(this.loginButton, nextcloudBaseUrl, function(username, appPassword)
+
+				if (typeof attachNextcloudTopBarButton === 'function')
 				{
-					nextcloudUsername = username;
-					nextcloudPassword = appPassword;
-				});
-				
+					attachNextcloudTopBarButton(this.loginButton, nextcloudBaseUrl, null);
+				}
+
 				this.buttonContainer.appendChild(this.loginButton);
 			}
 
 			this.loginButton.style.display = (file != null &&
 				Editor.currentTheme == 'kennedy' &&
 				urlParams['embed'] != '1') ? '' : 'none';
-			
+
 			// ====== end of changes by SE	======
 			
 			// User

@@ -22,6 +22,76 @@
 // Structure: { username: string|null, password: string|null, baseUrl: string|null }
 // ====== end of changes by SE ======
 var _nextcloudSessionCache = { username: null, password: null, baseUrl: null, displayName: null };
+
+// ====== NOLAI - {- Frontend -} /Sprint 3/ Task 151 ======
+// _nolaiTopBarRefresh — optional callback registered by attachNextcloudTopBarButton.
+// When a dialog login button completes authentication it calls this so the top-bar
+// chip updates immediately without requiring a page reload.
+// ====== end of changes by SE ======
+var _nolaiTopBarRefresh = null;
+
+// ====== NOLAI - {- Frontend -} /Sprint 3/ Task 151 ======
+// _nolaiIsDark() — safe wrapper around Editor.isDarkMode().
+// Returns true when the editor is currently in dark mode, false otherwise.
+// Guarded so that calling it before Editor is fully initialised never throws.
+// ====== end of changes by SE ======
+function _nolaiIsDark() {
+    return typeof Editor !== 'undefined' &&
+           typeof Editor.isDarkMode === 'function' &&
+           Editor.isDarkMode();
+}
+
+// ====== NOLAI - {- Frontend -} /Sprint 3/ Task 151 ======
+// Dark-mode reactive update system for NOLAI widgets.
+//
+// Problem: our widgets use inline styles computed once at render time. When the
+// user toggles dark mode (View → Dark, or the OS preference changes), draw.io
+// calls EditorUi.prototype.setDarkMode which writes to the Editor.darkMode
+// property and fires a 'darkModeChanged' event on the EditorUi instance. Neither
+// signal is easily reachable from NextcloudFile.js without access to editorUi.
+//
+// Solution: intercept Editor.darkMode via Object.defineProperty so we receive
+// a synchronous notification on every write. Widgets register callbacks in
+// _nolaiDarkModeListeners and are called immediately when the value changes.
+//
+// WHY Object.defineProperty rather than a MutationObserver:
+//   MutationObserver would need to watch a large subtree to catch the geDarkMode
+//   class being toggled, which is expensive. The property setter gives a precise,
+//   zero-overhead hook with no DOM traversal.
+//
+// Guard: _nolaiDarkPatched on the Editor object prevents double-patching if the
+// script is ever loaded more than once.
+// ====== end of changes by SE ======
+var _nolaiDarkModeListeners = [];
+
+(function patchEditorDarkMode() {
+    // Editor may not be defined yet if scripts load asynchronously — retry.
+    if (typeof Editor === 'undefined') {
+        setTimeout(patchEditorDarkMode, 50);
+        return;
+    }
+    if (Editor._nolaiDarkPatched) { return; }
+
+    var _stored = Editor.darkMode; // capture the current value (false by default)
+
+    Object.defineProperty(Editor, 'darkMode', {
+        configurable: true,
+        get: function() { return _stored; },
+        set: function(val) {
+            var changed = _stored !== val;
+            _stored = val;
+            if (changed) {
+                // Call each listener; wrap in try/catch so one bad callback
+                // cannot prevent the others from running.
+                for (var i = 0; i < _nolaiDarkModeListeners.length; i++) {
+                    try { _nolaiDarkModeListeners[i](val); } catch (e) { /* ignore */ }
+                }
+            }
+        },
+    });
+
+    Editor._nolaiDarkPatched = true;
+})();
 // ====== NOLAI - {- Backend -} /Sprint 3/ Task 151 ======
 //
 // buildNextcloudWebdavBaseContext(nextcloudUrl, username, password, remotePath)
@@ -713,6 +783,295 @@ function openNextcloudLoginPopup(nextcloudBaseUrl) {
 
 // ====== NOLAI - {- Frontend -} /Sprint 3/ Task 151 ======
 //
+// attachNextcloudTopBarButton(container, nextcloudBaseUrl, onLoggedIn)
+//
+// Renders a professional, compact Nextcloud authentication widget in the draw.io
+// top-bar button container. The widget has three visual states:
+//
+//   signed-out  — teal pill button "Sign in to Nextcloud" (cloud icon + label)
+//   signing-in  — muted "Signing in…" text while the login popup is open
+//   signed-in   — rounded chip: Nextcloud avatar (or initials fallback) + display name
+//
+// Avatar loading:
+//   Fetches /index.php/avatar/{username}/32 with Basic Auth. If the request
+//   fails (CORS, network, etc.) the chip shows a generated SVG initials circle
+//   using the first character of the display name in the NOLAI teal colour.
+//
+// Cross-dialog coordination:
+//   Registers itself as _nolaiTopBarRefresh so that the session banner inside
+//   Save/Load dialogs can refresh this chip immediately after the user logs in
+//   from within a dialog — no page reload needed.
+//
+// Parameters:
+//   container        — the <div> inside buttonContainer that wraps this widget
+//   nextcloudBaseUrl — Nextcloud root URL, e.g. 'https://localhost'
+//   onLoggedIn       — optional callback(username, appPassword) fired on login
+// ====== end of changes by SE ======
+function attachNextcloudTopBarButton(container, nextcloudBaseUrl, onLoggedIn) {
+    var nolaiColor = '#008f89';
+
+    container.style.cssText = [
+        'display:inline-flex',
+        'align-items:center',
+        'vertical-align:middle',
+        'margin:0 4px',
+    ].join(';');
+
+    // makeInitialsAvatar — generates a teal SVG circle with one capital letter.
+    // Used immediately on login and as the permanent fallback if the Nextcloud
+    // avatar endpoint is unreachable.
+    function makeInitialsAvatar(displayName) {
+        var initial = (displayName || 'U').trim().charAt(0).toUpperCase();
+        var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">' +
+            '<circle cx="12" cy="12" r="12" fill="' + nolaiColor + '"/>' +
+            '<text x="12" y="16.5" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" ' +
+            'font-size="12" font-weight="700" fill="#fff">' + initial + '</text>' +
+            '</svg>';
+        return 'data:image/svg+xml;base64,' + btoa(svg);
+    }
+
+    // fetchAvatar — attempts to load the user's Nextcloud avatar as a Blob URL.
+    // Uses Basic Auth so the browser does not send the OIDC session cookie
+    // (same reasoning as WebDAV calls — mixing cookie + token causes 401).
+    function fetchAvatar(username, appPassword) {
+        return fetch(
+            nextcloudBaseUrl + '/index.php/avatar/' + encodeURIComponent(username) + '/32',
+            {
+                headers: { 'Authorization': 'Basic ' + btoa(username + ':' + appPassword) },
+                mode: 'cors',
+                credentials: 'omit',
+            }
+        ).then(function(r) {
+            if (!r.ok) { throw new Error('avatar unavailable'); }
+            return r.blob();
+        }).then(function(blob) {
+            return URL.createObjectURL(blob);
+        });
+    }
+
+    // fetchDisplayName — same helper as in attachNextcloudSessionBanner, duplicated
+    // here so the top-bar button has no dependency on the banner function.
+    function fetchDisplayNameLocal(username, appPassword) {
+        return fetch(nextcloudBaseUrl + '/ocs/v2.php/cloud/user?format=json', {
+            headers: {
+                'Authorization': 'Basic ' + btoa(username + ':' + appPassword),
+                'OCS-APIRequest': 'true',
+            },
+            mode: 'cors',
+            credentials: 'omit',
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            return (data.ocs && data.ocs.data && data.ocs.data.displayname)
+                ? data.ocs.data.displayname
+                : username;
+        })
+        .catch(function() { return username; });
+    }
+
+    // _chipState — tracks what the widget is currently showing so that the dark-mode
+    // listener can call the right render function without any extra arguments.
+    //
+    //   mode: 'signed-out'  — Sign in button
+    //         'signing-in'  — "Signing in…" spinner
+    //         'signed-in'   — avatar chip with username
+    //
+    // For 'signed-in', username/appPassword/displayName are also stored so the
+    // chip can be rebuilt verbatim (including avatar re-fetch) on a mode toggle.
+    var _chipState = { mode: 'signed-out', username: null, appPassword: null, displayName: null };
+
+    // showSignInButton — the default state before the user has authenticated.
+    // The teal button looks correct on both light and dark toolbars so no branching
+    // on dark mode is needed here.
+    function showSignInButton() {
+        _chipState.mode = 'signed-out';
+        container.innerHTML = '';
+
+        var btn = document.createElement('button');
+        // Inline cloud SVG icon keeps the button self-contained (no external asset needed).
+        var cloudIcon = '<svg width="13" height="10" viewBox="0 0 24 18" fill="currentColor" ' +
+            'style="margin-right:5px;vertical-align:middle;flex-shrink:0">' +
+            '<path d="M19.35 6.04A7.49 7.49 0 0012 0C9.11 0 6.6 1.64 5.35 4.04A5.994 5.994 0 ' +
+            '000 10c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/>' +
+            '</svg>';
+        btn.innerHTML = cloudIcon + 'Sign in to Nextcloud';
+        btn.style.cssText = [
+            'display:inline-flex',
+            'align-items:center',
+            'padding:5px 13px',
+            'background:' + nolaiColor,
+            'color:#fff',
+            'border:none',
+            'border-radius:16px',
+            'cursor:pointer',
+            'font-size:12px',
+            'font-weight:600',
+            'font-family:Helvetica,Arial,sans-serif',
+            'letter-spacing:0.1px',
+            'box-shadow:0 1px 3px rgba(0,0,0,0.18)',
+            'white-space:nowrap',
+            'line-height:1.2',
+            'transition:opacity 0.15s',
+        ].join(';');
+
+        btn.addEventListener('mouseover', function() { btn.style.opacity = '0.85'; });
+        btn.addEventListener('mouseout',  function() { btn.style.opacity = '1'; });
+        btn.addEventListener('click', startLogin);
+        container.appendChild(btn);
+    }
+
+    // showSpinner — minimal text shown while the Login Flow v2 popup is open.
+    // Colour adapts to dark mode so it reads well on the dark toolbar.
+    function showSpinner() {
+        _chipState.mode = 'signing-in';
+        container.innerHTML = '';
+        var dark = _nolaiIsDark();
+        var span = document.createElement('span');
+        span.style.cssText = [
+            'font-size:12px',
+            'font-family:Helvetica,Arial,sans-serif',
+            'color:' + (dark ? '#aaa' : '#888'),
+            'padding:0 6px',
+            'white-space:nowrap',
+        ].join(';');
+        span.textContent = 'Signing in…';
+        container.appendChild(span);
+    }
+
+    // showUserChip — the signed-in state.  Displays avatar + display name in a
+    // rounded chip styled with a subtle NOLAI teal tint.
+    // Background opacity, border colour, and text colour all adapt to dark mode
+    // so the chip remains legible against both light and dark top bars.
+    function showUserChip(username, appPassword, displayName) {
+        _chipState.mode        = 'signed-in';
+        _chipState.username    = username;
+        _chipState.appPassword = appPassword;
+        _chipState.displayName = displayName;
+
+        container.innerHTML = '';
+        var dark = _nolaiIsDark();
+
+        var chip = document.createElement('div');
+        chip.title = 'Signed in to Nextcloud as ' + (displayName || username);
+        chip.style.cssText = [
+            'display:inline-flex',
+            'align-items:center',
+            'gap:7px',
+            'padding:3px 11px 3px 3px',
+            // Slightly higher opacity in dark mode so the tint is visible on the
+            // dark toolbar background without being too vivid.
+            'background:' + (dark ? 'rgba(0,190,183,0.18)' : 'rgba(0,143,137,0.10)'),
+            'border:1px solid ' + (dark ? 'rgba(0,190,183,0.40)' : 'rgba(0,143,137,0.30)'),
+            'border-radius:16px',
+            'font-size:12px',
+            'font-family:Helvetica,Arial,sans-serif',
+            'max-width:220px',
+            'white-space:nowrap',
+            'overflow:hidden',
+            'cursor:default',
+            'user-select:none',
+        ].join(';');
+
+        // Avatar — starts as initials; replaced by real photo once the fetch resolves.
+        var avatarImg = document.createElement('img');
+        avatarImg.style.cssText = [
+            'width:22px',
+            'height:22px',
+            'border-radius:50%',
+            'display:block',
+            'flex-shrink:0',
+            'object-fit:cover',
+        ].join(';');
+        avatarImg.src = makeInitialsAvatar(displayName || username);
+        avatarImg.alt = displayName || username;
+
+        // Swap in the real Nextcloud avatar once it has loaded.
+        fetchAvatar(username, appPassword).then(function(url) {
+            avatarImg.src = url;
+        }).catch(function() { /* keep initials — no visual change needed */ });
+
+        var nameEl = document.createElement('span');
+        nameEl.textContent = displayName || username;
+        nameEl.style.cssText = [
+            'overflow:hidden',
+            'text-overflow:ellipsis',
+            'font-weight:500',
+            // Light text on dark toolbar; dark text on light toolbar.
+            'color:' + (dark ? '#e8e8e8' : '#111'),
+            'flex:1',
+            'min-width:0',
+        ].join(';');
+
+        chip.appendChild(avatarImg);
+        chip.appendChild(nameEl);
+        container.appendChild(chip);
+    }
+
+    // confirmLogin — called once credentials are obtained.  Updates the session
+    // cache, renders the chip, and fires the caller's onLoggedIn callback.
+    function confirmLogin(username, appPassword, displayName) {
+        _nextcloudSessionCache.username    = username;
+        _nextcloudSessionCache.password    = appPassword;
+        _nextcloudSessionCache.baseUrl     = nextcloudBaseUrl;
+        _nextcloudSessionCache.displayName = displayName || username;
+        showUserChip(username, appPassword, displayName || username);
+        if (typeof onLoggedIn === 'function') { onLoggedIn(username, appPassword); }
+    }
+
+    // startLogin — opens the Login Flow v2 popup, then resolves credentials.
+    function startLogin() {
+        showSpinner();
+        openNextcloudLoginPopup(nextcloudBaseUrl).then(function(creds) {
+            fetchDisplayNameLocal(creds.username, creds.appPassword).then(function(dn) {
+                confirmLogin(creds.username, creds.appPassword, dn);
+            }).catch(function() {
+                confirmLogin(creds.username, creds.appPassword, creds.username);
+            });
+        }).catch(function() {
+            // User cancelled or popup was blocked — return to the sign-in button.
+            showSignInButton();
+        });
+    }
+
+    // rerender — redraws the widget in its current state using fresh dark-mode
+    // colours.  Called by the _nolaiDarkModeListeners entry below whenever
+    // Editor.darkMode changes.
+    function rerender() {
+        if (_chipState.mode === 'signed-in') {
+            showUserChip(_chipState.username, _chipState.appPassword, _chipState.displayName);
+        } else if (_chipState.mode === 'signing-in') {
+            showSpinner();
+        } else {
+            showSignInButton();
+        }
+    }
+
+    // Register with the global dark-mode listener list so rerender() is called
+    // synchronously whenever Editor.darkMode is written (i.e., every time the
+    // user toggles dark mode via View or the OS preference changes).
+    _nolaiDarkModeListeners.push(rerender);
+
+    // Register a refresh callback so dialog sign-in buttons can update this chip.
+    _nolaiTopBarRefresh = function() {
+        var c = _nextcloudSessionCache;
+        if (c.username && c.password) {
+            showUserChip(c.username, c.password, c.displayName || c.username);
+        }
+    };
+
+    // Restore from session cache (e.g., user opened the save dialog and logged in
+    // there before this button was initialised) or show the sign-in button.
+    if (_nextcloudSessionCache.username && _nextcloudSessionCache.password) {
+        var c = _nextcloudSessionCache;
+        showUserChip(c.username, c.password, c.displayName || c.username);
+        if (typeof onLoggedIn === 'function') { onLoggedIn(c.username, c.password); }
+    } else {
+        showSignInButton();
+    }
+}
+
+// ====== NOLAI - {- Frontend -} /Sprint 3/ Task 151 ======
+//
 // attachNextcloudSessionBanner(container, nextcloudBaseUrl, onLoggedIn)
 //
 // Builds and attaches a session-status banner to a draw.io dialog container.
@@ -742,6 +1101,9 @@ function attachNextcloudSessionBanner(container, nextcloudBaseUrl, onLoggedIn) {
     var nolaiColor = '#008f89';
 
     // Build the banner DOM — flex row: icon | status text | login button.
+    // Initial colours are set here; setChecking/setLoggedOut/confirmLogin overwrite
+    // them per-state with dark-mode-aware values.
+    var _initDark = _nolaiIsDark();
     var banner = document.createElement('div');
     banner.style.cssText = [
         'display:flex',
@@ -752,8 +1114,8 @@ function attachNextcloudSessionBanner(container, nextcloudBaseUrl, onLoggedIn) {
         'border-radius:6px',
         'font-size:13px',
         'font-family:Helvetica,Arial,sans-serif',
-        'background:#f5f5f5',
-        'border:1px solid #ddd',
+        'background:' + (_initDark ? '#2a2a2a' : '#f5f5f5'),
+        'border:1px solid ' + (_initDark ? '#555' : '#ddd'),
         'min-height:38px',
         'box-sizing:border-box',
     ].join(';');
@@ -765,19 +1127,21 @@ function attachNextcloudSessionBanner(container, nextcloudBaseUrl, onLoggedIn) {
     statusText.style.cssText = 'flex:1;';
 
     // Login button — hidden until a logged-out state is detected.
+    // Labelled "Sign in" to match the top-bar button wording.
     var loginBtn = document.createElement('button');
-    loginBtn.innerHTML = 'Connect to Nextcloud';
+    loginBtn.innerHTML = 'Sign in';
     loginBtn.style.cssText = [
-        'padding:5px 12px',
+        'padding:5px 14px',
         'background:' + nolaiColor,
         'color:#fff',
         'border:none',
-        'border-radius:4px',
+        'border-radius:12px',
         'cursor:pointer',
         'font-size:12px',
-        'font-weight:bold',
+        'font-weight:600',
         'flex-shrink:0',
         'display:none',
+        'white-space:nowrap',
     ].join(';');
 
     banner.appendChild(icon);
@@ -793,21 +1157,31 @@ function attachNextcloudSessionBanner(container, nextcloudBaseUrl, onLoggedIn) {
     }
 
     // setChecking — shown while the Login Flow v2 popup is open and polling.
+    // Background/border adapt to dark mode so the banner is legible on dark dialogs.
     function setChecking() {
-        banner.style.background = '#f5f5f5';
-        banner.style.borderColor = '#ddd';
+        var dark = _nolaiIsDark();
+        banner.style.background = dark ? '#2a2a2a' : '#f5f5f5';
+        banner.style.borderColor = dark ? '#555'    : '#ddd';
         icon.innerHTML = '⏳';
+        statusText.style.color = dark ? '#ccc' : '#444';
         statusText.innerHTML = 'Opening Nextcloud login&hellip;';
         loginBtn.style.display = 'none';
     }
 
     // setLoggedOut — shown on initial load or after a cancelled / failed login attempt.
-    // errorMsg is displayed so the user understands why the button is visible.
+    // Directs the user to the top-bar "Sign in to Nextcloud" button as the primary
+    // action; the inline sign-in button here is a convenience shortcut.
+    // Amber palette is adjusted to work on both light and dark dialog backgrounds.
     function setLoggedOut(errorMsg) {
-        banner.style.background = '#fff8e1';
-        banner.style.borderColor = '#ffb300';
+        var dark = _nolaiIsDark();
+        banner.style.background   = dark ? '#2d2100' : '#fff8e1';
+        banner.style.borderColor  = dark ? '#b36b00' : '#ffb300';
         icon.innerHTML = '⚠️';
-        statusText.innerHTML = errorMsg || 'Not connected to Nextcloud.';
+        var textColor = dark ? '#ffd54f' : '#5d4037';
+        statusText.style.color = textColor;
+        statusText.innerHTML = errorMsg
+            ? '<span style="color:' + textColor + '">' + errorMsg + '</span>'
+            : 'Not signed in to Nextcloud. Use the <strong>Sign in to Nextcloud</strong> button in the top right, or sign in below.';
         loginBtn.style.display = 'inline-block';
     }
 
@@ -827,11 +1201,17 @@ function attachNextcloudSessionBanner(container, nextcloudBaseUrl, onLoggedIn) {
         _nextcloudSessionCache.baseUrl     = nextcloudBaseUrl;
         _nextcloudSessionCache.displayName = displayName || username;
 
-        banner.style.background = '#edfaf4';
-        banner.style.borderColor = '#4caf50';
+        var dark = _nolaiIsDark();
+        banner.style.background   = dark ? '#0d2b1a' : '#edfaf4';
+        banner.style.borderColor  = dark ? '#388e3c' : '#4caf50';
         icon.innerHTML = '✅';
-        statusText.innerHTML = 'Logged in as <strong>' + (displayName || username) + '</strong>';
+        var nameColor = dark ? '#81c784' : '#2e7d32';
+        statusText.style.color = nameColor;
+        statusText.innerHTML = 'Connected as <strong>' + (displayName || username) + '</strong>';
         loginBtn.style.display = 'none';
+        // Refresh the top-bar chip immediately so the user sees their avatar/name
+        // without needing to close and reopen the dialog.
+        if (typeof _nolaiTopBarRefresh === 'function') { _nolaiTopBarRefresh(); }
         if (typeof onLoggedIn === 'function') { onLoggedIn(username, appPassword); }
     }
 
@@ -873,7 +1253,7 @@ function attachNextcloudSessionBanner(container, nextcloudBaseUrl, onLoggedIn) {
         }).catch(function(err) {
             // Re-enable the button so the user can try again without reopening the dialog.
             loginBtn.disabled = false;
-            loginBtn.innerHTML = 'Connect to Nextcloud';
+            loginBtn.innerHTML = 'Sign in';
             setLoggedOut(err.message);
         });
     });
@@ -888,7 +1268,7 @@ function attachNextcloudSessionBanner(container, nextcloudBaseUrl, onLoggedIn) {
             _nextcloudSessionCache.displayName
         );
     } else {
-        setLoggedOut('Not connected — click the button to authenticate via GoAuthentik.');
+        setLoggedOut(null); // shows the standard "not signed in" message with top-bar reference
     }
 
     // Expose state-setter functions so callers can drive the banner externally if needed.
