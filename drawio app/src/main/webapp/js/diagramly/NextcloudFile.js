@@ -21,7 +21,7 @@
 //
 // Structure: { username: string|null, password: string|null, baseUrl: string|null }
 // ====== end of changes by SE ======
-var _nextcloudSessionCache = { username: null, password: null, baseUrl: null };
+var _nextcloudSessionCache = { username: null, password: null, baseUrl: null, displayName: null };
 // ====== NOLAI - {- Backend -} /Sprint 3/ Task 151 ======
 //
 // buildNextcloudWebdavBaseContext(nextcloudUrl, username, password, remotePath)
@@ -814,18 +814,48 @@ function attachNextcloudSessionBanner(container, nextcloudBaseUrl, onLoggedIn) {
     // confirmLogin — called once Login Flow v2 resolves with credentials, or when
     // a cached session is restored on dialog open. Writes to the session cache,
     // updates the banner to its confirmed (green) state, and fires onLoggedIn.
-    function confirmLogin(username, appPassword) {
+    //
+    // WHY displayName is separate from username:
+    //   The Nextcloud Login Flow v2 returns the raw account UID as loginName, which
+    //   is a SHA-256 hash when user_oidc's unique-uid=1 is active. The OCS API
+    //   provides the human-readable display name separately. We use username for all
+    //   authentication (WebDAV, OCS) and displayName only for the UI label.
+    function confirmLogin(username, appPassword, displayName) {
         // Persist credentials so subsequent dialog opens skip the login popup.
-        _nextcloudSessionCache.username = username;
-        _nextcloudSessionCache.password = appPassword;
-        _nextcloudSessionCache.baseUrl  = nextcloudBaseUrl;
+        _nextcloudSessionCache.username    = username;
+        _nextcloudSessionCache.password    = appPassword;
+        _nextcloudSessionCache.baseUrl     = nextcloudBaseUrl;
+        _nextcloudSessionCache.displayName = displayName || username;
 
         banner.style.background = '#edfaf4';
         banner.style.borderColor = '#4caf50';
         icon.innerHTML = '✅';
-        statusText.innerHTML = 'Logged in as <strong>' + username + '</strong>';
+        statusText.innerHTML = 'Logged in as <strong>' + (displayName || username) + '</strong>';
         loginBtn.style.display = 'none';
         if (typeof onLoggedIn === 'function') { onLoggedIn(username, appPassword); }
+    }
+
+    // fetchDisplayName — fetches the human-readable display name for the
+    // authenticated user from Nextcloud's OCS API.
+    //
+    // WHY fetch after login rather than using the loginName directly:
+    //   Login Flow v2 only returns loginName (the account UID) and appPassword.
+    //   The display name is a separate field in Nextcloud's user record and must
+    //   be retrieved via /ocs/v2.php/cloud/user using the new app credentials.
+    function fetchDisplayName(username, appPassword) {
+        return fetch(nextcloudBaseUrl + '/ocs/v2.php/cloud/user?format=json', {
+            headers: {
+                'Authorization': 'Basic ' + btoa(username + ':' + appPassword),
+                'OCS-APIRequest': 'true'
+            }
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            return (data.ocs && data.ocs.data && data.ocs.data.displayname)
+                ? data.ocs.data.displayname
+                : username;
+        })
+        .catch(function() { return username; });
     }
 
     // Login button starts the Login Flow v2 popup.
@@ -835,7 +865,11 @@ function attachNextcloudSessionBanner(container, nextcloudBaseUrl, onLoggedIn) {
         setChecking();
 
         openNextcloudLoginPopup(nextcloudBaseUrl).then(function(creds) {
-            confirmLogin(creds.username, creds.appPassword);
+            // Fetch the display name before confirming so the banner shows the
+            // human-readable name rather than the raw account UID.
+            fetchDisplayName(creds.username, creds.appPassword).then(function(displayName) {
+                confirmLogin(creds.username, creds.appPassword, displayName);
+            });
         }).catch(function(err) {
             // Re-enable the button so the user can try again without reopening the dialog.
             loginBtn.disabled = false;
@@ -848,7 +882,11 @@ function attachNextcloudSessionBanner(container, nextcloudBaseUrl, onLoggedIn) {
     // dialog in this browser session — no popup required. Otherwise show the
     // Connect button so the user can authenticate for the first time.
     if (_nextcloudSessionCache.username && _nextcloudSessionCache.password) {
-        confirmLogin(_nextcloudSessionCache.username, _nextcloudSessionCache.password);
+        confirmLogin(
+            _nextcloudSessionCache.username,
+            _nextcloudSessionCache.password,
+            _nextcloudSessionCache.displayName
+        );
     } else {
         setLoggedOut('Not connected — click the button to authenticate via GoAuthentik.');
     }

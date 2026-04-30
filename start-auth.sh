@@ -189,7 +189,6 @@ echo "[4/7] Bootstrapping goauthentik OAuth2 provider..."
 # The script runs on the host machine. goauthentik is reachable at
 # localhost:9000 via the port mapping in docker-compose.auth.yml.
 API="http://localhost:9000/api/v3"
-AUTH="-H \"Authorization: Bearer ${AUTHENTIK_BOOTSTRAP_TOKEN}\""
 
 # Helper: make an authenticated GET request
 ak_get() {
@@ -247,10 +246,34 @@ if [ -z "$SIGNING_KEY_PK" ]; then
     exit 1
 fi
 
-# -- 5b. Create the OAuth2 provider (skip if already exists) --
+# -- 5b. Create the OAuth2 provider --
 # The redirect URI must match the URL Nextcloud sends the browser to after
 # the user logs in. Nextcloud's user_oidc app always uses /apps/user_oidc/code.
+#
+# WHY delete-then-create instead of create-or-skip:
+#   goauthentik 2026.x treats sub_mode as immutable after provider creation.
+#   A PATCH or a POST-with-fallback-to-GET would leave an existing provider
+#   with sub_mode=hashed_user_id intact, causing Nextcloud to receive a
+#   SHA-256 hash as the username instead of 'akadmin'. Deleting the provider
+#   first guarantees every run starts from a known-good state.
+#   New CLIENT_ID/SECRET are generated and written back to .env automatically.
 REDIRECT_URI="https://localhost/apps/user_oidc/code"
+
+# Delete the application before the provider — the application holds a
+# foreign-key reference to the provider and must be removed first.
+curl -sf -X DELETE \
+    -H "Authorization: Bearer ${AUTHENTIK_BOOTSTRAP_TOKEN}" \
+    "${API}/core/applications/nextcloud/" >/dev/null 2>&1 || true
+
+# Delete the provider if it already exists.
+EXISTING_PROVIDER_PK=$(ak_get "/providers/oauth2/?name=Nextcloud" \
+    | jq -r '.results[0].pk // empty')
+if [ -n "$EXISTING_PROVIDER_PK" ]; then
+    curl -sf -X DELETE \
+        -H "Authorization: Bearer ${AUTHENTIK_BOOTSTRAP_TOKEN}" \
+        "${API}/providers/oauth2/${EXISTING_PROVIDER_PK}/" >/dev/null
+    echo "  Removed existing provider (pk: ${EXISTING_PROVIDER_PK})"
+fi
 
 PROVIDER_JSON=$(ak_post "/providers/oauth2/" "$(cat <<EOF
 {
@@ -264,22 +287,30 @@ PROVIDER_JSON=$(ak_post "/providers/oauth2/" "$(cat <<EOF
   "include_claims_in_id_token": true
 }
 EOF
-)" 2>/dev/null \
-    || ak_get "/providers/oauth2/?name=Nextcloud" | jq -r '.results[0]')
+)")
 
-PROVIDER_PK=$(echo "$PROVIDER_JSON"     | jq -r '.pk     // empty')
-CLIENT_ID=$(echo "$PROVIDER_JSON"       | jq -r '.client_id     // empty')
-CLIENT_SECRET=$(echo "$PROVIDER_JSON"   | jq -r '.client_secret // empty')
+PROVIDER_PK=$(echo "$PROVIDER_JSON"   | jq -r '.pk          // empty')
+CLIENT_ID=$(echo "$PROVIDER_JSON"     | jq -r '.client_id   // empty')
+CLIENT_SECRET=$(echo "$PROVIDER_JSON" | jq -r '.client_secret // empty')
 
 if [ -z "$PROVIDER_PK" ]; then
     echo ""
-    echo "ERROR: Failed to create or retrieve the OAuth2 provider."
+    echo "ERROR: Failed to create the OAuth2 provider."
     echo "       Check goauthentik logs: $DC logs authentik-server"
     exit 1
 fi
-echo "  OAuth2 provider created (pk: ${PROVIDER_PK})"
 
-# -- 5c. Create the goauthentik Application (skip if already exists) --
+# Verify sub_mode was applied correctly. This is printed every run so it
+# is easy to confirm the provider is configured as expected.
+ACTUAL_SUB_MODE=$(ak_get "/providers/oauth2/${PROVIDER_PK}/" | jq -r '.sub_mode')
+echo "  OAuth2 provider created (pk: ${PROVIDER_PK}, sub_mode: ${ACTUAL_SUB_MODE})"
+if [ "$ACTUAL_SUB_MODE" != "user_username" ]; then
+    echo ""
+    echo "WARNING: sub_mode is '${ACTUAL_SUB_MODE}', expected 'user_username'."
+    echo "         Nextcloud will receive a hash instead of the username."
+fi
+
+# -- 5c. Create the goauthentik Application --
 # The 'slug' becomes part of the OIDC discovery URL:
 #   http://authentik-server:9000/application/o/<slug>/
 # It must match the slug in OIDC_PROVIDER_URL in docker-compose.auth.yml.
@@ -290,14 +321,12 @@ ak_post "/core/applications/" "$(cat <<EOF
   "provider": ${PROVIDER_PK}
 }
 EOF
-)" >/dev/null 2>&1 || true
-# ↑ 'true' silences the error if the application already exists (duplicate slug).
-
+)" >/dev/null
 echo "  goauthentik application 'nextcloud' created."
 
 # -- 5d. Write credentials back to .env --
-# start-auth.sh generated these automatically; store them so subsequent
-# runs (and the Nextcloud occ step below) always use the same values.
+# Store the credentials generated above so subsequent runs and the
+# Nextcloud occ step below always use the same values.
 update_env_var() {
     local key="$1"
     local value="$2"
@@ -344,21 +373,36 @@ $OCC app:enable  user_oidc
 
 # Register the goauthentik provider.
 #
-# --unique-uid=1 + --mapping-uid=preferred_username:
-#   Uses the goauthentik username as the Nextcloud account name.
-#   Without these flags, Nextcloud derives the username from the 'sub' claim
-#   (a random hash), which creates new accounts on every login.
+# --unique-uid=1:
+#   Derive the Nextcloud account identifier by hashing the mapped claim
+#   with SHA-256. This is required for the Login Flow v2 (used by the
+#   Draw.io integration) to complete correctly — user_oidc 7.5 has a bug
+#   where unique-uid=0 leaves the user empty in the Login Flow v2 session,
+#   causing a "State token does not match" error after authentication.
+#
+# --mapping-uid=sub:
+#   The OIDC 'sub' claim is used as the input to the unique-uid hash.
+#   Because the goauthentik provider is created with sub_mode=user_username,
+#   'sub' is set to the authentik username (e.g. 'akadmin') rather than the
+#   default per-application SHA-256 hash. The resulting Nextcloud UID is a
+#   stable hash of 'akadmin' — opaque internally but consistent across logins.
+#
+# --mapping-display-name=sub:
+#   Maps the same 'sub' claim (value: 'akadmin') to the Nextcloud display
+#   name shown in the UI. This makes the user-visible name human-readable
+#   while the internal UID remains the hash required by unique-uid=1.
 #
 # --discoveryuri:
 #   Full URL to the OIDC discovery document (user_oidc 7.5+ requires the
-#   complete /.well-known/openid-configuration path, not just the issuer base).
-#   Nextcloud fetches this server-side via Docker DNS.
+#   complete /.well-known/openid-configuration path, not just the issuer
+#   base). Nextcloud fetches this server-side via Docker DNS.
 $OCC user_oidc:provider goauthentik \
     --clientid="${CLIENT_ID}" \
     --clientsecret="${CLIENT_SECRET}" \
     --discoveryuri="http://authentik-server:9000/application/o/nextcloud/.well-known/openid-configuration" \
     --unique-uid=1 \
-    --mapping-uid=sub
+    --mapping-uid=sub \
+    --mapping-display-name=sub
 
 # Disable Nextcloud's built-in password login so all users must go through
 # goauthentik SSO. Comment this line out temporarily if you need direct
@@ -375,7 +419,7 @@ echo "[6/7] Running standard post-start steps..."
 docker exec --user www-data nextcloud-main php occ app:enable drawio || \
     echo "  (drawio app already enabled or not available — skipping)"
 
-echo "Extracting Caddy root certificate to caddy-root.crt..."
+echo "  Extracting Caddy root certificate to caddy-root.crt..."
 CADDY_CONTAINER=$($DC ps -q caddy)
 docker cp "${CADDY_CONTAINER}:/data/caddy/pki/authorities/local/root.crt" ./caddy-root.crt
 echo "  Certificate saved to: $(pwd)/caddy-root.crt"
