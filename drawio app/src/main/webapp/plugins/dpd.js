@@ -1009,6 +1009,57 @@ Draw.loadPlugin(function (ui) {
   }
 
   const violationHighlightedEdges = new Map();
+
+  // Keeps track of violation messages for hover tooltip
+  const cellViolationMessages = new Map();
+
+  // Stores violation message to every part of the shape
+  function storeCellTooltip(cell, line) {
+    if (!cell) return;
+    if (!cellViolationMessages.has(cell)) cellViolationMessages.set(cell, []);
+    if (cellViolationMessages.get(cell).indexOf(line) === -1) {
+      cellViolationMessages.get(cell).push(line);
+    }
+    var n = model.getChildCount(cell);
+    for (var i = 0; i < n; i++) {
+      storeCellTooltip(model.getChildAt(cell, i), line);
+    }
+  }
+
+  // Walk up the hierarchy to find the attribute
+  function getRootComponentCell(cell) {
+    var rootComponent = cell;
+    var current = cell;
+    while (current) {
+      var value = model.getValue(current);
+      if (value && typeof value.getAttribute === 'function') {
+        var dt = value.getAttribute('data-type');
+        if (dt && COMPONENT_TYPES.indexOf(dt) !== -1) {
+          rootComponent = current;
+        }
+      }
+      var parent = model.getParent(current);
+      if (!parent || parent.id === '1' || parent.id === '0') break;
+      current = parent;
+    }
+    return rootComponent;
+  }
+
+  // Hovering over a highlighted arrow or nodeshows the message tooltip
+  const originalGetTooltip = typeof graph.getTooltip === 'function'
+    ? graph.getTooltip.bind(graph)
+    : null;
+
+  graph.getTooltip = function (state, node, x, y) {
+    if (state && state.cell) {
+      const msgs = cellViolationMessages.get(state.cell);
+      if (msgs && msgs.length > 0) {
+        return msgs.join('\n');
+      }
+    }
+    return originalGetTooltip ? originalGetTooltip(state, node, x, y) : null;
+  };
+
   let lastViolations = [];
   let highlightsVisible = false;
 
@@ -1040,6 +1091,8 @@ Draw.loadPlugin(function (ui) {
       model.endUpdate();
     }
     violationHighlightedEdges.clear();
+    // Clear hover tooltips when highlights are removed
+    cellViolationMessages.clear();
   }
 
   function highlightViolations(violations) {
@@ -1058,8 +1111,12 @@ Draw.loadPlugin(function (ui) {
       return graph.getModel().getCell(ref);
     }
 
+    cellViolationMessages.clear();
+
     violations.forEach(function (v, i) {
       const idx = i + 1;
+      const icon = v.severity === 'error' ? '✗' : '⚠';
+      const line = icon + ' ' + v.rule + ': ' + v.msg;
 
       if (v.edge) {
         if (!edgeViolationMap.has(v.edge)) {
@@ -1068,6 +1125,10 @@ Draw.loadPlugin(function (ui) {
         var entry = edgeViolationMap.get(v.edge);
         addIndex(entry, idx);
         if (v.severity === 'error') entry.hasError = true;
+
+        // Tooltip message for edge
+        storeCellTooltip(v.edge, line);
+
       } else if (v.vertex) {
         const vertexCell = resolveCellRef(v.vertex);
         if (vertexCell) {
@@ -1077,6 +1138,9 @@ Draw.loadPlugin(function (ui) {
           var vEntry = vertexViolationMap.get(vertexCell);
           addIndex(vEntry, idx);
           if (v.severity === 'error') vEntry.hasError = true;
+
+          // Tooltip message for vertex
+          storeCellTooltip(getRootComponentCell(vertexCell), line);
         }
       }
     });
