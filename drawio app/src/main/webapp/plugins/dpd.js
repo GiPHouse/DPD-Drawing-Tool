@@ -1158,7 +1158,6 @@ Draw.loadPlugin(function (ui) {
 
         // Tooltip message for edge
         storeCellTooltip(v.edge, line);
-
       } else if (v.vertex) {
         const vertexCell = resolveCellRef(v.vertex);
         if (vertexCell) {
@@ -1172,17 +1171,11 @@ Draw.loadPlugin(function (ui) {
           // Tooltip message for vertex
           storeCellTooltip(getRootComponentCell(vertexCell), line);
         }
-    violations.forEach(function(v, i) {
-      if (!v.edge) return;
-      if (!edgeViolationMap.has(v.edge)) {
-        edgeViolationMap.set(v.edge, { indices: [], hasError: false });
       }
-      var entry = edgeViolationMap.get(v.edge);
-      entry.indices.push(i + 1);
-      if (v.severity === 'error') entry.hasError = true;
     });
 
-    if (edgeViolationMap.size === 0) return;
+    if (edgeViolationMap.size === 0 && vertexViolationMap.size === 0) return;
+
 
     model.beginUpdate();
     try {
