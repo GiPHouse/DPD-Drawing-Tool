@@ -6321,35 +6321,39 @@ App.prototype.updateButtonContainer = function()
 				this.commentButton.style.display = (this.commentsSupported()) ? '' : 'none';
 			}
 
-			// Share
-			if (this.shareButton == null)
+			// ======	NOLAI - {"Frontend"} /Sprint 3/ Task 151	=====
+			//
+			// Top-bar Nextcloud authentication widget.
+			// attachNextcloudTopBarButton renders a professional pill/chip that shows:
+			//   • A "Sign in to Nextcloud" pill button when the user is not authenticated.
+			//   • A rounded chip with the Nextcloud avatar + display name after login.
+			// The widget registers _nolaiTopBarRefresh so Save/Load dialog sign-in
+			// buttons can update it in real time without a page reload.
+			//
+			// WHY we switched from attachNextcloudSessionBanner:
+			//   The session banner was designed for dialog containers (full-width,
+			//   multi-state row). The top bar needs a compact, self-contained widget
+			//   that blends with the other icon buttons and shows user identity clearly.
+
+			if (this.loginButton == null)
 			{
-				this.shareButton = document.createElement('button');
-				this.shareButton.className = 'geBtn gePrimaryBtn';
+				var nextcloudBaseUrl = 'https://localhost';
 
-				var label = document.createElement('div');
-				label.className = 'geButton';
-				label.style.backgroundImage = 'url(' + Editor.groupImage + ')';
-				this.shareButton.appendChild(label);
+				this.loginButton = document.createElement('div');
 
-				this.dependsOnLanguage(mxUtils.bind(this, function()
+				if (typeof attachNextcloudTopBarButton === 'function')
 				{
-					label.innerHTML = '';
-					mxUtils.write(label, mxResources.get('share'));
-					this.shareButton.setAttribute('title', mxResources.get('share'));
-				}));
-				
-				mxEvent.addListener(this.shareButton, 'click', mxUtils.bind(this, function()
-				{
-					this.actions.get('share').funct();
-				}));
-				
-				this.buttonContainer.appendChild(this.shareButton);
+					attachNextcloudTopBarButton(this.loginButton, nextcloudBaseUrl, null);
+				}
+
+				this.buttonContainer.appendChild(this.loginButton);
 			}
 
-			this.shareButton.style.display = (file != null &&
+			this.loginButton.style.display = (file != null &&
 				Editor.currentTheme == 'kennedy' &&
 				urlParams['embed'] != '1') ? '' : 'none';
+
+			// ====== end of changes by SE	======
 			
 			// User
 			if (Editor.currentTheme != 'simple')
