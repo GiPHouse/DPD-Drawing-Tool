@@ -882,67 +882,127 @@
 			title.style.cssText = 'margin: 0 0 15px 0; color: ' + nolaiColor + '; font-size: 18px; border-bottom: 2px solid ' + nolaiColor + '; padding-bottom: 10px;';
 			div.appendChild(title);
 
-			function createField(label, type, defaultValue, placeholder)
-			{
-				var group = document.createElement('div');
-				group.style.marginBottom = '12px';
+			// ====== NOLAI - {- Backend -} /Sprint 3/ Task 151 ======
+			// Nextcloud base URL — WebDAV paths are built from this + the uid returned by the banner.
+			var nextcloudBaseUrl = 'https://localhost';
+			var nextcloudUsername = null; // uid, populated by the session banner on connect
+			var nextcloudPassword = null; // app password for WebDAV Basic Auth, also from banner
 
-				var lbl = document.createElement('label');
-				lbl.innerHTML = label;
-				lbl.style.cssText = 'display: block; font-size: 12px; font-weight: bold; margin-bottom: 4px; color: #666;';
-
-				var input = document.createElement('input');
-				input.type = type;
-				input.value = defaultValue;
-				input.placeholder = placeholder || '';
-				input.style.cssText = 'width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; outline: none; font-size: 14px;';
-
-				input.onfocus = function()
-				{
-					this.style.borderColor = nolaiColor;
-					this.style.boxShadow = '0 0 3px ' + nolaiColor;
-				};
-
-				input.onblur = function()
-				{
-					this.style.borderColor = '#ccc';
-					this.style.boxShadow = 'none';
-				};
-
-				group.appendChild(lbl);
-				group.appendChild(input);
-				div.appendChild(group);
-				return input;
+			// Attach the session banner. It restores a cached session immediately if one
+			// exists, or shows a "Connect to Nextcloud" button for first-time login.
+			if (typeof attachNextcloudSessionBanner === 'function') {
+				attachNextcloudSessionBanner(div, nextcloudBaseUrl, function(username, appPassword) {
+					nextcloudUsername = username;
+					nextcloudPassword = appPassword;
+				});
 			}
-			
-			// Server URL includes the username — the WebDAV functions extract it automatically.
-			// Authentication uses the active session cookie; no password required.
-			var urlInput = createField('Server URL', 'text', 'https://localhost/remote.php/dav/files/akadmin/', 'WebDAV URL');
+			// ====== end of changes by SE ======
 
-			// Ensure filename always ends with .drawio
-			if (!filename.endsWith('.drawio')) { filename += '.drawio'; }
-			var filenameInput = createField('Filename', 'text', filename, 'file.drawio');
+			// ====== NOLAI - {- Frontend -} /Sprint 3/ Task 151 ======
+			// Filename input: the base name is editable; '.drawio' is a read-only greyed suffix.
+			// WHY split display rather than a single editable field:
+			//   Appending '.drawio' inside the input value looks editable and users tend to
+			//   delete or change it. Rendering the extension as a separate locked suffix makes
+			//   it visually clear that the extension is fixed, matching common IDE conventions.
+			var baseFilename = filename.endsWith('.drawio') ? filename.slice(0, -7) : filename;
+
+			var filenameGroup = document.createElement('div');
+			filenameGroup.style.marginBottom = '12px';
+
+			var filenameLbl = document.createElement('label');
+			filenameLbl.innerHTML = 'Filename';
+			filenameLbl.style.cssText = 'display:block; font-size:12px; font-weight:bold; margin-bottom:4px; color:#666;';
+
+			// Wrapper that visually looks like one input field.
+			var filenameWrapper = document.createElement('div');
+			filenameWrapper.style.cssText = [
+				'display:flex',
+				'align-items:stretch',
+				'border:1px solid #ccc',
+				'border-radius:4px',
+				'overflow:hidden',
+				'font-size:14px',
+				'box-sizing:border-box',
+			].join(';');
+
+			var filenameInput = document.createElement('input');
+			filenameInput.type = 'text';
+			filenameInput.value = baseFilename;
+			filenameInput.placeholder = 'my-diagram';
+			filenameInput.style.cssText = [
+				'flex:1',
+				'padding:8px',
+				'border:none',
+				'outline:none',
+				'font-size:14px',
+				'background:transparent',
+				'min-width:0',
+			].join(';');
+
+			// Highlight the wrapper border on focus, matching the createField behaviour.
+			filenameInput.addEventListener('focus', function() {
+				filenameWrapper.style.borderColor = nolaiColor;
+				filenameWrapper.style.boxShadow = '0 0 3px ' + nolaiColor;
+			});
+			filenameInput.addEventListener('blur', function() {
+				filenameWrapper.style.borderColor = '#ccc';
+				filenameWrapper.style.boxShadow = 'none';
+			});
+
+			var filenameSuffix = document.createElement('span');
+			filenameSuffix.innerHTML = '.drawio';
+			filenameSuffix.style.cssText = [
+				'padding:8px 10px',
+				'background:#f0f0f0',
+				'color:#999',
+				'font-size:14px',
+				'border-left:1px solid #ccc',
+				'user-select:none',
+				'flex-shrink:0',
+				'display:flex',
+				'align-items:center',
+			].join(';');
+
+			filenameWrapper.appendChild(filenameInput);
+			filenameWrapper.appendChild(filenameSuffix);
+			filenameGroup.appendChild(filenameLbl);
+			filenameGroup.appendChild(filenameWrapper);
+			div.appendChild(filenameGroup);
+			// ====== end of changes by SE ======
 
 			// Dialog logic
 			var dlg = new CustomDialog(editorUi, div, function()
 			{
-				var url = urlInput.value.trim();
+				// Build the WebDAV URL from the base URL and the username detected by the banner.
+				if (!nextcloudUsername) {
+					editorUi.handleError({message: 'Please log in to Nextcloud before saving.'});
+					return;
+				}
+				var url = nextcloudBaseUrl + '/remote.php/dav/files/' + encodeURIComponent(nextcloudUsername) + '/';
 
-				var fname = filenameInput.value.trim();
-				// Force .drawio extension
-				if (!fname.endsWith('.drawio')) { fname += '.drawio'; }
+				// ====== NOLAI - {- Frontend -} /Sprint 3/ Task 151 ======
+				// Build the full filename from the base-name input + forced extension.
+				var baseVal = filenameInput.value.trim().replace(/\.drawio$/i, '');
+				if (!baseVal) {
+					editorUi.handleError({message: 'Please enter a filename.'});
+					return;
+				}
+				var fname = baseVal + '.drawio';
+				// ====== end of changes by SE ======
 
 				if (typeof saveDrawIOToNextcloudXML === 'function')
 				{
 					editorUi.spinner.spin(document.body, 'Saving to Nextcloud...');
 
-					// Username extracted from URL; null password — session cookie authenticates.
-					saveDrawIOToNextcloudXML(fname, xmlContent, url, null, null, '/').then(function(success)
+					// App password used for Basic Auth; session cookie deliberately omitted (see buildNextcloudWebdavBaseContext).
+					saveDrawIOToNextcloudXML(fname, xmlContent, url, null, nextcloudPassword, '/').then(function(success)
 					{
 						editorUi.spinner.stop();
 						if (success)
 						{
 							editorUi.editor.setStatus('Saved to Nextcloud successfully');
+							// Update the title bar overlay to reflect the saved filename.
+							if (typeof updateNolaiFileTitle === 'function') { updateNolaiFileTitle(fname); }
 						}
 						else
 						{
@@ -975,61 +1035,22 @@
 		{
 			var nolaiColor = '#008f89';
 
-			// Main container for dialog UI
-			var div = document.createElement('div');
-			div.style.cssText = 'padding: 20px; font-family: Helvetica, Arial, sans-serif; color: #333;';
+			// ====== NOLAI - {- Backend -} /Sprint 3/ Task 151 ======
+			// Nextcloud base URL — WebDAV paths are built from this + the uid returned by the banner.
+			var nextcloudBaseUrl = 'https://localhost';
+			var nextcloudUsername = null; // uid, populated by the session banner on connect
+			var nextcloudPassword = null; // app password for WebDAV Basic Auth, also from banner
 
-			// The title for the dialog
-			var title = document.createElement('h2');
-			title.innerHTML = 'Load diagram from Nextcloud';
-			title.style.cssText = 'margin: 0 0 15px 0; color: ' + nolaiColor + '; font-size: 18px; border-bottom: 2px solid ' + nolaiColor + '; padding-bottom: 10px;';
-			div.appendChild(title);
-
-			// Helper function to create a labeled input field
-			function createField(label, type, defaultValue, placeholder)
+			/**
+			 * Fetches all .drawio files from Nextcloud via WebDAV and opens the
+			 * file-picker dialog. Called automatically once the session banner
+			 * confirms credentials are available — no button click required.
+			 */
+			var fetchNextcloudFiles = function()
 			{
-				var group = document.createElement('div');
-				group.style.marginBottom = '12px';
+				var url = nextcloudBaseUrl + '/remote.php/dav/files/' + encodeURIComponent(nextcloudUsername) + '/';
 
-				var lbl = document.createElement('label');
-				lbl.innerHTML = label;
-				lbl.style.cssText = 'display: block; font-size: 12px; font-weight: bold; margin-bottom: 4px; color: #666;';
-
-				var input = document.createElement('input');
-				input.type = type;
-				input.value = defaultValue;
-				input.placeholder = placeholder || '';
-				input.style.cssText = 'width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; outline: none; font-size: 14px;';
-
-				input.onfocus = function()
-				{
-					this.style.borderColor = nolaiColor;
-					this.style.boxShadow = '0 0 3px ' + nolaiColor; 
-				};
-
-				input.onblur = function()
-				{
-					this.style.borderColor = '#ccc';
-					this.style.boxShadow = 'none'
-				};
-
-				group.appendChild(lbl);
-				group.appendChild(input);
-				div.appendChild(group);
-				return input
-			}
-
-			// Server URL includes the username — the WebDAV functions extract it automatically.
-			// Authentication uses the active session cookie; no password required.
-			var urlInput = createField('Server URL', 'text', 'https://localhost/remote.php/dav/files/akadmin/', 'WebDAV URL');
-
-			// When user confirms: fetch all .drawio files from Nextcloud.
-			var dlg = new CustomDialog(editorUi, div, function()
-			{
-				var url = urlInput.value.trim();
-				// null password — session cookie authenticates all WebDAV requests.
-
-				// Check if Nextcloud helper functions are loaded.
+				// Guard: verify all helper functions are present before proceeding.
 				if (typeof listDrawIOFilesInNextcloud !== 'function' || typeof getDrawIOFromNextcloudXML !== 'function' || typeof deleteFileInNextcloud !== 'function')
 				{
 					editorUi.handleError({message: 'NextcloudFile.js is not loaded'});
@@ -1038,18 +1059,18 @@
 
 				editorUi.spinner.spin(document.body, 'Loading file list from Nextcloud...');
 
-				listDrawIOFilesInNextcloud(url, null, null, '/').then(function(files)
+				listDrawIOFilesInNextcloud(url, null, nextcloudPassword, '/').then(function(files)
 				{
 					editorUi.spinner.stop();
 
-					// Stop if no matching draw.io files were found.
+					// Abort if no .drawio files were found.
 					if (files == null || files.length === 0)
 					{
 						editorUi.handleError({message: 'No .drawio files found in Nextcloud.'});
 						return;
 					}
 
-					// Build second UI containing selectable file list.
+					// Build the file-picker dialog.
 					var listDiv = document.createElement('div');
 					listDiv.style.cssText = 'padding: 20px; font-family: Helvetica, Arial, sans-serif;';
 
@@ -1062,7 +1083,7 @@
 					select.style.cssText = 'width: 100%; height: 220px; padding: 5px;';
 					select.size = 12;
 
-					// List all file options
+					// Populate the list with all discovered .drawio files.
 					files.forEach(function(file, i)
 					{
 						var option = document.createElement('option');
@@ -1073,6 +1094,10 @@
 
 					listDiv.appendChild(select);
 
+					/**
+					 * Loads the currently selected file into the editor.
+					 * Prompts the user to confirm if there are unsaved local changes.
+					 */
 					var loadSelected = function()
 					{
 						if (select.selectedIndex < 0)
@@ -1082,13 +1107,13 @@
 						}
 
 						var selected = files[parseInt(select.value, 10)];
-						
-						// Performs actual fetch+load into current editor state.
+
+						// Performs the actual WebDAV fetch and loads the XML into the editor.
 						var performLoad = function()
 						{
 							editorUi.spinner.spin(document.body, 'Loading file from Nextcloud...');
 
-							getDrawIOFromNextcloudXML(selected.name, url, null, null, selected.remotePath).then(function(xml)
+							getDrawIOFromNextcloudXML(selected.name, url, null, nextcloudPassword, selected.remotePath).then(function(xml)
 							{
 								editorUi.spinner.stop();
 
@@ -1100,19 +1125,12 @@
 
 								try
 								{
-									// Load XML as a fresh document and clear modified flag.
+									// Load XML as a fresh document and clear the modified flag.
 									editorUi.fileLoaded(new LocalFile(editorUi, xml, selected.name, true), true);
 									editorUi.editor.modified = false;
 									editorUi.editor.setStatus('Loaded from Nextcloud successfully');
-
-									// Re-run DPD validation after model has fully settled
-									setTimeout(function()
-									{
-										if (typeof editorUi._dpdValidate === 'function')
-										{
-											editorUi._dpdValidate();
-										}
-									}, 900);
+									// Update the title bar overlay to reflect the loaded filename.
+									if (typeof updateNolaiFileTitle === 'function') { updateNolaiFileTitle(selected.name); }
 								}
 								catch (e)
 								{
@@ -1125,7 +1143,7 @@
 							});
 						};
 
-						// Protect unsaved local changes before replacing current diagram.
+						// Warn about unsaved changes before replacing the current diagram.
 						if (editorUi.editor.modified)
 						{
 							editorUi.confirm(mxResources.get('allChangesLost'), null, performLoad,
@@ -1139,6 +1157,10 @@
 
 					// ======	NOLAI - {- Backend -} /Sprint 2/ Task 117	=====
 					// ======	NOLAI - {- Frontend -} /Sprint 2/ Task 108	=====
+					/**
+					 * Deletes the currently selected file from Nextcloud after confirmation.
+					 * Removes the entry from the list on success; closes the dialog if the list is empty.
+					 */
 					var deleteSelected = function()
 					{
 						if (select.selectedIndex < 0)
@@ -1153,7 +1175,7 @@
 						{
 							editorUi.spinner.spin(document.body, 'Deleting file from Nextcloud...');
 
-							deleteFileInNextcloud(url, null, null, selected.remotePath, selected.name).then(function(success)
+							deleteFileInNextcloud(url, null, nextcloudPassword, selected.remotePath, selected.name).then(function(success)
 							{
 								editorUi.spinner.stop();
 
@@ -1163,6 +1185,7 @@
 									return;
 								}
 
+								// Remove the deleted entry from both the data array and the UI list.
 								files.splice(select.selectedIndex, 1);
 								select.remove(select.selectedIndex);
 
@@ -1173,6 +1196,7 @@
 									return;
 								}
 
+								// Keep the selection valid after removal.
 								if (select.selectedIndex < 0)
 								{
 									select.selectedIndex = 0;
@@ -1194,15 +1218,15 @@
 					deleteBtn.innerHTML = 'Delete';
 					deleteBtn.style.cssText = 'padding: 8px 12px; border: none; border-radius: 4px; background-color: #e74c3c; color: white; cursor: pointer;';
 					deleteBtn.onclick = deleteSelected;
-					deleteBtn.onmouseover = function() { this.style.opacity = '0.85';};
-					deleteBtn.onmouseout = function() { this.style.opacity = '1';};
+					deleteBtn.onmouseover = function() { this.style.opacity = '0.85'; };
+					deleteBtn.onmouseout = function() { this.style.opacity = '1'; };
 
 					buttonRow.appendChild(deleteBtn);
 					listDiv.appendChild(buttonRow);
 
 					var listDlg = new CustomDialog(editorUi, listDiv, loadSelected);
 
-					// Add OK-button to load the diagram selected
+					// Style the OK button for loading the selected diagram.
 					listDlg.okButton.innerHTML = 'Load Diagram';
 					listDlg.okButton.style.backgroundColor = nolaiColor;
 					listDlg.okButton.style.color = '#fff';
@@ -1215,16 +1239,52 @@
 					editorUi.spinner.stop();
 					editorUi.handleError({message: 'Error loading file list: ' + error.message});
 				});
+			};
+
+			// Container for the session banner — only shown when the user is not yet logged in.
+			var bannerDiv = document.createElement('div');
+			bannerDiv.style.cssText = 'padding: 20px; font-family: Helvetica, Arial, sans-serif; color: #333;';
+
+			var bannerTitle = document.createElement('h2');
+			bannerTitle.innerHTML = 'Load diagram from Nextcloud';
+			bannerTitle.style.cssText = 'margin: 0 0 15px 0; color: ' + nolaiColor + '; font-size: 18px; border-bottom: 2px solid ' + nolaiColor + '; padding-bottom: 10px;';
+			bannerDiv.appendChild(bannerTitle);
+
+			if (typeof attachNextcloudSessionBanner !== 'function')
+			{
+				editorUi.handleError({message: 'Nextcloud session banner is not available.'});
+				return;
+			}
+
+			// Track whether the banner callback fired synchronously (i.e., user already
+			// has a cached session). This avoids showing the login dialog unnecessarily.
+			var sessionReady = false;
+
+			// Attach the session banner. The callback fires immediately for cached sessions
+			// or after the user completes login. Either way, fetchNextcloudFiles() is called
+			// automatically — no "Fetch Files" button click required.
+			attachNextcloudSessionBanner(bannerDiv, nextcloudBaseUrl, function(username, appPassword)
+			{
+				nextcloudUsername = username;
+				nextcloudPassword = appPassword;
+				sessionReady = true;
+				// Close the login dialog if it is currently open, then start fetching.
+				editorUi.hideDialog();
+				fetchNextcloudFiles();
 			});
 
-			// Add OK-button to show all saved files
-			dlg.okButton.innerHTML = 'Fetch Files';
-			dlg.okButton.style.backgroundColor = nolaiColor;
-			dlg.okButton.style.color = '#fff';
-			dlg.okButton.style.backgroundImage = 'none';
+			// Only show the login dialog if credentials were not already available
+			// synchronously (i.e., the user still needs to authenticate).
+			if (!sessionReady)
+			{
+				var loginDlg = new CustomDialog(editorUi, bannerDiv, null);
 
-			editorUi.showDialog(dlg.container, 450, 240, true, true);
-			urlInput.focus();
+				// Hide the OK button — the fetch is triggered automatically by the
+				// session banner callback once the user authenticates.
+				loginDlg.okButton.style.display = 'none';
+
+				editorUi.showDialog(loginDlg.container, 450, 240, true, true);
+			}
 		});
 
 		// ====== end of changes by SE	======
@@ -3593,37 +3653,83 @@
 				}
 				else
 				{
-					var filename = (file.getTitle() != null) ? file.getTitle() : this.editorUi.defaultFilename;
-					
-					var dlg = new FilenameDialog(this.editorUi, filename, mxResources.get('rename'), mxUtils.bind(this, function(title)
+					// ====== NOLAI - {- Frontend -} /Sprint 3/ Task 151 ======
+					// Custom rename dialog — replaces FilenameDialog with a split-input layout so
+					// the .drawio extension is greyed out and non-editable, matching the save dialog.
+					// ====== end of changes by SE ======
+					var currentTitle = (file.getTitle() != null) ? file.getTitle() : this.editorUi.defaultFilename;
+					var currentBase  = currentTitle.endsWith('.drawio') ? currentTitle.slice(0, -7) : currentTitle;
+					var self = this;
+
+					var renameDiv = document.createElement('div');
+					renameDiv.style.cssText = 'padding:20px;font-family:Helvetica,Arial,sans-serif;';
+
+					var label = document.createElement('div');
+					label.innerHTML = '<strong>Rename diagram</strong>';
+					label.style.cssText = 'margin-bottom:12px;font-size:14px;';
+					renameDiv.appendChild(label);
+
+					var inputWrapper = document.createElement('div');
+					inputWrapper.style.cssText = 'display:flex;align-items:stretch;border:1px solid #ccc;border-radius:4px;overflow:hidden;font-size:14px;box-sizing:border-box;margin-bottom:16px;';
+
+					var renameInput = document.createElement('input');
+					renameInput.type  = 'text';
+					renameInput.value = currentBase;
+					renameInput.style.cssText = 'flex:1;border:none;outline:none;padding:8px 10px;font-size:14px;box-sizing:border-box;';
+
+					var renameSuffix = document.createElement('span');
+					renameSuffix.innerHTML = '.drawio';
+					renameSuffix.style.cssText = 'padding:8px 10px;background:#f0f0f0;color:#999;border-left:1px solid #ccc;white-space:nowrap;cursor:default;user-select:none;font-size:14px;';
+
+					inputWrapper.appendChild(renameInput);
+					inputWrapper.appendChild(renameSuffix);
+					renameDiv.appendChild(inputWrapper);
+
+					var btnRow = document.createElement('div');
+					btnRow.style.cssText = 'display:flex;justify-content:flex-end;gap:8px;';
+
+					var cancelBtn = document.createElement('button');
+					cancelBtn.innerHTML = 'Cancel';
+					cancelBtn.style.cssText = 'padding:8px 16px;border:1px solid #ccc;border-radius:4px;background:#fff;cursor:pointer;font-size:13px;';
+
+					var okBtn = document.createElement('button');
+					okBtn.innerHTML = 'Rename';
+					okBtn.style.cssText = 'padding:8px 16px;border:none;border-radius:4px;background:#008f89;color:#fff;cursor:pointer;font-size:13px;';
+
+					btnRow.appendChild(cancelBtn);
+					btnRow.appendChild(okBtn);
+					renameDiv.appendChild(btnRow);
+
+					// Show dialog using draw.io's built-in dialog wrapper.
+					self.editorUi.showDialog(renameDiv, 360, 140, true, true);
+					renameInput.focus();
+					renameInput.select();
+
+					var doRename = mxUtils.bind(self, function()
 					{
-						if (title != null && title.length > 0 && file != null && title != file.getTitle() &&
-							this.editorUi.spinner.spin(document.body, mxResources.get('renaming')))
+						var baseVal  = renameInput.value.trim().replace(/\.drawio$/i, '');
+						if (!baseVal) { editorUi.handleError({message: 'Please enter a filename.'}); return; }
+						var newTitle = baseVal + '.drawio';
+						if (newTitle === file.getTitle()) { self.editorUi.hideDialog(); return; }
+						self.editorUi.hideDialog();
+						if (self.editorUi.spinner.spin(document.body, mxResources.get('renaming')))
 						{
-							// Delete old file, save new file in dropbox if autosize is enabled
-							file.rename(title, mxUtils.bind(this, function(resp)
-							{
-								this.editorUi.spinner.stop();
-							}),
-							mxUtils.bind(this, function(resp)
-							{
-								this.editorUi.handleError(resp, (resp != null) ? mxResources.get('errorRenamingFile') : null);
-							}));
+							file.rename(newTitle,
+								mxUtils.bind(self, function() { self.editorUi.spinner.stop(); }),
+								mxUtils.bind(self, function(resp) {
+									self.editorUi.spinner.stop();
+									self.editorUi.handleError(resp, (resp != null) ? mxResources.get('errorRenamingFile') : null);
+								})
+							);
 						}
-					}), (file.constructor == DriveFile || file.constructor == StorageFile) ?
-						mxResources.get('diagramName') : null, function(name)
-					{
-						if (name != null && name.length > 0)
-						{
-							return true;
-						}
-						
-						editorUi.showError(mxResources.get('error'), mxResources.get('invalidName'), mxResources.get('ok'));
-						
-						return false;
-					}, null, FilenameDialog.filenameHelpLink, null, null, editorUi.editor.fileExtensions);
-					this.editorUi.showDialog(dlg.container, 340, 100, true, true);
-					dlg.init();
+					});
+
+					okBtn.addEventListener('click', doRename);
+					cancelBtn.addEventListener('click', function() { self.editorUi.hideDialog(); });
+					renameInput.addEventListener('keydown', function(e) {
+						if (e.key === 'Enter') { doRename(); }
+						if (e.key === 'Escape') { self.editorUi.hideDialog(); }
+					});
 				}
 			}
 		}));
@@ -5586,9 +5692,9 @@
 				{
 					this.addMenuItems(menu, ['new'], parent);
 				}
-				// ======	NOLAI - {- Frontend -} /Sprint 2/ Task 98 and Task 100	=====
+				// ======	NOLAI - {- Frontend -} /Sprint 2 & 3/ Task 98, Task 100 and Task 151	=====
 				menu.addSeparator(parent);
-				this.addMenuItems(menu, ['Save', 'My Files'], parent);
+				this.addMenuItems(menu, ['Save', 'My Files', 'share'], parent);
 				// ====== end of changes by SE	======
 			
 				if (file != null && file.constructor == DriveFile)

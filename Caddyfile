@@ -49,22 +49,29 @@
 # -----------------------------------------------------------------------
 https://localhost {
 
-    # ---- WebDAV CORS preflight handler ----
-    # Matches OPTIONS requests on Nextcloud's WebDAV path.
-    # Responds immediately with 204 No Content and the required headers so
-    # the browser permits the subsequent GET/PUT/PROPFIND etc.
-    @davPreflight {
+    # ---- CORS preflight handler (all paths from draw.io origin) ----
+    #
+    # WHY this replaces the previous @davPreflight that only matched /remote.php/dav:
+    #   The session-detection call in draw.io hits /ocs/v2.php/cloud/user with a
+    #   custom OCS-APIREQUEST header. Any custom request header triggers a CORS
+    #   preflight OPTIONS request. The old handler only matched WebDAV paths, so
+    #   the OCS preflight fell through to Nextcloud, which returned no CORS headers,
+    #   causing the browser to silently block the response.
+    #
+    #   This broader matcher catches every OPTIONS request from the draw.io origin
+    #   (https://localhost:5443) regardless of path, so both WebDAV and OCS API
+    #   calls are permitted correctly.
+    @drawioPreflightAll {
         method OPTIONS
-        path_regexp dav ^/remote\.php/dav(?:/.*)?$
+        header Origin https://localhost:5443
     }
-    handle @davPreflight {
-        @preflightDrawio header Origin https://localhost:5443
-        header @preflightDrawio Access-Control-Allow-Origin  "https://localhost:5443"
-        header Access-Control-Allow-Credentials              "true"
-        header Access-Control-Allow-Methods                  "OPTIONS, GET, HEAD, PROPFIND, MKCOL, MOVE, COPY, LOCK, UNLOCK, PUT, DELETE"
-        header Access-Control-Allow-Headers                  "Authorization, Content-Type, Depth, Timeout, If, Lock-Token, Destination, Overwrite, X-Requested-With, OCS-APIRequest"
-        header Access-Control-Max-Age                        "86400"
-        header Vary                                          "Origin"
+    handle @drawioPreflightAll {
+        header Access-Control-Allow-Origin   "https://localhost:5443"
+        header Access-Control-Allow-Credentials "true"
+        header Access-Control-Allow-Methods  "OPTIONS, GET, HEAD, POST, PROPFIND, MKCOL, MOVE, COPY, LOCK, UNLOCK, PUT, DELETE"
+        header Access-Control-Allow-Headers  "Authorization, Content-Type, Depth, Timeout, If, Lock-Token, Destination, Overwrite, X-Requested-With, OCS-APIRequest"
+        header Access-Control-Max-Age        "86400"
+        header Vary                          "Origin"
         respond "" 204
     }
 
