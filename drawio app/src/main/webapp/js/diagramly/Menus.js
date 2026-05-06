@@ -1005,23 +1005,20 @@
 		// On success it converges on finalizeSaveSuccess just like the quick path.
 		function openSaveAsDialog()
 		{
-			// Get filename and ensure that it is a valid file
 			var currentFile = editorUi.getCurrentFile();
 			var filename = (currentFile != null && currentFile.getTitle() != null) ?
 				currentFile.getTitle() : editorUi.defaultFilename;
 
 			if (!filename.endsWith('.drawio') && !filename.endsWith('.xml'))
 			{
-				filename += '.drawio';
+				filename = filename.replace(/\.[^/.]+$/, '') + '.drawio';
 			}
 
 			var nolaiColor = '#008f89';
 
-			// Main container for dialog UI
 			var div = document.createElement('div');
 			div.style.cssText = 'padding: 20px; font-family: Helvetica, Arial, sans-serif; color: #333;';
 
-			// The title for the dialog
 			var title = document.createElement('h2');
 			title.innerHTML = 'Save diagram to Nextcloud';
 			title.style.cssText = 'margin: 0 0 15px 0; color: ' + nolaiColor + '; font-size: 18px; border-bottom: 2px solid ' + nolaiColor + '; padding-bottom: 10px;';
@@ -1167,7 +1164,6 @@
 				});
 			});
 
-			// Styling the OK button for saving files.
 			dlg.okButton.innerHTML = 'Save Diagram';
 			dlg.okButton.style.backgroundColor = nolaiColor;
 			dlg.okButton.style.backgroundImage = 'none';
@@ -6521,7 +6517,7 @@
 
 				if (urlParams['noDevice'] != '1')
 				{
-					menu.addItem(mxResources.get('device') + '...', null, function()
+					menu.addItem(mxResources.get('importFrom') + ' ' + mxResources.get('device') + '...', null, function()
 					{
 						editorUi.importLocalFile(true);
 					}, parent);

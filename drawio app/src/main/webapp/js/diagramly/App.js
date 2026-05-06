@@ -5295,11 +5295,27 @@ App.prototype.createFile = function(title, data, libs, mode, done, replace, fold
 				this.showSaveFilePicker(mxUtils.bind(this, function(fileHandle, desc)
 				{
 					var file = new LocalFile(this, data, desc.name, null, fileHandle, desc);
-					
+					var dpdConsole = ui.dpdConsole;
+					var highlightsOn = !!(dpdConsole && dpdConsole.toggleBtn && dpdConsole.toggleBtn._active);
+
+					if (highlightsOn)
+					{
+						if (dpdConsole && typeof dpdConsole.onToggleHighlights === 'function')
+						{
+							dpdConsole.onToggleHighlights();
+						}
+						else
+						{
+							error({message: mxResources.get('errorSavingFile')});
+							return;
+						}
+					}
+
 					file.saveFile(desc.name, false, mxUtils.bind(this, function()
 					{
 						this.fileCreated(file, libs, replace, done, clibs, success);
-					}), error, true);
+					}), error, false);
+					
 				}), mxUtils.bind(this, function(e)
 				{
 					if (e.name != 'AbortError')

@@ -1073,6 +1073,8 @@ Draw.loadPlugin(function (ui) {
       }
     } else {
       validateGraph();
+      highlightsVisible = true;
+      setEditLockState(true);
       if (ui.dpdConsole && typeof ui.dpdConsole.setHighlightToggleState === 'function') {
         ui.dpdConsole.setHighlightToggleState(highlightsVisible);
       }
@@ -1083,9 +1085,57 @@ Draw.loadPlugin(function (ui) {
     if (violationHighlightedEdges.size === 0) return;
     model.beginUpdate();
     try {
-      violationHighlightedEdges.forEach(function (originalStyle, cell) {
-        graph.setCellStyle(originalStyle, [cell]);
-        graph.removeCellOverlays(cell);
+      violationHighlightedEdges.forEach(function (originalStyle, edge) {
+        graph.setCellStyle(originalStyle, [edge]);
+        graph.removeCellOverlays(edge);
+      });
+
+      // Cleanup for reloaded files that were previously saved with highlight styles.
+      // Supports both marker-tagged styles and older highlight styles without markers.
+      var allEdges = collectAllCells().edges;
+      allEdges.forEach(function (edge) {
+        var style = edge.style || '';
+        var hasMarker = /(^|;)dpdViolation=1(;|$)/.test(style);
+        var hasLegacyHighlight = /(^|;)strokeWidth=4(;|$)/.test(style) &&
+          /(^|;)strokeColor=(#ff4444|#ffaa00)(;|$)/i.test(style);
+
+        if (hasMarker || hasLegacyHighlight) {
+          var cleaned = style
+            .replace(/(^|;)dpdViolation=1(?=;|$)/g, '')
+            .replace(/strokeColor=[^;]*(;|$)/g, '')
+            .replace(/strokeWidth=[^;]*(;|$)/g, '')
+            .replace(/;;+/g, ';')
+            .replace(/^;|;$/g, '');
+
+          graph.setCellStyle(cleaned, [edge]);
+          graph.removeCellOverlays(edge);
+
+          // Also clear any persisted style values stored on the cell's XML/value
+          // (some saved diagrams may include style fragments in the value element).
+          try {
+            var val = model.getValue(edge);
+            if (val && typeof val === 'object' && typeof val.getAttribute === 'function') {
+              var valStyle = val.getAttribute('style') || '';
+              var cleanedValStyle = valStyle
+                .replace(/strokeColor=[^;]*(;|$)/g, '')
+                .replace(/strokeWidth=[^;]*(;|$)/g, '')
+                .replace(/;;+/g, ';')
+                .replace(/^;|;$/g, '');
+
+              if (cleanedValStyle !== valStyle) {
+                var newVal = val.cloneNode(true);
+                if (cleanedValStyle) {
+                  newVal.setAttribute('style', cleanedValStyle);
+                } else {
+                  newVal.removeAttribute('style');
+                }
+                model.setValue(edge, newVal);
+              }
+            }
+          } catch (e) {
+            console.warn('[DPD] Error cleaning persisted value style for edge', e);
+          }
+        }
       });
     } finally {
       model.endUpdate();
@@ -1154,12 +1204,13 @@ Draw.loadPlugin(function (ui) {
 
         var color = info.hasError ? '#ff4444' : '#ffaa00';
         var base = (edge.style || '')
+          .replace(/(^|;)dpdViolation=1(?=;|$)/g, '')
           .replace(/strokeColor=[^;]*(;|$)/g, '')
           .replace(/strokeWidth=[^;]*(;|$)/g, '')
           .replace(/;;+/g, ';')
           .replace(/^;|;$/g, '');
         var newStyle = (base ? base + ';' : '') +
-          'strokeColor=' + color + ';strokeWidth=4';
+          'strokeColor=' + color + ';strokeWidth=4;dpdViolation=1';
         graph.setCellStyle(newStyle, [edge]);
 
         var label = info.indices.join(',');
