@@ -1009,12 +1009,7 @@
 			var filename = (currentFile != null && currentFile.getTitle() != null) ?
 				currentFile.getTitle() : editorUi.defaultFilename;
 
-<<<<<<< Correctly-load-attributes
-			// Always ensure the default filename ends with .drawio
-			if (!filename.endsWith('.drawio'))
-=======
 			if (!filename.endsWith('.drawio') && !filename.endsWith('.xml'))
->>>>>>> main
 			{
 				filename = filename.replace(/\.[^/.]+$/, '') + '.drawio';
 			}
