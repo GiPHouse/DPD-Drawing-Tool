@@ -1226,6 +1226,55 @@ Draw.loadPlugin(function (ui) {
         graph.removeCellOverlays(edge);
         graph.addCellOverlay(edge, overlay);
       });
+
+        vertexViolationMap.forEach(function (info, vertex) {
+        violationHighlightedEdges.set(vertex, vertex.style || '');
+
+        var color = info.hasError ? '#ff4444' : '#ffaa00';
+        var base = (vertex.style || '')
+          .replace(/strokeColor=[^;]*(;|$)/g, '')
+          .replace(/strokeWidth=[^;]*(;|$)/g, '')
+          .replace(/;;+/g, ';')
+          .replace(/^;|;$/g, '');
+        var newStyle = (base ? base + ';' : '') +
+          'strokeColor=' + color + ';strokeWidth=4';
+        graph.setCellStyle(newStyle, [vertex]);
+
+        var label = info.indices.join(',');
+        var badgeH = 28;
+        var badgeW = Math.max(36, label.length * 10 + 24);
+
+        var svg = [
+          '<svg xmlns="http://www.w3.org/2000/svg" width="' + badgeW + '" height="' + badgeH + '">',
+          '  <defs>',
+          '    <filter id="s" x="-25%" y="-25%" width="150%" height="150%">',
+          '      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="rgba(0,0,0,0.55)"/>',
+          '    </filter>',
+          '  </defs>',
+          '  <rect x="1" y="1" width="' + (badgeW - 2) + '" height="' + (badgeH - 2) + '"',
+          '    rx="6" ry="6" fill="' + color + '" stroke="white" stroke-width="2"',
+          '    filter="url(#s)" opacity="0.97"/>',
+          '  <text x="' + (badgeW / 2) + '" y="19" text-anchor="middle"',
+          '    fill="white" font-size="13" font-weight="bold"',
+          '    font-family="Arial,sans-serif" letter-spacing="0.5">' + label + '</text>',
+          '</svg>',
+        ].join('');
+
+        var dataUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+
+        var overlay = new mxCellOverlay(
+          new mxImage(dataUrl, badgeW, badgeH),
+          info.indices.map(function (n) { return '#' + n; }).join(', '),
+          mxConstants.ALIGN_RIGHT,
+          mxConstants.ALIGN_BOTTOM,
+          new mxPoint(0, 0)
+        );
+
+        graph.removeCellOverlays(vertex);
+        graph.addCellOverlay(vertex, overlay);
+
+      });
+
     } finally {
       model.endUpdate();
     }
@@ -1281,16 +1330,22 @@ Draw.loadPlugin(function (ui) {
     }
 
     edit.changes.forEach(function(change) {
+      const vertex = change.child || change.cell;
+
       if (change.constructor && change.constructor.name === 'mxChildChange') {
-        const vertex = change.child;
         if (vertex && model.isVertex(vertex) && change.parent && !loggedAddedVertices.has(vertex)) {
           loggedAddedVertices.add(vertex);
           console.log('Vertex added:', vertex.id || '(no id)');
         }
-      }
 
+        if (vertex && model.isVertex(vertex) && change.parent && change.previous == null && getComponentType(vertex) == "process") {
+          setTimeout(() => showProcessAnnotationDialog(vertex), 150);
+        } else if (vertex && model.isVertex(vertex) && change.parent && change.previous == null && getComponentType(vertex) == "data_store") {
+          setTimeout(() => showDataAnnotationDialog(vertex), 150);
+        }
+      }
+      
       if (change.constructor && change.constructor.name === 'mxGeometryChange') {
-        const vertex = change.cell;
         if (vertex && model.isVertex(vertex) && !loggedMovedVertices.has(vertex)) {
           loggedMovedVertices.add(vertex);
           console.log('Vertex moved:', vertex.id || '(no id)');
