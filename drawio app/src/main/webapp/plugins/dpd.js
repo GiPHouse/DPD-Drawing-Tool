@@ -581,56 +581,115 @@ Draw.loadPlugin(function (ui) {
     return null;
   }
 
-  function renderIconToImage(iconKey, callback) {
-    const xml = ICON_XML[iconKey];
-    if (!xml) { callback(null); return; }
+  // ====== NOLAI - {Frontend} /Sprint 3/ Task 133 — test icon SVGs ======
+  // Pill-shaped text-label icons used as the fallback (and for QA) when the
+  // mxGraph rendering path fails.  Each entry has svg/w/h so the mxImage is
+  // sized to match the actual SVG dimensions rather than a fixed square.
+  //
+  // Positioning: the icon floats ABOVE the edge midpoint (y-offset -20 in
+  // addEdgeIcon) so it never overlaps the error-badge which sits at y=0.
+  const TEST_ICON_SVG = {
+    directly_identifiable: {
+      w: 86, h: 22,
+      svg: `<svg xmlns="http://www.w3.org/2000/svg" width="86" height="22" viewBox="0 0 86 22">
+        <rect x="1" y="1" width="84" height="20" rx="10" fill="#c0392b"/>
+        <text x="43" y="15" text-anchor="middle" fill="white" font-size="9" font-weight="bold" font-family="Arial,sans-serif">Direct ID</text>
+      </svg>`,
+    },
+    indirectly_identifiable: {
+      w: 100, h: 22,
+      svg: `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="22" viewBox="0 0 100 22">
+        <rect x="1" y="1" width="98" height="20" rx="10" fill="#e67e22"/>
+        <text x="50" y="15" text-anchor="middle" fill="white" font-size="9" font-weight="bold" font-family="Arial,sans-serif">Indirect ID</text>
+      </svg>`,
+    },
+    anonymous: {
+      w: 80, h: 22,
+      svg: `<svg xmlns="http://www.w3.org/2000/svg" width="80" height="22" viewBox="0 0 80 22">
+        <rect x="1" y="1" width="78" height="20" rx="10" fill="#27ae60"/>
+        <text x="40" y="15" text-anchor="middle" fill="white" font-size="9" font-weight="bold" font-family="Arial,sans-serif">Anonymous</text>
+      </svg>`,
+    },
+    strict_pseudonymous: {
+      w: 102, h: 22,
+      svg: `<svg xmlns="http://www.w3.org/2000/svg" width="102" height="22" viewBox="0 0 102 22">
+        <rect x="1" y="1" width="100" height="20" rx="10" fill="#2980b9"/>
+        <text x="51" y="15" text-anchor="middle" fill="white" font-size="9" font-weight="bold" font-family="Arial,sans-serif">Strict Pseudo</text>
+      </svg>`,
+    },
+    soft_pseudonymous: {
+      w: 94, h: 22,
+      svg: `<svg xmlns="http://www.w3.org/2000/svg" width="94" height="22" viewBox="0 0 94 22">
+        <rect x="1" y="1" width="92" height="20" rx="10" fill="#8e44ad"/>
+        <text x="47" y="15" text-anchor="middle" fill="white" font-size="9" font-weight="bold" font-family="Arial,sans-serif">Soft Pseudo</text>
+      </svg>`,
+    },
+  };
 
-    try {
-      const doc  = mxUtils.parseXml(xml);
-      const node = doc.documentElement;
-      const tmp  = new mxGraph(document.createElement('div'));
-      const codec = new mxCodec(node.ownerDocument);
-      codec.decode(node, tmp.getModel());
- 
-      tmp.setEnabled(false);
-      const svgNode = tmp.getSvg(null, 1, 2);
-      const svgStr  = mxUtils.getXml(svgNode);
-      tmp.destroy();
- 
-      callback(new mxImage(
-        'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgStr),
-        ICON_DISPLAY_W,
-        ICON_DISPLAY_H
-      ));
-    } catch (e) {
-      console.warn('[DPD] icon thumbnail fallback for', iconKey, e);
-      callback(new mxImage(
-        'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(xml),
-        ICON_DISPLAY_W,
-        ICON_DISPLAY_H
-      ));
+  function renderIconToImage(iconKey, callback) {
+    // ====== NOLAI - {Frontend} /Sprint 3/ Task 133 — icon render ======
+    // The original approach used `new mxGraph(container)` to re-render the
+    // ICON_XML mxGraphModel into an SVG.  This always throws in the plugin
+    // context because draw.io's minified mxGraph build patches the constructor
+    // with UI-specific theme helpers (e.g. getAdaptiveColors) that don't exist
+    // in a detached div — there is no way to fix this from plugin code.
+    //
+    // The pill-label SVGs in TEST_ICON_SVG are therefore the canonical icons.
+    // They are self-contained, always render, and are more informative than
+    // the original symbol-only artwork.  ICON_XML is kept for reference but
+    // is no longer used at runtime.
+    const icon = TEST_ICON_SVG[iconKey];
+    if (!icon) {
+      console.warn('[DPD] renderIconToImage: unknown icon key', iconKey);
+      callback(null);
+      return;
     }
+    callback(new mxImage(
+      'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(icon.svg),
+      icon.w,
+      icon.h
+    ));
+    // ====== end icon render ======
   }
  
   function addEdgeIcon(edge) {
     const props   = getEdgeProps(edge);
     const iconKey = resolveIconKey(props.identifiability, props.pseudonymity);
- 
-    graph.removeCellOverlays(edge);
+
+    // ====== NOLAI - {Frontend} /Sprint 3/ Task 133 — overlay fix ======
+    // Remove only the existing ICON overlay for this edge, not the error badge.
+    // Using removeCellOverlay (singular) instead of removeCellOverlays (all).
+    const existingIcon = edgeIconOverlayMap.get(edge);
+    if (existingIcon) {
+      graph.removeCellOverlay(edge, existingIcon);
+      edgeIconOverlayMap.delete(edge);
+    }
+    // ====== end overlay fix ======
+
     if (!iconKey) return;
- 
+
     renderIconToImage(iconKey, function (img) {
       if (!img) return;
       graph.getModel().beginUpdate();
       try {
-        graph.removeCellOverlays(edge);
+        // Guard: remove stale icon that may have been added between the outer
+        // check and this async callback resolving.
+        const stale = edgeIconOverlayMap.get(edge);
+        if (stale) {
+          graph.removeCellOverlay(edge, stale);
+          edgeIconOverlayMap.delete(edge);
+        }
+
+        // Float the icon ABOVE the edge midpoint (0, -20) so it never overlaps
+        // the error-badge overlay which sits at (0, 0) on the edge itself.
         const overlay = new mxCellOverlay(
           img,
           '',
           mxConstants.ALIGN_CENTER,
           mxConstants.ALIGN_MIDDLE,
-          new mxPoint(0, 0)
+          new mxPoint(0, -20)
         );
+        edgeIconOverlayMap.set(edge, overlay);
         graph.addCellOverlay(edge, overlay);
       } finally {
         graph.getModel().endUpdate();
@@ -1105,6 +1164,14 @@ Draw.loadPlugin(function (ui) {
 
   const violationHighlightedEdges = new Map();
 
+  // ====== NOLAI - {Frontend} /Sprint 3/ Task 133 — overlay fix ======
+  // Independent overlay tracking so icon overlays and error badge overlays
+  // never clobber each other.  Use graph.removeCellOverlay(cell, instance)
+  // (singular) rather than graph.removeCellOverlays(cell) (plural = all).
+  const edgeIconOverlayMap  = new Map();  // cell → mxCellOverlay (identifiability icon)
+  const edgeErrorOverlayMap = new Map();  // cell → mxCellOverlay (violation badge)
+  // ====== end overlay fix ======
+
   // Keeps track of violation messages for hover tooltip
   const cellViolationMessages = new Map();
 
@@ -1180,7 +1247,17 @@ Draw.loadPlugin(function (ui) {
     try {
       violationHighlightedEdges.forEach(function (originalStyle, cell) {
         graph.setCellStyle(originalStyle, [cell]);
-        graph.removeCellOverlays(cell);
+
+        // ====== NOLAI - {Frontend} /Sprint 3/ Task 133 — overlay fix ======
+        // Remove only the error BADGE overlay for this cell.
+        // removeCellOverlays (all) is intentionally NOT used here — it would
+        // also destroy the identifiability icon overlay on the same edge.
+        const badge = edgeErrorOverlayMap.get(cell);
+        if (badge) {
+          graph.removeCellOverlay(cell, badge);
+          edgeErrorOverlayMap.delete(cell);
+        }
+        // ====== end overlay fix ======
       });
     } finally {
       model.endUpdate();
@@ -1287,7 +1364,12 @@ Draw.loadPlugin(function (ui) {
           new mxPoint(0, 0)
         );
 
-        graph.removeCellOverlays(edge);
+        // ====== NOLAI - {Frontend} /Sprint 3/ Task 133 — overlay fix ======
+        // Remove only the previous error badge, not the icon overlay.
+        var oldBadge = edgeErrorOverlayMap.get(edge);
+        if (oldBadge) graph.removeCellOverlay(edge, oldBadge);
+        edgeErrorOverlayMap.set(edge, overlay);
+        // ====== end overlay fix ======
         graph.addCellOverlay(edge, overlay);
       });
 
@@ -1334,7 +1416,12 @@ Draw.loadPlugin(function (ui) {
           new mxPoint(0, 0)
         );
 
-        graph.removeCellOverlays(vertex);
+        // ====== NOLAI - {Frontend} /Sprint 3/ Task 133 — overlay fix ======
+        // Remove only the previous error badge overlay for this vertex.
+        var oldVertexBadge = edgeErrorOverlayMap.get(vertex);
+        if (oldVertexBadge) graph.removeCellOverlay(vertex, oldVertexBadge);
+        edgeErrorOverlayMap.set(vertex, overlay);
+        // ====== end overlay fix ======
         graph.addCellOverlay(vertex, overlay);
 
       });
@@ -1438,6 +1525,21 @@ Draw.loadPlugin(function (ui) {
     return origPopup(menu, cell, evt);
   };
   // ====== end of changes by SE ======
+
+  // ====== NOLAI - {Frontend} /Sprint 3/ Task 133 — startup icon sweep ======
+  // Re-apply identifiability icons for any edges that are already annotated
+  // when the diagram first loads (e.g. opening a saved file).  Without this,
+  // icons only appear after the annotation dialog is saved in the same session.
+  setTimeout(function () {
+    var allCells = collectAllCells();
+    allCells.edges.forEach(function (edge) {
+      var props = getEdgeProps(edge);
+      if (props.identifiability) {
+        addEdgeIcon(edge);
+      }
+    });
+  }, 600);
+  // ====== end startup icon sweep ======
 
   console.log('DPD Plugin Loaded');
   console.log('[DPD] Plugin loaded — 15 rules active (R-S1–4, R-I1–5, R-L1–2, R-P1–4)');
