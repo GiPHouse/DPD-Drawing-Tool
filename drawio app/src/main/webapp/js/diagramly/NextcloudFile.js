@@ -23,6 +23,54 @@
 // ====== end of changes by SE ======
 var _nextcloudSessionCache = { username: null, password: null, baseUrl: null, displayName: null };
 
+// ====== NOLAI - {- Backend -} /Sprint 4/ Task 148 (Smart Save) ======
+//
+// _nolaiCurrentNextcloudFile — tracks which Nextcloud-resident file the editor
+// is currently bound to. Set on Save success / My Files load / Rename success /
+// Version restore. Read by the Save action's quick path so that ⌘+S can save
+// silently to the same Nextcloud path without re-prompting for a filename.
+//
+// Structure: { filename: string, remotePath: string } | null
+//   filename   — the full filename including the '.drawio' extension
+//   remotePath — DAV-relative folder; '/' means the user's DAV root.
+//
+// WHY module-level (not stored on the LocalFile instance):
+//   draw.io constructs new LocalFile objects on every load (My Files reload,
+//   Version restore replaces the live file with a fresh LocalFile, etc.).
+//   Storing the binding on the instance would silently lose it across those
+//   transitions and the next ⌘+S would regress to a "Save As" prompt.
+//   Using a module variable keeps the user's mental model — "I am currently
+//   editing <this Nextcloud file>" — stable across draw.io's internal
+//   re-construction of file objects.
+//
+// WHY in-memory rather than persisted:
+//   Same reasoning as _nextcloudSessionCache: this is session state that
+//   should reset on browser reload. Persisting could surprise users who
+//   open the app and find it bound to a file they no longer expect.
+// ====== end of changes by SE ======
+var _nolaiCurrentNextcloudFile = null;
+
+// nolaiSetCurrentNextcloudFile — records the Nextcloud filename + remotePath
+// the editor is now bound to. Pass null/empty filename to clear.
+function nolaiSetCurrentNextcloudFile(filename, remotePath) {
+    if (!filename) {
+        _nolaiCurrentNextcloudFile = null;
+        return;
+    }
+    _nolaiCurrentNextcloudFile = {
+        filename: filename,
+        remotePath: remotePath || '/',
+    };
+}
+
+function nolaiGetCurrentNextcloudFile() {
+    return _nolaiCurrentNextcloudFile;
+}
+
+function nolaiClearCurrentNextcloudFile() {
+    _nolaiCurrentNextcloudFile = null;
+}
+
 // ====== NOLAI - {- Frontend -} /Sprint 3/ Task 151 ======
 // _nolaiTopBarRefresh — optional callback registered by attachNextcloudTopBarButton.
 // When a dialog login button completes authentication it calls this so the top-bar
@@ -1313,6 +1361,7 @@ function renameFileInNextcloud(oldFilename, newFilename, nextcloudUrl, username,
 }
 
 // ====== NOLAI - {- Backend -} /Sprint 3/ Task 151 ======
+// ====== NOLAI - {- Backend -} /Sprint 4/ Task 148 — rename ⇒ save fallback ======
 // LocalFile.prototype.rename override — adds Nextcloud persistence to draw.io's in-memory rename.
 //
 // draw.io's default LocalFile.prototype.rename updates only the in-memory title; it has no
@@ -1322,9 +1371,19 @@ function renameFileInNextcloud(oldFilename, newFilename, nextcloudUrl, username,
 // The override reads baseUrl/username/password from _nextcloudSessionCache so that it works
 // without any extra wiring in Menus.js — the banner login flow already populates the cache.
 //
+// Sprint 4 addition — "rename also saves" behaviour:
+//   When the user renames a brand-new diagram that has not yet been saved to Nextcloud, the
+//   WebDAV MOVE source path doesn't exist on the server, so the server returns 404. Treating
+//   that as an error is unhelpful — what the user actually wants in that flow is "give this
+//   diagram a name and save it under that name". So when MOVE returns 404 we fall back to
+//   saveDrawIOToNextcloudXML with the editor's current XML under newTitle. This makes the
+//   rename dialog double as a "name & save" affordance for first-time saves.
+//
 // Assumptions:
 //   - Files are always saved at the root of the user's DAV folder (remotePath = '/').
 //   - _nextcloudSessionCache.baseUrl is set when the user connects via the session banner.
+//   - The fallback save uses this.ui.getFileData(true), the same XML serialisation the Save
+//     action uses — so the resulting Nextcloud file is byte-equivalent to a normal Save.
 // ====== end of changes by SE ======
 (function() {
     // Guard: LocalFile may not yet be defined if scripts load out of order.
@@ -1334,6 +1393,7 @@ function renameFileInNextcloud(oldFilename, newFilename, nextcloudUrl, username,
 
     LocalFile.prototype.rename = function(newTitle, success, error) {
         var oldTitle = this.title;
+        var self = this;
 
         // Always apply the in-memory rename so draw.io's toolbar updates immediately.
         _originalRename.call(this, newTitle, null, null);
@@ -1341,17 +1401,85 @@ function renameFileInNextcloud(oldFilename, newFilename, nextcloudUrl, username,
         var cache = _nextcloudSessionCache;
         var titleChanged = oldTitle && newTitle && oldTitle !== newTitle;
 
+        // saveUnderNewName — fallback path: PUT the current diagram XML under newTitle.
+        // Used when (a) MOVE returns 404 because the source doesn't exist on Nextcloud, or
+        // (b) there was no oldTitle to MOVE from in the first place (truly first-time save).
+        // Reads the live editor XML via this.ui.getFileData(true), exactly mirroring the
+        // existing Save action, so the resulting file is identical to what Save would write.
+        function saveUnderNewName(reasonLog) {
+            // self.ui is set by DrawioFile's constructor; getFileData serialises the current
+            // editor state to draw.io's XML format. This is the authoritative source of truth
+            // for the diagram's content — using self.data would risk writing stale content
+            // captured at file-load time before the user's edits.
+            var xml = (self.ui && typeof self.ui.getFileData === 'function')
+                ? self.ui.getFileData(true)
+                : (typeof self.getData === 'function' ? self.getData() : null);
+
+            if (xml == null) {
+                console.error('NOLAI: rename-save fallback could not access editor XML (' + reasonLog + ')');
+                if (typeof error === 'function') {
+                    error(new Error('Could not read diagram contents to save.'));
+                }
+                return;
+            }
+
+            saveDrawIOToNextcloudXML(newTitle, xml, cache.baseUrl, cache.username, cache.password, '/')
+                .then(function(saved) {
+                    if (saved) {
+                        updateNolaiFileTitle(newTitle);
+                        // Bind the editor to the just-created Nextcloud file so the next
+                        // ⌘+S is a silent save instead of another prompt.
+                        nolaiSetCurrentNextcloudFile(newTitle, '/');
+                        // Clear the modified flag — the editor's content is now in sync
+                        // with what was just persisted.
+                        if (self.ui && self.ui.editor) { self.ui.editor.modified = false; }
+                        // Reflect in the editor's status line so the user sees the same
+                        // confirmation they'd get from a manual Save.
+                        if (self.ui && self.ui.editor && typeof self.ui.editor.setStatus === 'function') {
+                            self.ui.editor.setStatus('Saved to Nextcloud as ' + newTitle);
+                        }
+                        if (typeof success === 'function') { success(); }
+                    } else {
+                        console.error('NOLAI: rename-save fallback PUT did not succeed (' + reasonLog + ')');
+                        if (typeof error === 'function') {
+                            error(new Error('Could not save under new name.'));
+                        }
+                    }
+                })
+                .catch(function(saveErr) {
+                    console.error('NOLAI: rename-save fallback PUT threw (' + reasonLog + ')', saveErr);
+                    if (typeof error === 'function') { error(saveErr); }
+                });
+        }
+
         if (cache.username && cache.password && cache.baseUrl && titleChanged) {
-            // Perform WebDAV MOVE then fire the caller's callbacks.
+            // Try a real MOVE first — that is the correct operation for an existing file
+            // because it preserves the Nextcloud fileid and version chain. Only fall back
+            // to a PUT if the source didn't exist (404).
             renameFileInNextcloud(oldTitle, newTitle, cache.baseUrl, cache.username, cache.password, '/')
                 .then(function() {
                     updateNolaiFileTitle(newTitle);
+                    // The current-file binding now points at the new name on the server.
+                    nolaiSetCurrentNextcloudFile(newTitle, '/');
                     if (typeof success === 'function') { success(); }
                 })
                 .catch(function(err) {
-                    console.error('NOLAI: Nextcloud rename (MOVE) failed', err);
-                    if (typeof error === 'function') { error(err); }
+                    var msg = (err && err.message) ? err.message : '';
+                    // /HTTP 404/ matches the message thrown by renameFileInNextcloud when
+                    // the WebDAV MOVE returns 404. Tightly scoped — any other failure
+                    // (auth, conflict, network) still surfaces as a real error.
+                    if (/HTTP 404/i.test(msg)) {
+                        console.warn('NOLAI: Source missing on Nextcloud — falling back to PUT save under new name.');
+                        saveUnderNewName('MOVE 404');
+                    } else {
+                        console.error('NOLAI: Nextcloud rename (MOVE) failed', err);
+                        if (typeof error === 'function') { error(err); }
+                    }
                 });
+        } else if (cache.username && cache.password && cache.baseUrl && newTitle && !oldTitle) {
+            // Edge case: no oldTitle at all (truly first-time naming). Skip the MOVE
+            // attempt and go straight to a fresh PUT under newTitle.
+            saveUnderNewName('no oldTitle');
         } else {
             // No Nextcloud session — just update the title bar and fire success.
             updateNolaiFileTitle(newTitle);
@@ -1396,3 +1524,328 @@ function updateNolaiFileTitle(filename) {
 
 // Show "Untitled" once draw.io has had time to render its toolbar (~1 s after script load).
 setTimeout(function() { updateNolaiFileTitle(null); }, 1000);
+
+// ====== NOLAI - {- Backend -} /Sprint 4/ Task 148 (Version Control) ======
+//
+// Nextcloud Versions API helpers.
+//
+// WHY this exists alongside the existing native draw.io revision history path:
+//   draw.io ships with a native RevisionDialog wired to ui.getRevisions(), which
+//   plugins/nextcloud.js implements via remoteInvoke('getFileRevisions') — a
+//   postMessage RPC that requires drawio to be embedded inside Nextcloud's
+//   parent window. In our standalone NOLAI deployment drawio runs on its own
+//   origin (https://localhost:5443) and talks to Nextcloud directly over WebDAV,
+//   so the postMessage path has no listener and revision history is broken.
+//
+//   These helpers fill that gap by talking directly to Nextcloud's Versions
+//   WebDAV endpoint, exactly the same way saveDrawIOToNextcloudXML and
+//   listDrawIOFilesInNextcloud talk to the Files endpoint. Authentication
+//   reuses the same _nextcloudSessionCache (Basic Auth via app password from
+//   Login Flow v2) so no new login flow is needed.
+//
+// API SHAPE (Nextcloud 25+):
+//   File metadata:   PROPFIND on /remote.php/dav/files/{user}/{path}/{file}
+//                    requesting <oc:fileid/> — returns the numeric file id.
+//   Version listing: PROPFIND on /remote.php/dav/versions/{user}/versions/{fileId}/
+//                    with Depth:1 — each <d:response> is one version. The href
+//                    last segment is the version's Unix-seconds timestamp.
+//   Version content: GET on the version href — body is the historical file XML.
+//   Restore:         MOVE on the version href with
+//                    Destination: /remote.php/dav/versions/{user}/restore/target
+//                    Nextcloud's DAV plugin recognises /restore/target as a
+//                    marker that means "atomically copy this version's contents
+//                    over the live file". This is the supported, idiomatic
+//                    restore path — there is no separate REST endpoint.
+//
+// All helpers return Promises that resolve to the documented value, or reject
+// with an Error containing a human-readable message. They rely on
+// buildNextcloudWebdavBaseContext for auth + URL construction so they share
+// the cookie/Basic-Auth strategy used everywhere else in this file.
+// ====== end of changes by SE ======
+
+// ====== NOLAI - {- Backend -} /Sprint 4/ Task 148 (Version Control) ======
+//
+// getFileIdFromNextcloud(filename, nextcloudUrl, username, password, remotePath)
+//
+// Resolves the Nextcloud internal file id for a file. The file id is required
+// by every other Versions endpoint — the Versions API is keyed by file id, not
+// path, so that file moves/renames do not break the version chain.
+//
+// Implementation: PROPFIND on the file with body
+//   <d:propfind xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns">
+//     <d:prop><oc:fileid/></d:prop>
+//   </d:propfind>
+// then parse the first <oc:fileid> element from the response.
+//
+// Returns a Promise resolving to the file id (string of digits) or null if the
+// file does not exist on the server (404 or empty response). Any other error
+// rejects so callers can surface useful messages.
+// ====== end of changes by SE ======
+function getFileIdFromNextcloud(filename, nextcloudUrl, username, password, remotePath) {
+    var ctx = buildNextcloudWebdavContext(filename, nextcloudUrl, username, password, remotePath || '/');
+    if (!ctx) {
+        return Promise.reject(new Error('Could not build WebDAV context'));
+    }
+
+    var headers = {
+        'Depth': '0',
+        'Content-Type': 'application/xml; charset=utf-8',
+    };
+    if (ctx.authHeader) { headers['Authorization'] = ctx.authHeader; }
+
+    // The oc: namespace is owncloud-derived and is what Nextcloud uses for fileid.
+    var body =
+        '<?xml version="1.0"?>' +
+        '<d:propfind xmlns:d="DAV:" xmlns:oc="http://owncloud.org/ns">' +
+        '<d:prop><oc:fileid/></d:prop>' +
+        '</d:propfind>';
+
+    return fetch(ctx.webdavUrl, Object.assign({}, ctx.requestBase, {
+        method: 'PROPFIND', headers: headers, body: body,
+    })).then(function(resp) {
+        // 404 = file not yet on Nextcloud → caller decides what to do (e.g. prompt save).
+        if (resp.status === 404) { return null; }
+        if (!resp.ok) {
+            throw new Error('PROPFIND for fileid failed: HTTP ' + resp.status);
+        }
+        return resp.text();
+    }).then(function(xmlText) {
+        if (xmlText == null) { return null; }
+        var parser = new DOMParser();
+        var doc = parser.parseFromString(xmlText, 'application/xml');
+        // Note: ownCloud namespace URI is used as-is by Nextcloud for backwards compat.
+        var nodes = doc.getElementsByTagNameNS('http://owncloud.org/ns', 'fileid');
+        if (nodes && nodes.length > 0 && nodes[0].textContent) {
+            return nodes[0].textContent.trim();
+        }
+        return null;
+    });
+}
+
+// ====== NOLAI - {- Backend -} /Sprint 4/ Task 148 (Version Control) ======
+//
+// listFileVersionsInNextcloud(fileId, nextcloudUrl, username, password)
+//
+// Lists every server-side version of the file identified by fileId.
+//
+// WebDAV endpoint:
+//   /remote.php/dav/versions/{user}/versions/{fileId}/
+// PROPFIND Depth:1 returns the directory itself + one <response> per version.
+//
+// Version metadata returned:
+//   versionId   — last segment of the version href (Unix seconds timestamp,
+//                 also a stable identifier the user can refer to)
+//   href        — absolute server-relative path used by GET / MOVE
+//   absUrl      — fully qualified URL (origin + href), used directly by fetch
+//   mtime       — JS milliseconds (parsed from <d:getlastmodified> RFC 1123)
+//   size        — bytes (parsed from <d:getcontentlength>) or null
+//   etag        — opaque etag string or null
+//
+// The current/live file is NOT returned by Nextcloud in this listing — only
+// the *historical* versions appear. The caller renders the live file as a
+// separate "Current" entry in the UI.
+//
+// Returns a Promise resolving to an array, sorted newest-first by mtime.
+// ====== end of changes by SE ======
+function listFileVersionsInNextcloud(fileId, nextcloudUrl, username, password) {
+    if (!fileId) {
+        return Promise.reject(new Error('Missing fileId — cannot list versions'));
+    }
+
+    // We deliberately use buildNextcloudWebdavBaseContext (NOT the per-file variant)
+    // because the versions endpoint is not under /remote.php/dav/files/, so the
+    // generic per-file URL builder would put us in the wrong place.
+    var ctx = buildNextcloudWebdavBaseContext(nextcloudUrl, username, password, '/');
+    if (!ctx) {
+        return Promise.reject(new Error('Could not build WebDAV context'));
+    }
+
+    // /remote.php/dav/versions/{user}/versions/{fileId}/
+    var versionsPath = '/remote.php/dav/versions/' + ctx.encodedUsername +
+                       '/versions/' + encodeURIComponent(fileId) + '/';
+    var versionsUrl = ctx.baseUrl + versionsPath;
+
+    var headers = {
+        'Depth': '1',
+        'Content-Type': 'application/xml; charset=utf-8',
+    };
+    if (ctx.authHeader) { headers['Authorization'] = ctx.authHeader; }
+
+    // Request the standard mtime/size/etag triple — sufficient to render
+    // a meaningful list. Author info varies across Nextcloud versions and
+    // is intentionally not requested to keep behaviour predictable.
+    var body =
+        '<?xml version="1.0"?>' +
+        '<d:propfind xmlns:d="DAV:">' +
+        '<d:prop>' +
+        '<d:getlastmodified/>' +
+        '<d:getcontentlength/>' +
+        '<d:getetag/>' +
+        '</d:prop>' +
+        '</d:propfind>';
+
+    return fetch(versionsUrl, Object.assign({}, ctx.requestBase, {
+        method: 'PROPFIND', headers: headers, body: body,
+    })).then(function(resp) {
+        // 404 = no versions stored for this file (Nextcloud keeps versions only
+        // after at least one overwrite; a brand-new file has zero versions).
+        if (resp.status === 404) { return ''; }
+        if (!resp.ok) {
+            throw new Error('PROPFIND for versions failed: HTTP ' + resp.status);
+        }
+        return resp.text();
+    }).then(function(xmlText) {
+        var versions = [];
+        if (!xmlText) { return versions; }
+
+        var parser = new DOMParser();
+        var doc = parser.parseFromString(xmlText, 'application/xml');
+        var responses = doc.getElementsByTagNameNS('DAV:', 'response');
+
+        for (var i = 0; i < responses.length; i++) {
+            var rsp = responses[i];
+            var hrefNode = rsp.getElementsByTagNameNS('DAV:', 'href')[0];
+            if (!hrefNode || !hrefNode.textContent) { continue; }
+
+            var href = hrefNode.textContent;
+            // The directory itself appears as the first <response>; skip it.
+            // It ends in "/versions/{fileId}/" while real versions end in a
+            // numeric timestamp segment with no trailing slash.
+            if (/\/versions\/[^/]+\/?$/.test(href) && /\/$/.test(href)) {
+                continue;
+            }
+
+            // Last non-empty path segment is the version id (Unix seconds).
+            var segments = href.split('/').filter(function(s) { return s.length > 0; });
+            var versionId = segments[segments.length - 1];
+            if (!versionId) { continue; }
+
+            // Parse <d:getlastmodified> (RFC 1123 string) → ms since epoch.
+            // Fall back to versionId * 1000 if Nextcloud omits the property.
+            var mtime = null;
+            var lmNodes = rsp.getElementsByTagNameNS('DAV:', 'getlastmodified');
+            if (lmNodes && lmNodes.length > 0 && lmNodes[0].textContent) {
+                var parsed = Date.parse(lmNodes[0].textContent);
+                if (!isNaN(parsed)) { mtime = parsed; }
+            }
+            if (mtime == null) {
+                var asNum = parseInt(versionId, 10);
+                if (!isNaN(asNum)) { mtime = asNum * 1000; }
+            }
+
+            var size = null;
+            var clNodes = rsp.getElementsByTagNameNS('DAV:', 'getcontentlength');
+            if (clNodes && clNodes.length > 0 && clNodes[0].textContent) {
+                var asInt = parseInt(clNodes[0].textContent, 10);
+                if (!isNaN(asInt)) { size = asInt; }
+            }
+
+            var etag = null;
+            var etagNodes = rsp.getElementsByTagNameNS('DAV:', 'getetag');
+            if (etagNodes && etagNodes.length > 0 && etagNodes[0].textContent) {
+                etag = etagNodes[0].textContent.replace(/^"|"$/g, '');
+            }
+
+            versions.push({
+                versionId: versionId,
+                href: href,
+                absUrl: ctx.baseOrigin + href,
+                mtime: mtime,
+                size: size,
+                etag: etag,
+            });
+        }
+
+        // Sort newest-first so the list reads top-to-bottom from most recent.
+        versions.sort(function(a, b) {
+            return (b.mtime || 0) - (a.mtime || 0);
+        });
+
+        return versions;
+    });
+}
+
+// ====== NOLAI - {- Backend -} /Sprint 4/ Task 148 (Version Control) ======
+//
+// getVersionContentFromNextcloud(versionAbsUrl, username, password)
+//
+// Fetches the raw XML body of a single historical version. This is the same
+// kind of content that getDrawIOFromNextcloudXML returns for the live file —
+// a draw.io <mxfile> XML document — so the result can be fed straight into
+// editorUi.fileLoaded(new LocalFile(...)) or used to populate a preview Graph.
+//
+// We construct the auth context from a base URL because the version URL is
+// fully qualified and not under /remote.php/dav/files/.
+// ====== end of changes by SE ======
+function getVersionContentFromNextcloud(versionAbsUrl, nextcloudUrl, username, password) {
+    if (!versionAbsUrl) {
+        return Promise.reject(new Error('Missing version URL'));
+    }
+    var ctx = buildNextcloudWebdavBaseContext(nextcloudUrl, username, password, '/');
+    if (!ctx) {
+        return Promise.reject(new Error('Could not build WebDAV context'));
+    }
+
+    var headers = {};
+    if (ctx.authHeader) { headers['Authorization'] = ctx.authHeader; }
+
+    return fetch(versionAbsUrl, Object.assign({}, ctx.requestBase, {
+        method: 'GET', headers: headers,
+    })).then(function(resp) {
+        if (!resp.ok) {
+            throw new Error('GET version failed: HTTP ' + resp.status);
+        }
+        return resp.text();
+    });
+}
+
+// ====== NOLAI - {- Backend -} /Sprint 4/ Task 148 (Version Control) ======
+//
+// restoreVersionInNextcloud(versionAbsUrl, nextcloudUrl, username, password)
+//
+// Atomically rolls the live file back to a chosen historical version.
+//
+// Implementation: WebDAV MOVE on the version's absolute URL with the
+// Destination header set to /remote.php/dav/versions/{user}/restore/target.
+// Nextcloud's DAV plugin recognises that path as a virtual restore marker —
+// the server overwrites the live file with the version's contents and then
+// captures the *previous* live state as a new version (so a restore is itself
+// reversible by performing another restore on the now-newest historical entry).
+//
+// WHY MOVE (and not COPY/PUT to the live file):
+//   - MOVE is the documented Nextcloud restore mechanism; it preserves the
+//     original mtime/etag chain and triggers the proper "version restored"
+//     activity entry inside Nextcloud.
+//   - PUT-ing the version contents to the live file would create an extra
+//     intermediate version and lose the link to the original entry.
+//
+// Returns a Promise resolving to true on success or rejecting with an Error.
+// ====== end of changes by SE ======
+function restoreVersionInNextcloud(versionAbsUrl, nextcloudUrl, username, password) {
+    if (!versionAbsUrl) {
+        return Promise.reject(new Error('Missing version URL'));
+    }
+    var ctx = buildNextcloudWebdavBaseContext(nextcloudUrl, username, password, '/');
+    if (!ctx) {
+        return Promise.reject(new Error('Could not build WebDAV context'));
+    }
+
+    // Destination is the virtual restore-target path under the user's versions root.
+    var destination = ctx.baseUrl +
+        '/remote.php/dav/versions/' + ctx.encodedUsername + '/restore/target';
+
+    var headers = {
+        'Destination': destination,
+        // Overwrite must be T (true) — we are explicitly replacing the live file.
+        'Overwrite': 'T',
+    };
+    if (ctx.authHeader) { headers['Authorization'] = ctx.authHeader; }
+
+    return fetch(versionAbsUrl, Object.assign({}, ctx.requestBase, {
+        method: 'MOVE', headers: headers,
+    })).then(function(resp) {
+        // 201 Created or 204 No Content both indicate success in WebDAV semantics.
+        if (resp.status === 201 || resp.status === 204) { return true; }
+        throw new Error('Version restore (MOVE) failed: HTTP ' + resp.status);
+    });
+}
