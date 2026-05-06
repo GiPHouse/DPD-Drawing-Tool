@@ -11,8 +11,8 @@
 Draw.loadPlugin(function (ui) {
   console.log('[DPD] Plugin loading…');
 
-  const graph = ui.editor.graph;
-  const model = graph.getModel();
+  const graph = ui && ui.editor ? ui.editor.graph : null;
+  const model = graph && typeof graph.getModel === 'function' ? graph.getModel() : null;
 
   if (!graph || !model) {
     console.error('[DPD] Graph not available');
@@ -1227,7 +1227,7 @@ Draw.loadPlugin(function (ui) {
         graph.addCellOverlay(edge, overlay);
       });
 
-        vertexViolationMap.forEach(function (info, vertex) {
+      vertexViolationMap.forEach(function (info, vertex) {
         violationHighlightedEdges.set(vertex, vertex.style || '');
 
         var color = info.hasError ? '#ff4444' : '#ffaa00';
@@ -1274,7 +1274,6 @@ Draw.loadPlugin(function (ui) {
         graph.addCellOverlay(vertex, overlay);
 
       });
-
     } finally {
       model.endUpdate();
     }
