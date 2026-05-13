@@ -1850,7 +1850,7 @@ function restoreVersionInNextcloud(versionAbsUrl, nextcloudUrl, username, passwo
     });
 }
 
-// ====== NOLAI - {- Backend -} /SprintX/ Task YYY (File Sharing) ======
+// ====== NOLAI - {- Backend -} /Sprint 4/ Task 192 ======
 //
 // searchNextcloudUsers — searches for Nextcloud users by display name.
 //
@@ -1891,7 +1891,7 @@ function searchNextcloudUsers(query, nextcloudUrl, username, password) {
     .catch(function() { return []; });
 }
 
-// ====== NOLAI - {- Backend -} /SprintX/ Task YYY (File Sharing) ======
+// ====== NOLAI - {- Backend -} /Sprint 4/ Task 192 ======
 //
 // shareFileWithUser — shares a Nextcloud file with another user via the OCS Share API.
 //

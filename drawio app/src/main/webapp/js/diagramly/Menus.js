@@ -4573,7 +4573,36 @@
 				
 				if (file != null)
 				{
-					// ======	NOLAI - {- Backend -} /Sprint 2/ Task 99	======
+					// ====== NOLAI - {- Frontend -} /Sprint 4/ Task 191 ======
+					// ====== NOLAI - {- Backend -} /Sprint 4/ Task 192 ======
+					//
+					// Share dialog — implements file sharing with Nextcloud users via the
+					// OCS Share API. Users are searched by Authentik display name via the
+					// Nextcloud autocomplete endpoint; the resolved UID is passed to the
+					// Share API so Nextcloud can create the share internally.
+					//
+					// Originally scaffolded as UI-only in Sprint 2 / Task 99.
+					// Backend and full frontend wiring added in Sprint 4 / Tasks 191-192.
+					//
+					// GATE: Bail early with a clear message if the file has not yet been
+					// saved to Nextcloud (no server-side path exists to share) or if the
+					// user is not signed in (no credentials to call the Share API with).
+					// This prevents a confusing 404 or 401 surfacing from deep inside the
+					// Promise chain instead of a readable message.
+					// ====== end of changes by SE ======
+					if (!_nolaiCurrentNextcloudFile)
+					{
+						editorUi.handleError({message: 'Save the file to Nextcloud before sharing.'});
+						return;
+					}
+
+					if (!_nextcloudSessionCache.username || !_nextcloudSessionCache.password)
+					{
+						editorUi.handleError({message: 'Sign in to Nextcloud before sharing.'});
+						return;
+					}
+
+					// ====== NOLAI - {- Frontend -} /Sprint 4/ Task 191 ======
 					var allPeople = [];
 					var selectedPeople = {};
 
@@ -4628,13 +4657,6 @@
 					status.style.fontSize = '12px';
 					status.style.color = '#666';
 					div.appendChild(status);
-
-					var hint = document.createElement('div');
-					hint.style.marginTop = '10px';
-					hint.style.fontSize = '11px';
-					hint.style.color = '#888';
-					hint.innerHTML = 'This is UI-only. Selected recipients are prepared for backend integration.';
-					div.appendChild(hint);
 
 					function normalizePeople(raw)
 					{
@@ -4799,51 +4821,78 @@
 						}
 					}
 
+					// ====== NOLAI - {- Backend -} /Sprint 4/ Task 192 ======
+					//
+					// loadCompanyPeople — queries the Nextcloud autocomplete endpoint for users.
+					//
+					// WHY the autocomplete endpoint rather than /cloud/users:
+					//   /cloud/users requires admin privileges. The autocomplete endpoint is
+					//   available to all authenticated users and is the same source Nextcloud's
+					//   own sharing UI uses. It returns both UID and display name in one call.
+					//
+					// WHY an empty-string initial query:
+					//   Passing '' returns a first page of users so the list is populated
+					//   immediately on dialog open — the user can refine with the search box.
+					// ====== end of changes by SE ======
 					function loadCompanyPeople()
 					{
-						status.innerHTML = 'Loading company colleagues...';
+						var cache = _nextcloudSessionCache;
 
-						var source = null;
-
-						if (typeof window.getNextcloudCompanyUsers === 'function')
+						if (!cache.username || !cache.password)
 						{
-							try
-							{
-								source = window.getNextcloudCompanyUsers();
-							}
-							catch (e)
-							{
-								source = [];
-							}
-						}
-						else if (window.NEXTCLOUD_COMPANY_USERS != null)
-						{
-							source = window.NEXTCLOUD_COMPANY_USERS;
-						}
-						else
-						{
-							source = [];
+							status.innerHTML = 'Not signed in to Nextcloud. Use the Sign in button first.';
+							setPeople([]);
+							return;
 						}
 
-						if (source != null && typeof source.then === 'function')
-						{
-							source.then(function(users)
+						status.innerHTML = 'Loading colleagues…';
+
+						searchNextcloudUsers('', cache.baseUrl, cache.username, cache.password)
+							.then(function(users)
 							{
-								setPeople(users);
-							}).catch(function()
+								// Exclude the currently signed-in user from the list.
+								var others = users.filter(function(u) { return u.id !== cache.username; });
+								setPeople(others);
+							})
+							.catch(function()
 							{
+								status.innerHTML = 'Could not load users. Check your Nextcloud connection.';
 								setPeople([]);
 							});
-						}
-						else
-						{
-							setPeople(source);
-						}
 					}
+
+					// ====== NOLAI - {- Frontend -} /Sprint 4/ Task 191 ======
+					//
+					// WHY debounce at 300ms:
+					//   Each keystroke would otherwise fire an HTTP request. 300ms gives the
+					//   user time to finish typing a few characters before hitting the network.
+					//   Local filtering (renderList) is still applied immediately so the list
+					//   feels responsive while the API call is in flight.
+					// ====== end of changes by SE ======
+					var _shareSearchTimer = null;
 
 					mxEvent.addListener(searchInput, 'input', function()
 					{
+						// Apply local filter immediately for responsiveness.
 						renderList(searchInput.value);
+
+						// Then fire a real API search after the debounce window.
+						clearTimeout(_shareSearchTimer);
+						_shareSearchTimer = setTimeout(function()
+						{
+							var query = mxUtils.trim(searchInput.value);
+							var cache = _nextcloudSessionCache;
+
+							if (!cache.username || !cache.password) { return; }
+
+							searchNextcloudUsers(query, cache.baseUrl, cache.username, cache.password)
+								.then(function(users)
+								{
+									var others = users.filter(function(u) { return u.id !== cache.username; });
+									allPeople = normalizePeople(others);
+									renderList(searchInput.value);
+								});
+						}, 300);
 					});
 
 					mxEvent.addListener(refreshBtn, 'click', function(evt)
@@ -4852,6 +4901,18 @@
 						loadCompanyPeople();
 					});
 
+					// ====== NOLAI - {- Backend -} /Sprint 4/ Task 192 ======
+					//
+					// WHY recipients from getSelectedRecipients() are already UIDs:
+					//   normalizePeople() maps item.id (the Nextcloud UID) to person.email, which
+					//   is what selectedPeople and getSelectedRecipients() use as the key. The
+					//   field is named "email" for legacy reasons but holds the UID in this flow.
+					//
+					// WHY we check _nolaiCurrentNextcloudFile at the gate (top of share action):
+					//   The Share API needs the server-side file path. If the file has never been
+					//   saved to Nextcloud, there is no path to share. We gate early with a clear
+					//   message rather than failing silently with a 404 from inside the Promise chain.
+					// ====== end of changes by SE ======
 					var shareDlg = new CustomDialog(editorUi, div, function()
 					{
 						var recipients = getSelectedRecipients();
@@ -4862,13 +4923,46 @@
 							return;
 						}
 
-						window.pendingNextcloudShareRequest = {
-							fileName: (file.getTitle != null) ? file.getTitle() : editorUi.defaultFilename,
-							recipients: recipients,
-							timestamp: new Date().toISOString()
-						};
+						if (!_nolaiCurrentNextcloudFile)
+						{
+							editorUi.handleError({message: 'Save the file to Nextcloud before sharing.'});
+							return;
+						}
 
-						editorUi.editor.setStatus('Share request prepared for ' + recipients.length + ' colleague(s).');
+						var cache = _nextcloudSessionCache;
+
+						if (!cache.username || !cache.password)
+						{
+							editorUi.handleError({message: 'Not signed in to Nextcloud.'});
+							return;
+						}
+
+						var filename   = _nolaiCurrentNextcloudFile.filename;
+						var remotePath = _nolaiCurrentNextcloudFile.remotePath || '/';
+
+						status.innerHTML = 'Sharing…';
+
+						// Fire share requests in parallel for all selected recipients.
+						var sharePromises = recipients.map(function(uid)
+						{
+							return shareFileWithUser(
+								filename, uid, cache.baseUrl, cache.username, cache.password, remotePath
+							);
+						});
+
+						Promise.all(sharePromises)
+							.then(function()
+							{
+								editorUi.editor.setStatus(
+									'Shared "' + filename + '" with ' + recipients.length + ' colleague(s).'
+								);
+								editorUi.hideDialog();
+							})
+							.catch(function(err)
+							{
+								editorUi.handleError({message: 'Share failed: ' + (err.message || err)});
+							});
+
 					}, null, mxResources.get('share'));
 
 					editorUi.showDialog(shareDlg.container, 540, 460, true, false);
