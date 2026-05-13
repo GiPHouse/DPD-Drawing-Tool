@@ -324,7 +324,64 @@ EOF
 )" >/dev/null
 echo "  goauthentik application 'nextcloud' created."
 
-# -- 5d. Write credentials back to .env --
+# ====== NOLAI - Infrastructure / Sprint 4 / Task 192 ======
+#
+# -- 5d. Create a second dev user so file-sharing can be tested locally --
+#
+# WHY a second user is needed:
+#   The file-sharing feature (Sprint 4 / Task 192) lets a logged-in user share
+#   a draw.io file with another Nextcloud user. Testing this end-to-end requires
+#   at least two distinct accounts — the sharer (akadmin) and a recipient.
+#   The bootstrap only creates akadmin, so we provision 'devuser' here via the
+#   goauthentik API so every developer gets a working second account without any
+#   manual UI steps.
+#
+# IDEMPOTENCY:
+#   We check whether the user already exists before creating. If it does, we
+#   skip creation but still call set_password so re-running the script resets
+#   the password to the known value — useful after a stack wipe.
+#
+# CREDENTIALS (dev stack only — never use these in production):
+#   akadmin  / ${AUTHENTIK_BOOTSTRAP_PASSWORD}   (goauthentik bootstrap admin)
+#   devuser  / devpass123                         (second test user)
+# ====== end of changes by SE ======
+DEV_USER_USERNAME="devuser"
+DEV_USER_NAME="Dev User"
+DEV_USER_EMAIL="devuser@localhost"
+DEV_USER_PASSWORD="devpass123"
+
+EXISTING_DEV_USER_PK=$(ak_get "/core/users/?username=${DEV_USER_USERNAME}" \
+    | jq -r '.results[0].pk // empty')
+
+if [ -z "$EXISTING_DEV_USER_PK" ]; then
+    DEV_USER_RESPONSE=$(ak_post "/core/users/" "$(cat <<EOF
+{
+  "username": "${DEV_USER_USERNAME}",
+  "name":     "${DEV_USER_NAME}",
+  "email":    "${DEV_USER_EMAIL}",
+  "is_active": true,
+  "type":     "internal"
+}
+EOF
+)")
+    EXISTING_DEV_USER_PK=$(echo "$DEV_USER_RESPONSE" | jq -r '.pk // empty')
+    if [ -z "$EXISTING_DEV_USER_PK" ]; then
+        echo "  WARNING: Could not create dev user '${DEV_USER_USERNAME}' — sharing tests will require manual user setup."
+    else
+        echo "  Dev user '${DEV_USER_USERNAME}' created (pk: ${EXISTING_DEV_USER_PK})."
+    fi
+else
+    echo "  Dev user '${DEV_USER_USERNAME}' already exists (pk: ${EXISTING_DEV_USER_PK}) — skipping creation."
+fi
+
+# Always set the password so re-running the script restores the known value.
+if [ -n "$EXISTING_DEV_USER_PK" ]; then
+    ak_post "/core/users/${EXISTING_DEV_USER_PK}/set_password/" \
+        "{\"password\": \"${DEV_USER_PASSWORD}\"}" >/dev/null
+    echo "  Password set for '${DEV_USER_USERNAME}'."
+fi
+
+# -- 5f. Write credentials back to .env --
 # Store the credentials generated above so subsequent runs and the
 # Nextcloud occ step below always use the same values.
 update_env_var() {
@@ -438,7 +495,10 @@ echo " goauthentik  : http://authentik-server:9000"
 echo "======================================================="
 echo ""
 echo " goauthentik admin UI : http://authentik-server:9000/if/admin/"
-echo " goauthentik admin user: akadmin"
+echo ""
+echo " Dev accounts (for testing file sharing):"
+echo "   akadmin  / ${AUTHENTIK_BOOTSTRAP_PASSWORD}   (admin)"
+echo "   devuser  / devpass123                         (second test user)"
 echo ""
 echo " NEXT STEP — Trust the Caddy certificate (same as start.sh):"
 echo "   macOS: sudo security add-trusted-cert -d -r trustRoot \\"
