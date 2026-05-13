@@ -1183,16 +1183,47 @@ function attachNextcloudTopBarButton(container, nextcloudBaseUrl, onLoggedIn) {
                 evt.stopPropagation();
                 removeDropdown();
                 // ====== NOLAI - {- Backend -} /Sprint 4/ Task 191 ======
-                // Clear session cache so subsequent actions require re-authentication.
-                // WHY only clear the cache (not revoke the app password):
-                //   Revoking would require an authenticated DELETE to /ocs/v2.php/core/apppassword,
-                //   but the user may have used the same app password elsewhere. Clearing the
-                //   local cache is sufficient to require a fresh login from this browser session.
+                // Sign out from both Nextcloud (local cache) and Authentik (server session).
+                //
+                // WHY two steps:
+                //   1. Clearing the local cache stops draw.io sending the old app password on
+                //      future requests, so the next Nextcloud action requires re-authentication.
+                //   2. Hitting Authentik's end_session endpoint invalidates the server-side OIDC
+                //      session so the browser's Authentik cookie is cleared. Without this step
+                //      the Login Flow v2 popup would silently re-authenticate the same user
+                //      instead of showing the Authentik login screen.
+                //
+                // WHY a popup (not a redirect):
+                //   draw.io is a single-page app; navigating the main window away would destroy
+                //   all unsaved work. A small popup completes the server-side logout then closes
+                //   itself, leaving the editor intact.
+                //
+                // The Authentik end_session URL follows the pattern:
+                //   http://authentik-server:9000/application/o/<app-slug>/end-session/
+                // The app slug is 'nextcloud' (set in start-auth.sh when the Authentik
+                // application is created with the name "Nextcloud").
                 // ====== end of changes by SE ======
                 _nextcloudSessionCache.username    = null;
                 _nextcloudSessionCache.password    = null;
                 _nextcloudSessionCache.baseUrl     = null;
                 _nextcloudSessionCache.displayName = null;
+
+                // Open Authentik end_session in a small popup. The popup navigates to the
+                // end_session page which clears the Authentik session cookie, then we close
+                // it after a short delay to give the server time to process the request.
+                var authentikLogoutUrl = 'http://authentik-server:9000/application/o/nextcloud/end-session/';
+                var logoutPopup = window.open(
+                    authentikLogoutUrl,
+                    'authentik_logout',
+                    'width=500,height=400,toolbar=no,menubar=no,location=no,status=no'
+                );
+
+                // Close the popup after 2 s — enough time for Authentik to process the
+                // end_session request and clear the session cookie in the browser.
+                setTimeout(function() {
+                    try { if (logoutPopup && !logoutPopup.closed) { logoutPopup.close(); } } catch(e) {}
+                }, 2000);
+
                 showSignInButton();
             });
             dropdown.appendChild(signOutBtn);

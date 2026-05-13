@@ -1762,29 +1762,6 @@
 							sharingPane.appendChild(othersSec);
 						}
 
-						// -- Internal link --
-						var intSec = document.createElement('div');
-						intSec.style.cssText = 'border-top:1px solid #e0e0e0;padding-top:12px;display:flex;align-items:center;justify-content:space-between;';
-						var intLabel = document.createElement('div');
-						intLabel.style.cssText = 'font-size:13px;color:#555;';
-						intLabel.textContent = '\uD83D\uDD17 Internal link';
-						intSec.appendChild(intLabel);
-						var intCopyBtn = document.createElement('button');
-						intCopyBtn.textContent = 'Copy link';
-						intCopyBtn.style.cssText = 'padding:5px 10px;border:1px solid #ccc;border-radius:4px;background:#fff;color:#333;cursor:pointer;font-size:12px;font-family:Helvetica,Arial,sans-serif;';
-						intCopyBtn.onclick = function()
-						{
-							var folder = (file.remotePath || '/').replace(/^\/+|\/+$/g, '');
-							var internalUrl = nextcloudBaseUrl + '/index.php/apps/files/?dir=/' + (folder ? folder : '') + '&openfile=' + encodeURIComponent(file.name);
-							navigator.clipboard.writeText(internalUrl).then(function()
-							{
-								intCopyBtn.textContent = '\u2713 Copied';
-								setTimeout(function() { intCopyBtn.textContent = 'Copy link'; }, 2000);
-							}).catch(function() { document.execCommand('copy'); });
-						};
-						intSec.appendChild(intCopyBtn);
-						sharingPane.appendChild(intSec);
-
 						// Refresh avatar chips in file list for this file
 						var fileIdx = files.indexOf(file);
 						if (fileIdx >= 0 && rowEls[fileIdx])
@@ -6765,10 +6742,8 @@
 			if (urlParams['noFileMenu'] != '1')
 			{
 				// ====== NOLAI - {- Frontend -} /Sprint 4/ Task 148 (Version Control) ======
-				// 'Version History' added next to Save / My Files so the in-app version
-				// control UI is reachable from every theme that exposes the File menu.
 				// ====== end of changes by SE ======
-				editorUi.menus.addMenuItems(menu, ['Save', 'Save As', 'My Files', 'Version History'], parent);
+				editorUi.menus.addMenuItems(menu, ['Save', 'Save As', 'My Files'], parent);
 			}
 
 			if (Editor.currentTheme != 'simple' && Editor.currentTheme != 'min')
@@ -6918,10 +6893,8 @@
 					else
 					{
 						// ====== NOLAI - {- Frontend -} /Sprint 4/ Task 148 (Version Control) ======
-						// Version History exposed in the embedded-file menu path too so the
-						// entry point is consistent regardless of how drawio is launched.
 						// ====== end of changes by SE ======
-						this.addMenuItems(menu, ['Save', 'Save As', 'My Files', 'Version History'], parent);
+						this.addMenuItems(menu, ['Save', 'Save As', 'My Files'], parent);
 
 						if (urlParams['saveAndExit'] == '1')
 						{
@@ -7064,9 +7037,8 @@
 					this.addMenuItems(menu, ['new'], parent);
 				}
 				// ======	NOLAI - {- Frontend -} /Sprint 2 & 3/ Task 98, Task 100 and Task 151	=====
-				// ======	NOLAI - {- Frontend -} /Sprint 4/ Task 148 — added 'Version History'	=====
 				menu.addSeparator(parent);
-				this.addMenuItems(menu, ['Save', 'Save As', 'My Files', 'Version History', 'share'], parent);
+				this.addMenuItems(menu, ['Save', 'Save As', 'My Files'], parent);
 				// ====== end of changes by SE	======
 			
 				if (file != null && file.constructor == DriveFile)
