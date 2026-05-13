@@ -590,39 +590,169 @@ Draw.loadPlugin(function (ui) {
   // addEdgeIcon) so it never overlaps the error-badge which sits at y=0.
   const TEST_ICON_SVG = {
     directly_identifiable: {
-      w: 86, h: 22,
-      svg: `<svg xmlns="http://www.w3.org/2000/svg" width="86" height="22" viewBox="0 0 86 22">
-        <rect x="1" y="1" width="84" height="20" rx="10" fill="#c0392b"/>
-        <text x="43" y="15" text-anchor="middle" fill="white" font-size="9" font-weight="bold" font-family="Arial,sans-serif">Direct ID</text>
-      </svg>`,
+      w: 28,
+      h: 32,
+      svg: `
+      <svg xmlns="http://www.w3.org/2000/svg" width="28" height="32" viewBox="0 0 28 32">
+        <!-- head -->
+        <circle cx="14" cy="8" r="6.5"
+          fill="white"
+          stroke="#1e1e1e"
+          stroke-width="2.2"/>
+
+        <!-- body -->
+        <rect x="4" y="18" width="20" height="10"
+          fill="white"
+          stroke="#1e1e1e"
+          stroke-width="2.2"/>
+
+        <!-- filled arrow -->
+        <polygon points="20,16 27,12 23,19"
+          fill="#1e1e1e"/>
+      </svg>
+      `,
     },
+
     indirectly_identifiable: {
-      w: 100, h: 22,
-      svg: `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="22" viewBox="0 0 100 22">
-        <rect x="1" y="1" width="98" height="20" rx="10" fill="#e67e22"/>
-        <text x="50" y="15" text-anchor="middle" fill="white" font-size="9" font-weight="bold" font-family="Arial,sans-serif">Indirect ID</text>
-      </svg>`,
+      w: 28,
+      h: 32,
+      svg: `
+      <svg xmlns="http://www.w3.org/2000/svg" width="28" height="32" viewBox="0 0 28 32">
+        <!-- head -->
+        <circle cx="14" cy="8" r="6.5"
+          fill="white"
+          stroke="#1e1e1e"
+          stroke-width="2.2"/>
+
+        <!-- body -->
+        <rect x="4" y="18" width="20" height="10"
+          fill="white"
+          stroke="#1e1e1e"
+          stroke-width="2.2"/>
+
+        <!-- ~ hook -->
+        <path d="
+          M20 24
+          Q22 21 24 24
+          Q25 25 26 23
+        "
+          fill="none"
+          stroke="#1e1e1e"
+          stroke-width="2.2"
+          stroke-linecap="round"
+          stroke-linejoin="round"/>
+      </svg>
+      `,
     },
+
     anonymous: {
-      w: 80, h: 22,
-      svg: `<svg xmlns="http://www.w3.org/2000/svg" width="80" height="22" viewBox="0 0 80 22">
-        <rect x="1" y="1" width="78" height="20" rx="10" fill="#27ae60"/>
-        <text x="40" y="15" text-anchor="middle" fill="white" font-size="9" font-weight="bold" font-family="Arial,sans-serif">Anonymous</text>
-      </svg>`,
+      w: 28,
+      h: 32,
+      svg: `
+      <svg xmlns="http://www.w3.org/2000/svg" width="28" height="32" viewBox="0 0 28 32">
+        <!-- head -->
+        <circle cx="14" cy="8" r="6.5"
+          fill="white"
+          stroke="#1e1e1e"
+          stroke-width="2.2"/>
+
+        <!-- body -->
+        <rect x="4" y="18" width="20" height="10"
+          fill="white"
+          stroke="#1e1e1e"
+          stroke-width="2.2"/>
+
+        <!-- X -->
+        <line x1="20" y1="12" x2="27" y2="19"
+          stroke="#1e1e1e"
+          stroke-width="2.2"/>
+
+        <line x1="27" y1="12" x2="20" y2="19"
+          stroke="#1e1e1e"
+          stroke-width="2.2"/>
+      </svg>
+      `,
     },
+
     strict_pseudonymous: {
-      w: 102, h: 22,
-      svg: `<svg xmlns="http://www.w3.org/2000/svg" width="102" height="22" viewBox="0 0 102 22">
-        <rect x="1" y="1" width="100" height="20" rx="10" fill="#2980b9"/>
-        <text x="51" y="15" text-anchor="middle" fill="white" font-size="9" font-weight="bold" font-family="Arial,sans-serif">Strict Pseudo</text>
-      </svg>`,
+      w: 28,
+      h: 32,
+      svg: `
+      <svg xmlns="http://www.w3.org/2000/svg" width="28" height="32" viewBox="0 0 28 32">
+        <!-- head -->
+        <circle cx="14" cy="8" r="6.5"
+          fill="white"
+          stroke="#1e1e1e"
+          stroke-width="2.2"/>
+
+        <!-- body -->
+        <rect x="4" y="18" width="20" height="10"
+          fill="white"
+          stroke="#1e1e1e"
+          stroke-width="2.2"/>
+
+        <!-- asterisk -->
+        <line x1="24" y1="6" x2="24" y2="14"
+          stroke="#1e1e1e"
+          stroke-width="2"/>
+
+        <line x1="20.5" y1="8" x2="27.5" y2="12"
+          stroke="#1e1e1e"
+          stroke-width="2"/>
+
+        <line x1="20.5" y1="12" x2="27.5" y2="8"
+          stroke="#1e1e1e"
+          stroke-width="2"/>
+
+        <!-- small vertical line -->
+        <line x1="24" y1="15" x2="24" y2="19"
+          stroke="#1e1e1e"
+          stroke-width="2"/>
+      </svg>
+      `,
     },
+
     soft_pseudonymous: {
-      w: 94, h: 22,
-      svg: `<svg xmlns="http://www.w3.org/2000/svg" width="94" height="22" viewBox="0 0 94 22">
-        <rect x="1" y="1" width="92" height="20" rx="10" fill="#8e44ad"/>
-        <text x="47" y="15" text-anchor="middle" fill="white" font-size="9" font-weight="bold" font-family="Arial,sans-serif">Soft Pseudo</text>
-      </svg>`,
+      w: 28,
+      h: 32,
+      svg: `
+      <svg xmlns="http://www.w3.org/2000/svg" width="28" height="32" viewBox="0 0 28 32">
+        <!-- head -->
+        <circle cx="14" cy="8" r="6.5"
+          fill="white"
+          stroke="#1e1e1e"
+          stroke-width="2.2"/>
+
+        <!-- body -->
+        <rect x="4" y="18" width="20" height="10"
+          fill="white"
+          stroke="#1e1e1e"
+          stroke-width="2.2"/>
+
+        <!-- asterisk -->
+        <line x1="24" y1="6" x2="24" y2="14"
+          stroke="#1e1e1e"
+          stroke-width="2"/>
+
+        <line x1="20.5" y1="8" x2="27.5" y2="12"
+          stroke="#1e1e1e"
+          stroke-width="2"/>
+
+        <line x1="20.5" y1="12" x2="27.5" y2="8"
+          stroke="#1e1e1e"
+          stroke-width="2"/>
+
+        <!-- hooked arrow -->
+        <line x1="20" y1="18" x2="25" y2="21"
+          stroke="#1e1e1e"
+          stroke-width="2"/>
+
+        <polyline points="21,21 25,21 25,17"
+          fill="none"
+          stroke="#1e1e1e"
+          stroke-width="2"/>
+      </svg>
+      `,
     },
   };
 
