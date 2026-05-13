@@ -1932,7 +1932,11 @@ function shareFileWithUser(filename, targetUid, nextcloudUrl, username, password
         'permissions=' + perms,
     ].join('&');
 
-    return fetch(nextcloudUrl + '/ocs/v2.php/apps/files_sharing/api/v1/shares', {
+    // WHY ?format=json on the URL:
+    //   The OCS API defaults to XML when no format is specified. Every other OCS
+    //   call in this file uses ?format=json; without it here the response body
+    //   starts with "<?xml" and r.json() throws "Unexpected token '<'".
+    return fetch(nextcloudUrl + '/ocs/v2.php/apps/files_sharing/api/v1/shares?format=json', {
         method: 'POST',
         headers: {
             'Authorization':  'Basic ' + btoa(username + ':' + password),
