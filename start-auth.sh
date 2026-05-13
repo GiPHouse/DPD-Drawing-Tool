@@ -347,7 +347,7 @@ echo "  goauthentik application 'nextcloud' created."
 # ====== end of changes by SE ======
 DEV_USER_USERNAME="devuser"
 DEV_USER_NAME="Dev User"
-DEV_USER_EMAIL="devuser@localhost"
+DEV_USER_EMAIL="devuser@example.com"
 DEV_USER_PASSWORD="devpass123"
 
 EXISTING_DEV_USER_PK=$(ak_get "/core/users/?username=${DEV_USER_USERNAME}" \

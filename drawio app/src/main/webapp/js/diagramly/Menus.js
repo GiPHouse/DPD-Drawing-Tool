@@ -1240,230 +1240,771 @@
 	
 		// ======	NOLAI - {- Backend -} /Sprint 1/ Task 92	=====
 		// ======   NOLAI - {- Frontend -} /Sprint 2/ Task 100  =====
+		// ======   NOLAI - {- Frontend -} /Sprint 4/ Task 191  =====
+		// ======   NOLAI - {- Backend -} /Sprint 4/ Task 192   =====
+		//
+		// 'My Files' action — full two-panel Nextcloud-style Files UI.
+		//
+		// Layout (960 x 580px dialog):
+		//   Left panel  (300px) — scrollable .drawio file list with collaborator chips.
+		//   Right panel (auto)  — file header + two tabs shown on file selection:
+		//     Sharing tab  — public share link (create/copy/remove), share-with-people
+		//                    search field, existing user shares with permissions
+		//                    dropdown and x remove button, "Others with access"
+		//                    collapsible, internal link copy button.
+		//     Versions tab — version list + live read-only Graph preview + Restore.
+		//   Bottom row — Delete (left/red), Load Diagram + Close (right/teal+white).
+		//
+		// WHY one unified dialog:
+		//   Nextcloud's Files sidebar surfaces management, sharing and versioning in
+		//   one place. Mirroring that here removes context switching — the user never
+		//   needs to close one dialog and open another to share then check versions.
+		//
+		// The standalone 'Version History' menu action is kept as a shortcut for
+		// the currently open file. This tab shows versions for the *selected* file.
+		// ====== end of changes by SE ======
 		editorUi.actions.addAction('My Files', function()
 		{
 			var nolaiColor = '#008f89';
-
-			// ====== NOLAI - {- Backend -} /Sprint 3/ Task 151 ======
-			// Nextcloud base URL — WebDAV paths are built from this + the uid returned by the banner.
 			var nextcloudBaseUrl = 'https://localhost';
-			var nextcloudUsername = null; // uid, populated by the session banner on connect
-			var nextcloudPassword = null; // app password for WebDAV Basic Auth, also from banner
+			var nextcloudUsername = null;
+			var nextcloudPassword = null;
 
-			/**
-			 * Fetches all .drawio files from Nextcloud via WebDAV and opens the
-			 * file-picker dialog. Called automatically once the session banner
-			 * confirms credentials are available — no button click required.
-			 */
+			if (typeof listDrawIOFilesInNextcloud !== 'function' ||
+				typeof getDrawIOFromNextcloudXML !== 'function' ||
+				typeof deleteFileInNextcloud !== 'function')
+			{
+				editorUi.handleError({message: 'NextcloudFile.js helpers are not loaded.'});
+				return;
+			}
+
 			var fetchNextcloudFiles = function()
 			{
-				var url = nextcloudBaseUrl + '/remote.php/dav/files/' + encodeURIComponent(nextcloudUsername) + '/';
+				var davUrl = nextcloudBaseUrl + '/remote.php/dav/files/' + encodeURIComponent(nextcloudUsername) + '/';
 
-				// Guard: verify all helper functions are present before proceeding.
-				if (typeof listDrawIOFilesInNextcloud !== 'function' || typeof getDrawIOFromNextcloudXML !== 'function' || typeof deleteFileInNextcloud !== 'function')
-				{
-					editorUi.handleError({message: 'NextcloudFile.js is not loaded'});
-					return;
-				}
-
-				editorUi.spinner.spin(document.body, 'Loading file list from Nextcloud...');
-
-				listDrawIOFilesInNextcloud(url, null, nextcloudPassword, '/').then(function(files)
+				listDrawIOFilesInNextcloud(davUrl, null, nextcloudPassword, '/').then(function(files)
 				{
 					editorUi.spinner.stop();
 
-					// Abort if no .drawio files were found.
-					if (files == null || files.length === 0)
+					if (!files || files.length === 0)
 					{
 						editorUi.handleError({message: 'No .drawio files found in Nextcloud.'});
 						return;
 					}
 
-					// Build the file-picker dialog.
-					var listDiv = document.createElement('div');
-					listDiv.style.cssText = 'padding: 20px; font-family: Helvetica, Arial, sans-serif;';
+					// ---- State ----
+					var selectedFile    = null;
+					var selectedRowEl   = null;
+					var rowEls          = [];
+					var currentTab      = 'sharing';
+					var versionsLoadedFor = null;
 
-					var listTitle = document.createElement('h3');
-					listTitle.innerHTML = 'Select a diagram';
-					listTitle.style.cssText = 'margin: 0 0 15px 0; color: ' + nolaiColor + '; font-size: 18px; border-bottom: 2px solid ' + nolaiColor + '; padding-bottom: 10px;';
-					listDiv.appendChild(listTitle);
-
-					var select = document.createElement('select');
-					select.style.cssText = 'width: 100%; height: 220px; padding: 5px;';
-					select.size = 12;
-
-					// Populate the list with all discovered .drawio files.
-					files.forEach(function(file, i)
+					// ====== NOLAI - {- Frontend -} /Sprint 4/ Task 191 ======
+					// makeChip — circular avatar showing the first initial of a display name.
+					// WHY initials not real avatar images: fetching one image per share across
+					// every file would add M*N HTTP requests. Initials render instantly with no
+					// network cost and match Nextcloud's own photo fallback behaviour.
+					// ====== end of changes by SE ======
+					function makeChip(displayName, size, marginLeft)
 					{
-						var option = document.createElement('option');
-						option.value = i;
-						option.text = file.displayPath;
-						select.appendChild(option);
-					});
+						var sz = size || 22;
+						var chip = document.createElement('div');
+						chip.title = displayName || '';
+						chip.textContent = (displayName || '?').charAt(0).toUpperCase();
+						chip.style.cssText = [
+							'width:'  + sz + 'px', 'height:' + sz + 'px',
+							'border-radius:50%', 'background:' + nolaiColor, 'color:#fff',
+							'font-size:' + Math.floor(sz * 0.5) + 'px', 'font-weight:bold',
+							'display:flex', 'align-items:center', 'justify-content:center',
+							'border:2px solid #fff', 'margin-left:' + (marginLeft || 0) + 'px',
+							'cursor:default', 'flex-shrink:0', 'font-family:Helvetica,Arial,sans-serif',
+						].join(';');
+						return chip;
+					}
 
-					listDiv.appendChild(select);
+					// ---- Dialog root ----
+					var root = document.createElement('div');
+					root.style.cssText = 'display:flex;flex-direction:column;height:520px;font-family:Helvetica,Arial,sans-serif;color:#333;';
 
-					/**
-					 * Loads the currently selected file into the editor.
-					 * Prompts the user to confirm if there are unsaved local changes.
-					 */
-					var loadSelected = function()
+					var bodyRow = document.createElement('div');
+					bodyRow.style.cssText = 'display:flex;flex:1;overflow:hidden;min-height:0;';
+					root.appendChild(bodyRow);
+
+					// ---- Left panel: file list ----
+					var leftPanel = document.createElement('div');
+					leftPanel.style.cssText = 'width:300px;flex-shrink:0;display:flex;flex-direction:column;border-right:1px solid #e0e0e0;';
+					bodyRow.appendChild(leftPanel);
+
+					var leftHdr = document.createElement('div');
+					leftHdr.style.cssText = 'padding:14px 16px 10px;font-size:14px;font-weight:600;color:' + nolaiColor + ';border-bottom:1px solid #e0e0e0;flex-shrink:0;';
+					leftHdr.innerHTML = 'Files <span style="color:#999;font-weight:400;font-size:12px;">.drawio only</span>';
+					leftPanel.appendChild(leftHdr);
+
+					var fileListEl = document.createElement('div');
+					fileListEl.style.cssText = 'flex:1;overflow-y:auto;padding:4px 0;outline:none;';
+					fileListEl.setAttribute('tabindex', '0');
+					leftPanel.appendChild(fileListEl);
+
+					// ---- Right panel: detail pane ----
+					var rightPanel = document.createElement('div');
+					rightPanel.style.cssText = 'flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;';
+					bodyRow.appendChild(rightPanel);
+
+					var noSelEl = document.createElement('div');
+					noSelEl.style.cssText = 'flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;color:#bbb;';
+					noSelEl.innerHTML = '<div style="font-size:40px;opacity:0.25;">\uD83D\uDCC4</div><div style="font-size:13px;">Select a file to see details</div>';
+					rightPanel.appendChild(noSelEl);
+
+					var detailEl = document.createElement('div');
+					detailEl.style.cssText = 'flex:1;display:none;flex-direction:column;overflow:hidden;';
+					rightPanel.appendChild(detailEl);
+
+					var dHdr = document.createElement('div');
+					dHdr.style.cssText = 'padding:14px 16px 10px;border-bottom:1px solid #e0e0e0;flex-shrink:0;';
+					detailEl.appendChild(dHdr);
+
+					var dFilename = document.createElement('div');
+					dFilename.style.cssText = 'font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+					dHdr.appendChild(dFilename);
+
+					// ---- Tab bar ----
+					var tabBar = document.createElement('div');
+					tabBar.style.cssText = 'display:flex;border-bottom:1px solid #e0e0e0;flex-shrink:0;background:#fafafa;';
+					detailEl.appendChild(tabBar);
+
+					function makeTabBtn(label, tabId)
 					{
-						if (select.selectedIndex < 0)
+						var btn = document.createElement('button');
+						btn.textContent = label;
+						btn.dataset.tabId = tabId;
+						btn.style.cssText = 'padding:9px 16px;border:none;background:transparent;cursor:pointer;font-size:13px;color:#555;border-bottom:2px solid transparent;margin-bottom:-1px;font-family:Helvetica,Arial,sans-serif;';
+						btn.onclick = function() { switchTab(tabId); };
+						tabBar.appendChild(btn);
+						return btn;
+					}
+					var tabSharing  = makeTabBtn('Sharing',  'sharing');
+					var tabVersions = makeTabBtn('Versions', 'versions');
+
+					var tabContent = document.createElement('div');
+					tabContent.style.cssText = 'flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0;';
+					detailEl.appendChild(tabContent);
+
+					var sharingPane = document.createElement('div');
+					sharingPane.style.cssText = 'display:none;flex-direction:column;gap:14px;overflow-y:auto;padding:14px 16px;flex:1;';
+					tabContent.appendChild(sharingPane);
+
+					var versionsPane = document.createElement('div');
+					versionsPane.style.cssText = 'display:none;flex-direction:column;flex:1;overflow:hidden;';
+					tabContent.appendChild(versionsPane);
+
+					function switchTab(tabId)
+					{
+						currentTab = tabId;
+						[tabSharing, tabVersions].forEach(function(btn)
 						{
-							editorUi.handleError({message: 'Please select a file to load.'});
-							return;
-						}
+							var on = btn.dataset.tabId === tabId;
+							btn.style.color = on ? nolaiColor : '#555';
+							btn.style.borderBottomColor = on ? nolaiColor : 'transparent';
+							btn.style.fontWeight = on ? '600' : '400';
+						});
+						sharingPane.style.display  = tabId === 'sharing'  ? 'flex' : 'none';
+						versionsPane.style.display = tabId === 'versions' ? 'flex' : 'none';
+						if (tabId === 'versions' && selectedFile) { renderVersionsPane(selectedFile); }
+					}
 
-						var selected = files[parseInt(select.value, 10)];
+					// ---- Bottom button row ----
+					var btnRow = document.createElement('div');
+					btnRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-top:1px solid #e0e0e0;flex-shrink:0;background:#fafafa;';
+					root.appendChild(btnRow);
 
-						// Performs the actual WebDAV fetch and loads the XML into the editor.
+					var deleteBtn = document.createElement('button');
+					deleteBtn.textContent = 'Delete';
+					deleteBtn.disabled = true;
+					deleteBtn.style.cssText = 'padding:8px 14px;border:none;border-radius:4px;background:#e74c3c;color:#fff;cursor:pointer;font-size:13px;opacity:0.35;font-family:Helvetica,Arial,sans-serif;';
+					btnRow.appendChild(deleteBtn);
+
+					var rightBtns = document.createElement('div');
+					rightBtns.style.cssText = 'display:flex;gap:8px;';
+					btnRow.appendChild(rightBtns);
+
+					var closeBtn = document.createElement('button');
+					closeBtn.textContent = 'Close';
+					closeBtn.style.cssText = 'padding:8px 14px;border:1px solid #ccc;border-radius:4px;background:#fff;color:#333;cursor:pointer;font-size:13px;font-family:Helvetica,Arial,sans-serif;';
+					closeBtn.onclick = function() { editorUi.hideDialog(); };
+					rightBtns.appendChild(closeBtn);
+
+					var loadBtn = document.createElement('button');
+					loadBtn.textContent = 'Load Diagram';
+					loadBtn.disabled = true;
+					loadBtn.style.cssText = 'padding:8px 16px;border:none;border-radius:4px;background:' + nolaiColor + ';color:#fff;cursor:pointer;font-size:13px;font-weight:600;opacity:0.35;font-family:Helvetica,Arial,sans-serif;';
+					rightBtns.appendChild(loadBtn);
+
+					// ---- Select a file ----
+					function selectFile(file, rowEl)
+					{
+						if (selectedRowEl) { selectedRowEl.style.background = ''; }
+						selectedFile  = file;
+						selectedRowEl = rowEl;
+						rowEl.style.background = 'rgba(0,143,137,0.12)';
+						loadBtn.disabled   = false; loadBtn.style.opacity   = '1';
+						deleteBtn.disabled = false; deleteBtn.style.opacity = '1';
+						noSelEl.style.display   = 'none';
+						detailEl.style.display  = 'flex';
+						dFilename.textContent   = file.displayPath;
+						sharingPane.innerHTML   = '';
+						var ph = document.createElement('div');
+						ph.style.cssText = 'color:#aaa;font-size:12px;';
+						ph.textContent = 'Loading sharing info\u2026';
+						sharingPane.appendChild(ph);
+						versionsLoadedFor = null;
+						switchTab('sharing');
+						loadSharingData(file);
+					}
+
+					// ---- Load diagram ----
+					loadBtn.onclick = function()
+					{
+						if (!selectedFile) { return; }
+						var file = selectedFile;
 						var performLoad = function()
 						{
-							editorUi.spinner.spin(document.body, 'Loading file from Nextcloud...');
-
-							getDrawIOFromNextcloudXML(selected.name, url, null, nextcloudPassword, selected.remotePath).then(function(xml)
-							{
-								editorUi.spinner.stop();
-
-								if (xml == null)
+							editorUi.spinner.spin(document.body, 'Loading from Nextcloud\u2026');
+							getDrawIOFromNextcloudXML(file.name, davUrl, null, nextcloudPassword, file.remotePath)
+								.then(function(xml)
 								{
-									editorUi.handleError({message: 'Failed to load selected file from Nextcloud.'});
-									return;
-								}
-
-								try
-								{
-									// Load XML as a fresh document and clear the modified flag.
-									editorUi.fileLoaded(new LocalFile(editorUi, xml, selected.name, true), true);
-									editorUi.editor.modified = false;
-									editorUi.editor.setStatus('Loaded from Nextcloud successfully');
-									// Update the title bar overlay to reflect the loaded filename.
-									if (typeof updateNolaiFileTitle === 'function') { updateNolaiFileTitle(selected.name); }
-									// ====== NOLAI - {- Backend -} /Sprint 4/ Task 148 — bind editor to Nextcloud file ======
-									// Record which Nextcloud file the editor is now editing, so the next
-									// ⌘+S quick-saves to the same path instead of re-prompting.
-									// ====== end of changes by SE ======
-									if (typeof nolaiSetCurrentNextcloudFile === 'function')
+									editorUi.spinner.stop();
+									if (!xml) { editorUi.handleError({message: 'Failed to load file.'}); return; }
+									try
 									{
-										nolaiSetCurrentNextcloudFile(selected.name, selected.remotePath || '/');
+										editorUi.fileLoaded(new LocalFile(editorUi, xml, file.name, true), true);
+										editorUi.editor.modified = false;
+										editorUi.editor.setStatus('Loaded from Nextcloud successfully');
+										if (typeof updateNolaiFileTitle === 'function') { updateNolaiFileTitle(file.name); }
+										// ====== NOLAI - {- Backend -} /Sprint 4/ Task 148 ======
+										// Bind editor so next Cmd+S saves to this Nextcloud path automatically.
+										// ====== end of changes by SE ======
+										if (typeof nolaiSetCurrentNextcloudFile === 'function')
+										{
+											nolaiSetCurrentNextcloudFile(file.name, file.remotePath || '/');
+										}
 									}
-								}
-								catch (e)
-								{
-									editorUi.handleError({message: 'Loaded file is not a valid draw.io diagram: ' + e.message});
-								}
-							}).catch(function(error)
-							{
-								editorUi.spinner.stop();
-								editorUi.handleError({message: 'Error: ' + error.message});
-							});
+									catch (e) { editorUi.handleError({message: 'Invalid diagram: ' + e.message}); }
+									editorUi.hideDialog();
+								})
+								.catch(function(err) { editorUi.spinner.stop(); editorUi.handleError({message: 'Load error: ' + err.message}); });
 						};
-
-						// Warn about unsaved changes before replacing the current diagram.
 						if (editorUi.editor.modified)
 						{
 							editorUi.confirm(mxResources.get('allChangesLost'), null, performLoad,
 								mxResources.get('cancel'), mxResources.get('discardChanges'));
 						}
-						else
-						{
-							performLoad();
-						}
+						else { performLoad(); }
 					};
 
-					// ======	NOLAI - {- Backend -} /Sprint 2/ Task 117	=====
-					// ======	NOLAI - {- Frontend -} /Sprint 2/ Task 108	=====
-					/**
-					 * Deletes the currently selected file from Nextcloud after confirmation.
-					 * Removes the entry from the list on success; closes the dialog if the list is empty.
-					 */
-					var deleteSelected = function()
+					// ====== NOLAI - {- Backend -} /Sprint 2/ Task 117 ======
+					// ====== NOLAI - {- Frontend -} /Sprint 2/ Task 108 ======
+					// ---- Delete file ----
+					deleteBtn.onclick = function()
 					{
-						if (select.selectedIndex < 0)
+						if (!selectedFile) { return; }
+						var file = selectedFile;
+						editorUi.confirm('Delete "' + file.displayPath + '" from Nextcloud?', null, function()
 						{
-							editorUi.handleError({message: 'Please select a file to delete.'});
-							return;
-						}
-
-						var selected = files[parseInt(select.value, 10)];
-
-						editorUi.confirm('Are you sure you want to delete "' + selected.displayPath + '"?', null, function()
-						{
-							editorUi.spinner.spin(document.body, 'Deleting file from Nextcloud...');
-
-							deleteFileInNextcloud(url, null, nextcloudPassword, selected.remotePath, selected.name).then(function(success)
-							{
-								editorUi.spinner.stop();
-
-								if (!success)
+							editorUi.spinner.spin(document.body, 'Deleting\u2026');
+							deleteFileInNextcloud(davUrl, null, nextcloudPassword, file.remotePath, file.name)
+								.then(function(ok)
 								{
-									editorUi.handleError({message: 'Failed to delete selected file from Nextcloud.'});
-									return;
-								}
-
-								// Remove the deleted entry from both the data array and the UI list.
-								files.splice(select.selectedIndex, 1);
-								select.remove(select.selectedIndex);
-
-								if (files.length == 0)
-								{
-									editorUi.hideDialog();
-									editorUi.editor.setStatus('Deleted from Nextcloud successfully');
-									return;
-								}
-
-								// Keep the selection valid after removal.
-								if (select.selectedIndex < 0)
-								{
-									select.selectedIndex = 0;
-								}
-
-								editorUi.editor.setStatus('Deleted from Nextcloud successfully');
-							}).catch(function(error)
-							{
-								editorUi.spinner.stop();
-								editorUi.handleError({message: 'Error deleting file: ' + error.message});
-							});
+									editorUi.spinner.stop();
+									if (!ok) { editorUi.handleError({message: 'Delete failed.'}); return; }
+									var idx = files.indexOf(file);
+									if (idx >= 0)
+									{
+										files.splice(idx, 1);
+										if (rowEls[idx] && rowEls[idx].parentNode) { rowEls[idx].parentNode.removeChild(rowEls[idx]); }
+										rowEls.splice(idx, 1);
+									}
+									if (files.length === 0) { editorUi.hideDialog(); return; }
+									selectedFile = null; selectedRowEl = null;
+									noSelEl.style.display  = '';
+									detailEl.style.display = 'none';
+									loadBtn.disabled   = true; loadBtn.style.opacity   = '0.35';
+									deleteBtn.disabled = true; deleteBtn.style.opacity = '0.35';
+									editorUi.editor.setStatus('Deleted from Nextcloud');
+								})
+								.catch(function(err) { editorUi.spinner.stop(); editorUi.handleError({message: 'Delete error: ' + err.message}); });
 						}, mxResources.get('cancel'), 'Delete');
 					};
 
-					var buttonRow = document.createElement('div');
-					buttonRow.style.cssText = 'display: flex; justify-content: space-between; margin-top: 15px;';
+					// ---- Build file rows ----
+					files.forEach(function(file, i)
+					{
+						var row = document.createElement('div');
+						row.style.cssText = 'display:flex;align-items:center;padding:7px 12px;cursor:pointer;user-select:none;font-size:13px;gap:8px;';
 
-					var deleteBtn = document.createElement('button');
-					deleteBtn.innerHTML = 'Delete';
-					deleteBtn.style.cssText = 'padding: 8px 12px; border: none; border-radius: 4px; background-color: #e74c3c; color: white; cursor: pointer;';
-					deleteBtn.onclick = deleteSelected;
-					deleteBtn.onmouseover = function() { this.style.opacity = '0.85'; };
-					deleteBtn.onmouseout = function() { this.style.opacity = '1'; };
+						var icon = document.createElement('span');
+						icon.textContent = '\uD83D\uDCC4';
+						icon.style.cssText = 'flex-shrink:0;font-size:14px;opacity:0.55;';
+						row.appendChild(icon);
 
-					buttonRow.appendChild(deleteBtn);
-					listDiv.appendChild(buttonRow);
+						var nameSpan = document.createElement('span');
+						nameSpan.style.cssText = 'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+						nameSpan.textContent = file.displayPath;
+						row.appendChild(nameSpan);
 
-					var listDlg = new CustomDialog(editorUi, listDiv, loadSelected);
+						// ====== NOLAI - {- Frontend -} /Sprint 4/ Task 191 ======
+						// avatarContainer — chips loaded asynchronously via getSharesForFile after
+						// dialog opens. Uses lastElementChild (not lastChild) to avoid text nodes.
+						// ====== end of changes by SE ======
+						var avatarContainer = document.createElement('div');
+						avatarContainer.style.cssText = 'display:flex;align-items:center;flex-shrink:0;';
+						row.appendChild(avatarContainer);
 
-					// Style the OK button for loading the selected diagram.
-					listDlg.okButton.innerHTML = 'Load Diagram';
-					listDlg.okButton.style.backgroundColor = nolaiColor;
-					listDlg.okButton.style.color = '#fff';
-					listDlg.okButton.style.backgroundImage = 'none';
+						row.onmouseover = function() { if (row !== selectedRowEl) { row.style.background = 'rgba(0,0,0,0.04)'; } };
+						row.onmouseout  = function() { if (row !== selectedRowEl) { row.style.background = ''; } };
+						row.onclick     = function() { selectFile(file, row); };
+						row.ondblclick  = function() { if (loadBtn && !loadBtn.disabled) { loadBtn.onclick(); } };
 
-					editorUi.showDialog(listDlg.container, 480, 420, true, false);
-					select.focus();
-				}).catch(function(error)
+						fileListEl.appendChild(row);
+						rowEls.push(row);
+					});
+
+					// Keyboard navigation
+					fileListEl.onkeydown = function(evt)
+					{
+						var idx = files.indexOf(selectedFile);
+						if      (evt.keyCode === 40 && idx < files.length - 1) { selectFile(files[idx + 1], rowEls[idx + 1]); mxEvent.consume(evt); }
+						else if (evt.keyCode === 38 && idx > 0)                { selectFile(files[idx - 1], rowEls[idx - 1]); mxEvent.consume(evt); }
+						else if (evt.keyCode === 13 && !loadBtn.disabled)      { loadBtn.onclick(); mxEvent.consume(evt); }
+					};
+
+					// ====== NOLAI - {- Frontend -} /Sprint 4/ Task 191 ======
+					// ====== NOLAI - {- Backend -} /Sprint 4/ Task 192 ======
+					// SHARING TAB
+					// loadSharingData fires two parallel OCS calls:
+					//   1. getSharesForFile — outbound shares created by this user (type 0=user, 3=public link)
+					//   2. getSharesReceivedForFile — shares received by this user for this file ("Others with access")
+					// ====== end of changes by SE ======
+					function loadSharingData(file)
+					{
+						Promise.all([
+							getSharesForFile(file.name, file.remotePath || '/', nextcloudBaseUrl, nextcloudUsername, nextcloudPassword),
+							(typeof getSharesReceivedForFile === 'function')
+								? getSharesReceivedForFile(nextcloudBaseUrl, nextcloudUsername, nextcloudPassword, file.name, file.remotePath || '/')
+								: Promise.resolve([]),
+						]).then(function(results)
+						{
+							if (selectedFile !== file) { return; }
+							renderSharingPane(file, results[0], results[1]);
+						}).catch(function()
+						{
+							if (selectedFile !== file) { return; }
+							sharingPane.innerHTML = '';
+							var errEl = document.createElement('div');
+							errEl.style.cssText = 'color:#c0392b;font-size:12px;';
+							errEl.textContent = 'Could not load sharing information.';
+							sharingPane.appendChild(errEl);
+						});
+					}
+
+					function renderSharingPane(file, ownedShares, receivedShares)
+					{
+						sharingPane.innerHTML = '';
+
+						// WHY parseInt: OCS API sometimes returns share_type as string "0" not integer 0.
+						var userShares = ownedShares.filter(function(s) { return parseInt(s.share_type, 10) === 0; });
+
+						// -- Share with people --
+						var peopleSec = document.createElement('div');
+						var peopleLabel = document.createElement('div');
+						peopleLabel.style.cssText = 'font-size:13px;font-weight:600;color:#333;margin-bottom:8px;';
+						peopleLabel.textContent = 'Share with people';
+						peopleSec.appendChild(peopleLabel);
+
+						var searchInput = document.createElement('input');
+						searchInput.type = 'text'; searchInput.placeholder = 'Search by name or email\u2026';
+						searchInput.style.cssText = 'width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid #ddd;border-radius:4px;font-size:13px;font-family:Helvetica,Arial,sans-serif;outline:none;margin-bottom:6px;';
+						searchInput.onfocus = function() { searchInput.style.borderColor = nolaiColor; };
+						searchInput.onblur  = function() { searchInput.style.borderColor = '#ddd'; setTimeout(function() { searchDrop.style.display = 'none'; }, 200); };
+						peopleSec.appendChild(searchInput);
+
+						var searchDrop = document.createElement('div');
+						searchDrop.style.cssText = 'border:1px solid #ddd;border-radius:4px;max-height:130px;overflow-y:auto;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,0.1);display:none;margin-bottom:8px;';
+						peopleSec.appendChild(searchDrop);
+
+						var searchTimer = null;
+						searchInput.oninput = function()
+						{
+							clearTimeout(searchTimer);
+							var q = searchInput.value.trim();
+							if (!q) { searchDrop.style.display = 'none'; return; }
+							searchTimer = setTimeout(function()
+							{
+								searchNextcloudUsers(q, nextcloudBaseUrl, nextcloudUsername, nextcloudPassword)
+									.then(function(users)
+									{
+										searchDrop.innerHTML = '';
+										var filtered = users.filter(function(u) { return u.id !== nextcloudUsername && u.id !== 'admin'; });
+										if (!filtered.length)
+										{
+											var none = document.createElement('div');
+											none.style.cssText = 'padding:8px 12px;color:#999;font-size:12px;';
+											none.textContent = 'No users found';
+											searchDrop.appendChild(none);
+										}
+										filtered.forEach(function(u)
+										{
+											var label = u.label || u.id;
+											var info  = u.shareWithDisplayNameUnique || u.subline || '';
+											var dr = document.createElement('div');
+											dr.style.cssText = 'display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;font-size:13px;';
+											dr.onmouseover = function() { dr.style.background = '#f0f9f8'; };
+											dr.onmouseout  = function() { dr.style.background = ''; };
+											dr.appendChild(makeChip(label, 28, 0));
+											var dt = document.createElement('div');
+											dt.innerHTML = '<div style="font-weight:500;">' + label + '</div>' +
+												(info && info !== label ? '<div style="font-size:11px;color:#888;">' + info + '</div>' : '');
+											dr.appendChild(dt);
+											dr.onclick = function()
+											{
+												searchInput.value = ''; searchDrop.style.display = 'none';
+												shareFileWithUser(file.name, u.id, nextcloudBaseUrl, nextcloudUsername, nextcloudPassword, file.remotePath || '/', 3)
+													.then(function() { loadSharingData(file); })
+													.catch(function(err) { alert('Share failed: ' + err.message); });
+											};
+											searchDrop.appendChild(dr);
+										});
+										searchDrop.style.display = '';
+									});
+							}, 300);
+						};
+
+						// Existing user shares list
+						var sharesList = document.createElement('div');
+						sharesList.style.cssText = 'display:flex;flex-direction:column;gap:4px;';
+						if (!userShares.length)
+						{
+							var noShareEl = document.createElement('div');
+							noShareEl.style.cssText = 'color:#aaa;font-size:12px;padding:2px 0;';
+							noShareEl.textContent = 'No users have access yet.';
+							sharesList.appendChild(noShareEl);
+						}
+						userShares.forEach(function(share)
+						{
+							var sRow = document.createElement('div');
+							sRow.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid #eee;border-radius:6px;background:#fff;';
+							sRow.appendChild(makeChip(share.share_with_displayname || share.share_with, 30, 0));
+							var sInfo = document.createElement('div');
+							sInfo.style.cssText = 'flex:1;min-width:0;';
+							sInfo.innerHTML = '<div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (share.share_with_displayname || share.share_with) + '</div>' +
+								'<div style="font-size:11px;color:#888;">' + (share.share_with_additional_info || share.share_with) + '</div>';
+							sRow.appendChild(sInfo);
+							var permSel = document.createElement('select');
+							permSel.style.cssText = 'font-size:12px;padding:3px 6px;border:1px solid #ddd;border-radius:4px;color:#555;cursor:pointer;font-family:Helvetica,Arial,sans-serif;';
+							[['Can edit', '3'], ['Read only', '1']].forEach(function(opt)
+							{
+								var o = document.createElement('option');
+								o.textContent = opt[0]; o.value = opt[1];
+								if (String(share.permissions) === opt[1]) { o.selected = true; }
+								permSel.appendChild(o);
+							});
+							permSel.onchange = function()
+							{
+								updateSharePermissions(share.id, parseInt(permSel.value, 10), nextcloudBaseUrl, nextcloudUsername, nextcloudPassword)
+									.catch(function(err) { alert('Permission update failed: ' + err.message); });
+							};
+							sRow.appendChild(permSel);
+							var rmBtn = document.createElement('button');
+							rmBtn.textContent = '\u00D7'; rmBtn.title = 'Remove access';
+							rmBtn.style.cssText = 'padding:2px 8px;border:none;background:transparent;color:#bbb;cursor:pointer;font-size:18px;line-height:1;border-radius:4px;';
+							rmBtn.onmouseover = function() { rmBtn.style.color = '#e74c3c'; };
+							rmBtn.onmouseout  = function() { rmBtn.style.color = '#bbb'; };
+							rmBtn.onclick = function()
+							{
+								rmBtn.disabled = true;
+								removeShare(share.id, nextcloudBaseUrl, nextcloudUsername, nextcloudPassword)
+									.then(function() { loadSharingData(file); })
+									.catch(function(err) { rmBtn.disabled = false; alert('Could not remove: ' + err.message); });
+							};
+							sRow.appendChild(rmBtn);
+							sharesList.appendChild(sRow);
+						});
+						peopleSec.appendChild(sharesList);
+						sharingPane.appendChild(peopleSec);
+
+						// -- Others with access (files shared WITH the current user) --
+						if (receivedShares && receivedShares.length)
+						{
+							var othersSec = document.createElement('div');
+							var othersExpanded = false;
+							var othersToggle = document.createElement('button');
+							othersToggle.style.cssText = 'background:none;border:none;cursor:pointer;font-size:13px;color:#555;padding:0;display:flex;align-items:center;gap:4px;font-family:Helvetica,Arial,sans-serif;';
+							othersToggle.innerHTML = '\u25B6 Others with access (' + receivedShares.length + ')';
+							var othersList = document.createElement('div');
+							othersList.style.cssText = 'display:none;flex-direction:column;gap:4px;margin-top:8px;';
+							receivedShares.forEach(function(share)
+							{
+								var oRow = document.createElement('div');
+								oRow.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid #eee;border-radius:6px;background:#f9f9f9;';
+								oRow.appendChild(makeChip(share.displayname_owner || share.uid_owner, 28, 0));
+								var oInfo = document.createElement('div');
+								oInfo.innerHTML = '<div style="font-size:13px;">' + (share.displayname_owner || share.uid_owner) + '</div><div style="font-size:11px;color:#888;">Shared with you</div>';
+								oRow.appendChild(oInfo);
+								othersList.appendChild(oRow);
+							});
+							othersToggle.onclick = function()
+							{
+								othersExpanded = !othersExpanded;
+								othersToggle.innerHTML = (othersExpanded ? '\u25BC' : '\u25B6') + ' Others with access (' + receivedShares.length + ')';
+								othersList.style.display = othersExpanded ? 'flex' : 'none';
+							};
+							othersSec.appendChild(othersToggle);
+							othersSec.appendChild(othersList);
+							sharingPane.appendChild(othersSec);
+						}
+
+						// -- Internal link --
+						var intSec = document.createElement('div');
+						intSec.style.cssText = 'border-top:1px solid #e0e0e0;padding-top:12px;display:flex;align-items:center;justify-content:space-between;';
+						var intLabel = document.createElement('div');
+						intLabel.style.cssText = 'font-size:13px;color:#555;';
+						intLabel.textContent = '\uD83D\uDD17 Internal link';
+						intSec.appendChild(intLabel);
+						var intCopyBtn = document.createElement('button');
+						intCopyBtn.textContent = 'Copy link';
+						intCopyBtn.style.cssText = 'padding:5px 10px;border:1px solid #ccc;border-radius:4px;background:#fff;color:#333;cursor:pointer;font-size:12px;font-family:Helvetica,Arial,sans-serif;';
+						intCopyBtn.onclick = function()
+						{
+							var folder = (file.remotePath || '/').replace(/^\/+|\/+$/g, '');
+							var internalUrl = nextcloudBaseUrl + '/index.php/apps/files/?dir=/' + (folder ? folder : '') + '&openfile=' + encodeURIComponent(file.name);
+							navigator.clipboard.writeText(internalUrl).then(function()
+							{
+								intCopyBtn.textContent = '\u2713 Copied';
+								setTimeout(function() { intCopyBtn.textContent = 'Copy link'; }, 2000);
+							}).catch(function() { document.execCommand('copy'); });
+						};
+						intSec.appendChild(intCopyBtn);
+						sharingPane.appendChild(intSec);
+
+						// Refresh avatar chips in file list for this file
+						var fileIdx = files.indexOf(file);
+						if (fileIdx >= 0 && rowEls[fileIdx])
+						{
+							var ac = rowEls[fileIdx].lastElementChild;
+							if (ac) { ac.innerHTML = ''; }
+							userShares.forEach(function(share, ci) { if (ac) { ac.appendChild(makeChip(share.share_with_displayname || share.share_with, 20, ci > 0 ? -6 : 0)); } });
+						}
+					}
+
+					// ====== NOLAI - {- Backend -} /Sprint 4/ Task 148 ======
+					// VERSIONS TAB — mirrors standalone Version History action but for the
+					// selected file (which may differ from the currently loaded diagram).
+					// ====== end of changes by SE ======
+					function formatRelative(ms)
+					{
+						if (!ms) { return ''; }
+						var diff = Math.max(0, Date.now() - ms), s = Math.floor(diff / 1000);
+						if (s < 60)  { return 'just now'; }
+						var m = Math.floor(s / 60);
+						if (m < 60)  { return m + (m === 1 ? ' minute ago' : ' minutes ago'); }
+						var h = Math.floor(m / 60);
+						if (h < 24)  { return h + (h === 1 ? ' hour ago' : ' hours ago'); }
+						var d = Math.floor(h / 24);
+						return d + (d === 1 ? ' day ago' : ' days ago');
+					}
+					function formatBytes(b)
+					{
+						if (b == null) { return ''; }
+						if (b < 1024)      { return b + ' B'; }
+						if (b < 1048576)   { return (b / 1024).toFixed(1) + ' KB'; }
+						return (b / 1048576).toFixed(1) + ' MB';
+					}
+
+					function renderVersionsPane(file)
+					{
+						if (versionsLoadedFor === file.name) { return; }
+						versionsLoadedFor = file.name;
+						versionsPane.innerHTML = '';
+						versionsPane.style.cssText = 'display:flex;flex-direction:column;flex:1;overflow:hidden;';
+						var vLoad = document.createElement('div');
+						vLoad.style.cssText = 'padding:16px;color:#888;font-size:13px;';
+						vLoad.textContent = 'Loading version history\u2026';
+						versionsPane.appendChild(vLoad);
+
+						if (typeof getFileIdFromNextcloud !== 'function' || typeof listFileVersionsInNextcloud !== 'function')
+						{
+							vLoad.textContent = 'Version helpers not available.'; return;
+						}
+
+						getFileIdFromNextcloud(file.name, nextcloudBaseUrl, nextcloudUsername, nextcloudPassword, file.remotePath || '/')
+							.then(function(fileId)
+							{
+								if (!fileId)
+								{
+									versionsPane.innerHTML = '';
+									var noId = document.createElement('div');
+									noId.style.cssText = 'padding:14px;background:#fff8e1;border:1px solid #ffb300;border-radius:6px;color:#5d4037;font-size:13px;margin:12px;';
+									noId.textContent = 'File not found on Nextcloud \u2014 save it first to enable version history.';
+									versionsPane.appendChild(noId); return null;
+								}
+								return listFileVersionsInNextcloud(fileId, nextcloudBaseUrl, nextcloudUsername, nextcloudPassword)
+									.then(function(v) { return {fileId: fileId, versions: v}; });
+							})
+							.then(function(result)
+							{
+								if (!result) { return; }
+								versionsPane.innerHTML = '';
+								versionsPane.style.cssText = 'display:flex;flex-direction:column;flex:1;overflow:hidden;';
+								if (!result.versions || !result.versions.length)
+								{
+									var emEl = document.createElement('div');
+									emEl.style.cssText = 'padding:16px;color:#888;font-size:13px;';
+									emEl.innerHTML = 'No prior versions yet.<br><span style="color:#aaa;font-size:11px;">Save the file again to create the first version.</span>';
+									versionsPane.appendChild(emEl); return;
+								}
+								var vBody = document.createElement('div');
+								vBody.style.cssText = 'display:flex;flex:1;overflow:hidden;min-height:0;';
+								versionsPane.appendChild(vBody);
+								var vList = document.createElement('div');
+								vList.style.cssText = 'width:190px;flex-shrink:0;border-right:1px solid #e0e0e0;overflow-y:auto;background:#fafafa;';
+								vBody.appendChild(vList);
+								var vPreview = document.createElement('div');
+								vPreview.style.cssText = 'flex:1;position:relative;overflow:hidden;background:#fff;';
+								vBody.appendChild(vPreview);
+								var vMsg = document.createElement('div');
+								vMsg.style.cssText = 'position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);color:#888;font-size:12px;pointer-events:none;text-align:center;';
+								vMsg.textContent = 'Select a version to preview';
+								vPreview.appendChild(vMsg);
+								var vGraph = new Graph(vPreview);
+								vGraph.setTooltips(false); vGraph.setEnabled(false); vGraph.setPanning(true);
+								vGraph.panningHandler.ignoreCell = true; vGraph.panningHandler.useLeftButtonForPanning = true;
+								var vFooter = document.createElement('div');
+								vFooter.style.cssText = 'display:flex;align-items:center;padding:8px 12px;border-top:1px solid #e0e0e0;flex-shrink:0;gap:8px;';
+								versionsPane.appendChild(vFooter);
+								var vStatusLine = document.createElement('span');
+								vStatusLine.style.cssText = 'flex:1;font-size:12px;color:#666;';
+								vFooter.appendChild(vStatusLine);
+								var restoreBtn = document.createElement('button');
+								restoreBtn.textContent = 'Restore this version';
+								restoreBtn.disabled = true;
+								restoreBtn.style.cssText = 'padding:6px 12px;border:none;border-radius:4px;background:' + nolaiColor + ';color:#fff;cursor:pointer;font-size:12px;font-weight:600;opacity:0.35;font-family:Helvetica,Arial,sans-serif;';
+								vFooter.appendChild(restoreBtn);
+								var selVer = null, selVRow = null;
+								function applyPreview(xml)
+								{
+									try
+									{
+										var doc = mxUtils.parseXml(xml), node = doc.documentElement;
+										if (node.nodeName === 'mxfile') { var d = node.getElementsByTagName('diagram')[0]; if (d) { node = Editor.parseDiagramNode(d); } }
+										var codec = new mxCodec(node.ownerDocument);
+										vGraph.getModel().clear(); codec.decode(node, vGraph.getModel());
+										vGraph.maxFitScale = 1; vGraph.fit(8); vGraph.center();
+										vMsg.style.display = 'none';
+									}
+									catch(e) { vMsg.style.display = ''; vMsg.textContent = 'Preview failed: ' + e.message; }
+								}
+								function selectVersion(v, rowEl)
+								{
+									if (selVRow) { selVRow.style.background = ''; selVRow.style.color = ''; }
+									selVRow = rowEl; selVer = v;
+									rowEl.style.background = nolaiColor; rowEl.style.color = '#fff';
+									restoreBtn.disabled = false; restoreBtn.style.opacity = '1';
+									vMsg.style.display = ''; vMsg.textContent = 'Loading\u2026';
+									getVersionContentFromNextcloud(v.absUrl, nextcloudBaseUrl, nextcloudUsername, nextcloudPassword)
+										.then(function(xml) { if (!xml) { throw new Error('empty'); } applyPreview(xml); })
+										.catch(function(err) { vMsg.style.display = ''; vMsg.textContent = 'Preview failed: ' + err.message; });
+								}
+								result.versions.forEach(function(v, idx)
+								{
+									var vRow = document.createElement('div');
+									vRow.style.cssText = 'padding:8px 10px;border-bottom:1px solid #eee;cursor:pointer;font-size:11px;line-height:1.35;';
+									vRow.innerHTML = '<div style="font-weight:600;">' + (v.mtime ? new Date(v.mtime).toLocaleString() : '(unknown)') + '</div>' +
+										'<div style="opacity:0.8;">' + formatRelative(v.mtime) + (v.size ? ' \u00B7 ' + formatBytes(v.size) : '') + '</div>';
+									vRow.onmouseover = function() { if (vRow !== selVRow) { vRow.style.background = '#eef7f7'; } };
+									vRow.onmouseout  = function() { if (vRow !== selVRow) { vRow.style.background = ''; } };
+									vRow.onclick = function() { selectVersion(v, vRow); };
+									vList.appendChild(vRow);
+									if (idx === 0) { setTimeout(function() { selectVersion(v, vRow); }, 0); }
+								});
+								restoreBtn.onclick = function()
+								{
+									if (!selVer) { return; }
+									var when = selVer.mtime ? new Date(selVer.mtime).toLocaleString() : 'this version';
+									editorUi.confirm('Restore the version from ' + when + '?\n\nThe current file is replaced. A new entry is saved so this is reversible.',
+										null,
+										function()
+										{
+											restoreBtn.disabled = true; restoreBtn.style.opacity = '0.5';
+											vStatusLine.textContent = 'Restoring\u2026';
+											restoreVersionInNextcloud(selVer.absUrl, nextcloudBaseUrl, nextcloudUsername, nextcloudPassword)
+												.then(function() { return getDrawIOFromNextcloudXML(file.name, davUrl, null, nextcloudPassword, file.remotePath || '/'); })
+												.then(function(xml)
+												{
+													if (!xml) { throw new Error('Could not reload restored file.'); }
+													editorUi.fileLoaded(new LocalFile(editorUi, xml, file.name, true), true);
+													editorUi.editor.modified = false;
+													if (typeof updateNolaiFileTitle === 'function') { updateNolaiFileTitle(file.name); }
+													if (typeof nolaiSetCurrentNextcloudFile === 'function') { nolaiSetCurrentNextcloudFile(file.name, file.remotePath || '/'); }
+													editorUi.editor.setStatus('Version restored');
+													editorUi.hideDialog();
+												})
+												.catch(function(err) { vStatusLine.textContent = 'Restore failed: ' + err.message; restoreBtn.disabled = false; restoreBtn.style.opacity = '1'; });
+										},
+										mxResources.get('cancel'), 'Restore');
+								};
+							})
+							.catch(function(err)
+							{
+								versionsPane.innerHTML = '';
+								var errEl = document.createElement('div');
+								errEl.style.cssText = 'padding:12px;background:#fdecea;border-radius:6px;color:#b71c1c;font-size:12px;margin:12px;';
+								errEl.textContent = 'Could not load versions: ' + err.message;
+								versionsPane.appendChild(errEl);
+							});
+					}
+
+					// ---- Show dialog ----
+					var dlg = new CustomDialog(editorUi, root, function() { loadBtn.onclick(); });
+					dlg.okButton.style.display = 'none';
+					if (dlg.cancelBtn) { dlg.cancelBtn.style.display = 'none'; }
+					editorUi.showDialog(dlg.container, 960, 580, true, false);
+					fileListEl.focus();
+
+					// ====== NOLAI - {- Frontend -} /Sprint 4/ Task 191 ======
+					// Progressive chip loading — fires one getSharesForFile per file after the
+					// dialog is in the DOM. Uses lastElementChild (not lastChild) to avoid
+					// accidental text nodes. Checks parseInt(share_type) for OCS string/int variance.
+					// ====== end of changes by SE ======
+					if (typeof getSharesForFile === 'function')
+					{
+						files.forEach(function(file, i)
+						{
+							getSharesForFile(file.name, file.remotePath || '/', nextcloudBaseUrl, nextcloudUsername, nextcloudPassword)
+								.then(function(shares)
+								{
+									if (!rowEls[i]) { return; }
+									var ac = rowEls[i].lastElementChild;
+									if (!ac) { return; }
+									shares.forEach(function(share, ci)
+									{
+										if (parseInt(share.share_type, 10) !== 0) { return; }
+										ac.appendChild(makeChip(share.share_with_displayname || share.share_with, 20, ci > 0 ? -6 : 0));
+									});
+								});
+						});
+					}
+
+				}).catch(function(err)
 				{
 					editorUi.spinner.stop();
-					editorUi.handleError({message: 'Error loading file list: ' + error.message});
+					editorUi.handleError({message: 'Error loading file list: ' + err.message});
 				});
 			};
 
-			// Container for the session banner — only shown when the user is not yet logged in.
+			// Session banner / auth — same pattern as all other NOLAI actions
 			var bannerDiv = document.createElement('div');
 			bannerDiv.style.cssText = 'padding: 20px; font-family: Helvetica, Arial, sans-serif; color: #333;';
-
 			var bannerTitle = document.createElement('h2');
-			bannerTitle.innerHTML = 'Load diagram from Nextcloud';
+			bannerTitle.innerHTML = 'Nextcloud Files';
 			bannerTitle.style.cssText = 'margin: 0 0 15px 0; color: ' + nolaiColor + '; font-size: 18px; border-bottom: 2px solid ' + nolaiColor + '; padding-bottom: 10px;';
 			bannerDiv.appendChild(bannerTitle);
 
@@ -1473,31 +2014,20 @@
 				return;
 			}
 
-			// Track whether the banner callback fired synchronously (i.e., user already
-			// has a cached session). This avoids showing the login dialog unnecessarily.
 			var sessionReady = false;
-
-			// Attach the session banner. The callback fires immediately for cached sessions
-			// or after the user completes login. Either way, fetchNextcloudFiles() is called
-			// automatically — no "Fetch Files" button click required.
 			attachNextcloudSessionBanner(bannerDiv, nextcloudBaseUrl, function(username, appPassword)
 			{
 				nextcloudUsername = username;
 				nextcloudPassword = appPassword;
 				sessionReady = true;
-				// Close the login dialog if it is currently open, then start fetching.
 				editorUi.hideDialog();
+				editorUi.spinner.spin(document.body, 'Loading files from Nextcloud\u2026');
 				fetchNextcloudFiles();
 			});
 
-			// Only show the login dialog if credentials were not already available
-			// synchronously (i.e., the user still needs to authenticate).
 			if (!sessionReady)
 			{
 				var loginDlg = new CustomDialog(editorUi, bannerDiv, null);
-
-				// Hide the OK button — the fetch is triggered automatically by the
-				// session banner callback once the user authenticates.
 				loginDlg.okButton.style.display = 'none';
 
 				editorUi.showDialog(loginDlg.container, 450, 240, true, true);
