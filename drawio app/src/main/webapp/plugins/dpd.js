@@ -546,6 +546,309 @@ Draw.loadPlugin(function (ui) {
     ui.showDialog(wrap, 400, 370, true, false);
   }
 
+  // ====== NOLAI - {Frontend} /Sprint 3/ Task 133 ======
+  const ICON_XML = {
+    directly_identifiable: '<mxGraphModel><root><mxCell id="0" /><mxCell id="1" parent="0"/><mxCell id="2" connectable="0" parent="1" style="group" value="" vertex="1"><mxGeometry height="23.4085693359375" width="20.453786849975586" as="geometry"/></mxCell><mxCell id="dR5PnMr9lIuu" parent="2" value="Layer 0"/><mxCell id="sAt2MlWrZqtqtYVJr7Kp-139" parent="2" connectable="0" style="shape=ellipse;perimeter=ellipsePerimeter;shadow=0;strokeWidth=2;fillColor=#ffffff;strokeColor=#1e1e1e;opacity=100.0;dashed=1;fixDash=1;dashPattern=;gliffyId=127;container=0;" vertex="1"><mxGeometry height="14.294870376586914" width="14.294870376586914" x="3.0794677734375" y="0" as="geometry" /></mxCell><mxCell id="sAt2MlWrZqtqtYVJr7Kp-140" parent="2" connectable="0" style="shape=rect;shadow=0;strokeWidth=2;fillColor=#ffffff;strokeColor=#1e1e1e;opacity=100.0;dashed=1;fixDash=1;dashPattern=;gliffyId=128;container=0;" vertex="1"><mxGeometry height="8.397865295410156" width="20.453786849975586" x="0" y="15.985107421875" as="geometry" /></mxCell><mxCell id="sAt2MlWrZqtqtYVJr7Kp-141" edge="1" parent="2" style="shape=filledEdge;strokeWidth=2;strokeColor=#1e1e1e;fillColor=#1e1e1e;startArrow=none;startFill=0;startSize=6;endArrow=none;endFill=0;endSize=6;rounded=1;dashed=1;fixDash=1;dashPattern=;gliffyId=129;" source="" target=""><mxGeometry height="6.594333171844482" relative="1" width="7.91076135635376" as="geometry"><Array as="points"><mxPoint x="20.2518310546875" y="25.921630859375" /></Array><mxPoint x="17.6068115234375" y="22.3853759765625" as="sourcePoint" /><mxPoint x="25.517578125" y="19.3272705078125" as="targetPoint" /></mxGeometry></mxCell></root></mxGraphModel>',
+ 
+    indirectly_identifiable: '<mxGraphModel><root><mxCell id="0" /><mxCell id="1" parent="0"/><mxCell id="2" connectable="0" parent="1" style="group" value="" vertex="1"><mxGeometry height="23.4085693359375" width="20.453786849975586" as="geometry"/></mxCell><mxCell id="sAt2MlWrZqtqtYVJr7Kp-142" parent="2" connectable="0" style="shape=ellipse;perimeter=ellipsePerimeter;shadow=0;strokeWidth=2;fillColor=#ffffff;strokeColor=#1e1e1e;opacity=100.0;dashed=1;fixDash=1;dashPattern=;gliffyId=150;container=0;" vertex="1"><mxGeometry height="13.716764450073242" width="13.716764450073242" x="2.9549560546875" as="geometry" /></mxCell><mxCell id="sAt2MlWrZqtqtYVJr7Kp-143" parent="2" connectable="0" style="shape=rect;shadow=0;strokeWidth=2;fillColor=#ffffff;strokeColor=#1e1e1e;opacity=100.0;dashed=1;fixDash=1;dashPattern=;gliffyId=151;container=0;" vertex="1"><mxGeometry height="8.058242797851562" width="19.626605987548828" y="15.338623046875" as="geometry" /></mxCell><mxCell id="sAt2MlWrZqtqtYVJr7Kp-144" edge="1" parent="2" style="shape=filledEdge;strokeWidth=2;strokeColor=#1e1e1e;fillColor=#ffffff;startArrow=none;startFill=0;startSize=6;endArrow=none;endFill=0;endSize=6;rounded=1;dashed=1;fixDash=1;dashPattern=;gliffyId=152;" source="" target=""><mxGeometry height="5.096216678619385" relative="1" width="11.775199890136719" as="geometry"><Array as="points"><mxPoint x="15.82763671875" y="20.4666748046875" /><mxPoint x="20.5987548828125" y="25.385986328125" /></Array><mxPoint x="12.2388916015625" y="25.5628662109375" as="sourcePoint" /><mxPoint x="24.0140380859375" y="21.0694580078125" as="targetPoint" /></mxGeometry></mxCell></root></mxGraphModel>',
+ 
+    anonymous: '<mxGraphModel><root><mxCell id="0" /><mxCell id="1" parent="0"/><mxCell id="2" connectable="0" parent="1" style="group" value="" vertex="1"><mxGeometry height="23.4085693359375" width="20.453786849975586" as="geometry"/></mxCell><mxCell id="M10A95Y2XUdIVCJoNkbn-1" parent="2" connectable="0" style="shape=ellipse;perimeter=ellipsePerimeter;shadow=0;strokeWidth=2;fillColor=#ffffff;strokeColor=#1e1e1e;opacity=100.0;dashed=1;fixDash=1;dashPattern=;gliffyId=132;container=0;" vertex="1"><mxGeometry height="13.536534309387207" width="13.536534309387207" x="2.9161376953125" as="geometry" /></mxCell><mxCell id="M10A95Y2XUdIVCJoNkbn-2" parent="2" connectable="0" style="shape=rect;shadow=0;strokeWidth=2;fillColor=#ffffff;strokeColor=#1e1e1e;opacity=100.0;dashed=1;fixDash=1;dashPattern=;gliffyId=133;container=0;" vertex="1"><mxGeometry height="7.952362537384033" width="19.368722915649414" y="14.9676513671875" as="geometry" /></mxCell><mxCell id="M10A95Y2XUdIVCJoNkbn-3" edge="1" parent="2" style="shape=filledEdge;strokeWidth=2;strokeColor=#1e1e1e;fillColor=#ffffff;startArrow=none;startFill=0;startSize=6;endArrow=none;endFill=0;endSize=6;rounded=1;dashed=1;fixDash=1;dashPattern=;gliffyId=134;" source="" target=""><mxGeometry height="8.082135200500488" relative="1" width="8.082135200500488" as="geometry"><mxPoint x="24.1248779296875" y="18.6109619140625" as="sourcePoint" /><mxPoint x="16.042724609375" y="26.693115234375" as="targetPoint" /></mxGeometry></mxCell><mxCell id="M10A95Y2XUdIVCJoNkbn-4" edge="1" parent="2" style="shape=filledEdge;strokeWidth=2;strokeColor=#1e1e1e;fillColor=#ffffff;startArrow=none;startFill=0;startSize=6;endArrow=none;endFill=0;endSize=6;rounded=1;dashed=1;fixDash=1;dashPattern=;gliffyId=135;" source="" target=""><mxGeometry height="7.732368469238281" relative="1" width="7.732368469238281" as="geometry"><mxPoint x="16.1640625" y="18.491943359375" as="sourcePoint" /><mxPoint x="23.896484375" y="26.224365234375" as="targetPoint" /></mxGeometry></mxCell></root></mxGraphModel>',
+ 
+    strict_pseudonymous: '<mxGraphModel><root><mxCell id="0" /><mxCell id="1" parent="0" /><mxCell id="2" connectable="0" parent="1" style="group" value="" vertex="1"><mxGeometry height="23.4085693359375" width="20.453786849975586" as="geometry"/></mxCell><mxCell id="M10A95Y2XUdIVCJoNkbn-5" parent="2" connectable="0" style="shape=ellipse;perimeter=ellipsePerimeter;shadow=0;strokeWidth=2;fillColor=#ffffff;strokeColor=#1e1e1e;opacity=100.0;dashed=1;fixDash=1;dashPattern=;gliffyId=137;container=0;" vertex="1"><mxGeometry height="14.437783241271973" width="14.437783241271973" x="3.1103515625" y="1.197509765625" as="geometry" /></mxCell><mxCell id="M10A95Y2XUdIVCJoNkbn-6" parent="2" connectable="0" style="shape=rect;shadow=0;strokeWidth=2;fillColor=#ffffff;strokeColor=#1e1e1e;opacity=100.0;dashed=1;fixDash=1;dashPattern=;gliffyId=138;container=0;" vertex="1"><mxGeometry height="8.481822967529297" width="20.658273696899414" y="17.20166015625" as="geometry" /></mxCell><mxCell id="M10A95Y2XUdIVCJoNkbn-7" edge="1" parent="2" style="shape=filledEdge;strokeWidth=2;strokeColor=#1e1e1e;fillColor=#1e1e1e;startArrow=none;startFill=0;startSize=6;endArrow=none;endFill=0;endSize=6;rounded=1;dashed=1;fixDash=1;dashPattern=;gliffyId=139;edgeStyle=orthogonalEdgeStyle;" source="" target=""><mxGeometry height="7.455108165740967" relative="1" as="geometry"><mxPoint x="23.5428466796875" as="sourcePoint" /><mxPoint x="23.5428466796875" y="7.455078125" as="targetPoint" /></mxGeometry></mxCell><mxCell id="M10A95Y2XUdIVCJoNkbn-8" edge="1" parent="2" style="shape=filledEdge;strokeWidth=2;strokeColor=#1e1e1e;fillColor=#1e1e1e;startArrow=none;startFill=0;startSize=6;endArrow=none;endFill=0;endSize=6;rounded=1;dashed=1;fixDash=1;dashPattern=;gliffyId=140;" source="" target=""><mxGeometry height="4.23309850692749" relative="1" width="7.331942081451416" as="geometry"><mxPoint x="20.220458984375" y="1.6134033203125" as="sourcePoint" /><mxPoint x="27.5523681640625" y="5.8465576171875" as="targetPoint" /></mxGeometry></mxCell><mxCell id="M10A95Y2XUdIVCJoNkbn-9" edge="1" parent="2" style="shape=filledEdge;strokeWidth=2;strokeColor=#1e1e1e;fillColor=#1e1e1e;startArrow=none;startFill=0;startSize=6;endArrow=none;endFill=0;endSize=6;rounded=1;dashed=1;fixDash=1;dashPattern=;gliffyId=141;" source="" target=""><mxGeometry height="4.062346935272217" relative="1" width="7.036191463470459" as="geometry"><mxPoint x="20.1341552734375" y="5.4849853515625" as="sourcePoint" /><mxPoint x="27.1702880859375" y="1.422607421875" as="targetPoint" /></mxGeometry></mxCell></root></mxGraphModel>',
+
+    soft_pseudonymous: '<mxGraphModel><root><mxCell id="0" /><mxCell id="1" parent="0" /><mxCell id="2" connectable="0" parent="1" style="group" value="" vertex="1"><mxGeometry height="23.4085693359375" width="20.453786849975586" as="geometry"/></mxCell><mxCell id="M10A95Y2XUdIVCJoNkbn-10" parent="2" connectable="0" style="shape=ellipse;perimeter=ellipsePerimeter;shadow=0;strokeWidth=2;fillColor=#ffffff;strokeColor=#1e1e1e;opacity=100.0;dashed=1;fixDash=1;dashPattern=;gliffyId=143;container=0;" vertex="1"><mxGeometry height="14.34787368774414" width="14.34787368774414" x="3.0908203125" y="1.1268310546875" as="geometry" /></mxCell><mxCell id="M10A95Y2XUdIVCJoNkbn-11" parent="2" connectable="0" style="shape=rect;shadow=0;strokeWidth=2;fillColor=#ffffff;strokeColor=#1e1e1e;opacity=100.0;dashed=1;fixDash=1;dashPattern=;gliffyId=144;container=0;" vertex="1"><mxGeometry height="8.429003715515137" width="20.52962875366211" y="17.171142578125" as="geometry" /></mxCell><mxCell id="M10A95Y2XUdIVCJoNkbn-12" edge="1" parent="2" style="shape=filledEdge;strokeWidth=2;strokeColor=#1e1e1e;fillColor=#ffffff;startArrow=none;startFill=0;startSize=6;endArrow=none;endFill=0;endSize=6;rounded=1;dashed=1;fixDash=1;dashPattern=;gliffyId=145;" source="" target=""><mxGeometry height="5.330694198608398" relative="1" width="12.316978454589844" as="geometry"><Array as="points"><mxPoint x="16.5771484375" y="22.598388671875" /><mxPoint x="21.56787109375" y="27.744140625" /></Array><mxPoint x="12.8233642578125" y="27.9290771484375" as="sourcePoint" /><mxPoint x="25.140380859375" y="23.2288818359375" as="targetPoint" /></mxGeometry></mxCell><mxCell id="M10A95Y2XUdIVCJoNkbn-13" edge="1" parent="2" style="shape=filledEdge;strokeWidth=2;strokeColor=#1e1e1e;fillColor=#1e1e1e;startArrow=none;startFill=0;startSize=6;endArrow=none;endFill=0;endSize=6;rounded=1;dashed=1;fixDash=1;dashPattern=;gliffyId=146;edgeStyle=orthogonalEdgeStyle;" source="" target=""><mxGeometry height="7.408682346343994" relative="1" as="geometry"><mxPoint x="23.4176025390625" as="sourcePoint" /><mxPoint x="23.4176025390625" y="7.40869140625" as="targetPoint" /></mxGeometry></mxCell><mxCell id="M10A95Y2XUdIVCJoNkbn-14" edge="1" parent="2" style="shape=filledEdge;strokeWidth=2;strokeColor=#1e1e1e;fillColor=#1e1e1e;startArrow=none;startFill=0;startSize=6;endArrow=none;endFill=0;endSize=6;rounded=1;dashed=1;fixDash=1;dashPattern=;gliffyId=147;" source="" target=""><mxGeometry height="4.206737518310547" relative="1" width="7.286283493041992" as="geometry"><mxPoint x="20.1158447265625" y="1.6033935546875" as="sourcePoint" /><mxPoint x="27.402099609375" y="5.8101806640625" as="targetPoint" /></mxGeometry></mxCell><mxCell id="M10A95Y2XUdIVCJoNkbn-15" edge="1" parent="2" style="shape=filledEdge;strokeWidth=2;strokeColor=#1e1e1e;fillColor=#1e1e1e;startArrow=none;startFill=0;startSize=6;endArrow=none;endFill=0;endSize=6;rounded=1;dashed=1;fixDash=1;dashPattern=;gliffyId=148;" source="" target=""><mxGeometry height="4.037049293518066" relative="1" width="6.992374897003174" as="geometry"><mxPoint x="20.0301513671875" y="5.4508056640625" as="sourcePoint" /><mxPoint x="27.0225830078125" y="1.4136962890625" as="targetPoint" /></mxGeometry></mxCell></root></mxGraphModel>',
+  };
+ 
+
+  const ICON_W = 20.50;
+  const ICON_H = 23.41;
+ 
+  const ICON_DISPLAY_W = 28;
+  const ICON_DISPLAY_H = 32;
+
+  function iconXmlToDataUri(xml) {
+    return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
+      mxUtils.getXml(mxUtils.parseXml(xml).documentElement)
+    );
+  }
+
+  function resolveIconKey(identifiability, pseudonymity) {
+    if (pseudonymity === 'strict_pseudonymous') return 'strict_pseudonymous';
+    if (pseudonymity === 'soft_pseudonymous')   return 'soft_pseudonymous';
+    if (identifiability === 'directly_identifiable')   return 'directly_identifiable';
+    if (identifiability === 'indirectly_identifiable') return 'indirectly_identifiable';
+    if (identifiability === 'non_personal' || identifiability === 'de_identified') return 'anonymous';
+    return null;
+  }
+
+  // ====== NOLAI - {Frontend} /Sprint 3/ Task 133 — test icon SVGs ======
+  
+  function createIcon(iconKey) {
+    let isDark = false;
+    if (ui.theme === 'dark') {
+      isDark = true;
+    } else if (typeof ui.isDarkMode === 'function' && ui.isDarkMode()) {
+      isDark = true;
+    } else if (ui.editor && typeof ui.editor.isDarkMode === 'function' && ui.editor.isDarkMode()) {
+      isDark = true;
+    } else if (document.body.classList.contains('geDark') ||
+      document.documentElement.classList.contains('geDark') ||
+      document.documentElement.getAttribute('data-color-mode') === 'dark' ||
+      document.body.getAttribute('data-theme') === 'dark') {
+      isDark = true;
+    } else {
+      try {
+        const container = ui.container || document.body;
+        const bgColor = window.getComputedStyle(container).backgroundColor;
+        const match = bgColor.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+        if (match) {
+          const r = parseInt(match[1], 10);
+          const g = parseInt(match[2], 10);
+          const b = parseInt(match[3], 10);
+          const luminance = (0.299 * r + 0.587 * g + 0.114 * b);
+          isDark = luminance < 128;
+        }
+      } catch (e) {
+        console.warn('[DPD] Could not compute background color for theme detection');
+      }
+    }
+
+    const stroke_color = isDark ? "#d3d3d3" : "#1e1e1e";
+    const fill_color = isDark ? "black" : "white";
+
+    const TEST_ICON_SVG = {
+      directly_identifiable: {
+        w: 28,
+        h: 32,
+        svg: `
+        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+          <!-- head -->
+          <circle cx="14" cy="8" r="6.5"
+            fill="${fill_color}"
+            stroke="${stroke_color}"
+            stroke-width="2.2"/>
+
+          <!-- body -->
+          <rect x="4" y="18" width="20" height="10"
+            fill="${fill_color}"
+            stroke="${stroke_color}"
+            stroke-width="2.2"/>
+
+          <!-- checkmark bottom-right -->
+          <polyline points="22,25 24,28 29,22"
+            fill="none"
+            stroke="${stroke_color}"
+            stroke-width="2.2"
+            stroke-linecap="round"
+            stroke-linejoin="round"/>
+        </svg>
+        `,
+      },
+
+      indirectly_identifiable: {
+        w: 28,
+        h: 32,
+        svg: `
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="32" viewBox="0 0 28 32">
+          <!-- head -->
+          <circle cx="14" cy="8" r="6.5"
+            fill="${fill_color}"
+            stroke="${stroke_color}"
+            stroke-width="2.2"/>
+
+          <!-- body -->
+          <rect x="4" y="18" width="20" height="10"
+            fill="${fill_color}"
+            stroke="${stroke_color}"
+            stroke-width="2.2"/>
+
+          <!-- ~ hook -->
+          <path d="
+            M20 29
+            Q22 27 24 29
+            Q25 30 27 28
+          "
+            fill="none"
+            stroke="${stroke_color}"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"/>
+        </svg>
+        `,
+      },
+
+      anonymous: {
+        w: 28,
+        h: 32,
+        svg: `
+        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+          <!-- head -->
+          <circle cx="14" cy="8" r="6.5"
+            fill="${fill_color}"
+            stroke="${stroke_color}"
+            stroke-width="2.2"/>
+
+          <!-- body -->
+          <rect x="4" y="18" width="20" height="10"
+            fill="${fill_color}"
+            stroke="${stroke_color}"
+            stroke-width="2.2"/>
+
+          <!-- X -->
+          <line x1="22" y1="22" x2="29" y2="29"
+            stroke="${stroke_color}"
+            stroke-width="2.2"/>
+
+          <line x1="29" y1="22" x2="22" y2="29"
+            stroke="${stroke_color}"
+            stroke-width="2.2"/>
+        </svg>
+        `,
+      },
+
+      strict_pseudonymous: {
+        w: 28,
+        h: 32,
+        svg: `
+        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+          <!-- head -->
+          <circle cx="14" cy="8" r="6.5"
+            fill="${fill_color}"
+            stroke="${stroke_color}"
+            stroke-width="2.2"/>
+
+          <!-- body -->
+          <rect x="4" y="18" width="20" height="10"
+            fill="${fill_color}"
+            stroke="${stroke_color}"
+            stroke-width="2.2"/>
+
+          <!-- asterisk -->
+          <line x1="26" y1="6" x2="26" y2="14"
+            stroke="${stroke_color}"
+            stroke-width="2"/>
+
+          <line x1="22.5" y1="8" x2="29.5" y2="12"
+            stroke="${stroke_color}"
+            stroke-width="2"/>
+
+          <line x1="22.5" y1="12" x2="29.5" y2="8"
+            stroke="${stroke_color}"
+            stroke-width="2"/>
+        </svg>
+        `,
+      },
+
+      soft_pseudonymous: {
+        w: 28,
+        h: 32,
+        svg: `
+        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+          <!-- head -->
+          <circle cx="14" cy="8" r="6.5"
+            fill="${fill_color}"
+            stroke="${stroke_color}"
+            stroke-width="2.2"/>
+
+          <!-- body -->
+          <rect x="4" y="18" width="20" height="10"
+            fill="${fill_color}"
+            stroke="${stroke_color}"
+            stroke-width="2.2"/>
+
+          <!-- asterisk -->
+          <line x1="26" y1="6" x2="26" y2="14"
+            stroke="${stroke_color}"
+            stroke-width="2"/>
+
+          <line x1="22.5" y1="8" x2="29.5" y2="12"
+            stroke="${stroke_color}"
+            stroke-width="2"/>
+
+          <line x1="22.5" y1="12" x2="29.5" y2="8"
+            stroke="${stroke_color}"
+            stroke-width="2"/>
+
+          <!-- ~ hook -->
+          <path d="
+            M20 29
+            Q22 27 24 29
+            Q25 30 27 28
+          "
+            fill="none"
+            stroke="${stroke_color}"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"/>
+        </svg>
+        `,
+      },
+    };
+    return TEST_ICON_SVG[iconKey];
+  }
+
+  
+
+  function renderIconToImage(iconKey, callback) {
+    // ====== NOLAI - {Frontend} /Sprint 3/ Task 133 — icon render ======
+    const icon = createIcon(iconKey);
+    if (!icon) {
+      console.warn('[DPD] renderIconToImage: unknown icon key', iconKey);
+      callback(null);
+      return;
+    }
+    callback(new mxImage(
+      'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(icon.svg),
+      icon.w,
+      icon.h
+    ));
+    // ====== end icon render ======
+  }
+ 
+  function addEdgeIcon(edge) {
+    const props   = getEdgeProps(edge);
+    const iconKey = resolveIconKey(props.identifiability, props.pseudonymity);
+
+    // ====== NOLAI - {Frontend} /Sprint 3/ Task 133 — overlay fix ======
+    const existingIcon = edgeIconOverlayMap.get(edge);
+    if (existingIcon) {
+      graph.removeCellOverlay(edge, existingIcon);
+      edgeIconOverlayMap.delete(edge);
+    }
+    // ====== end overlay fix ======
+
+    if (!iconKey) return;
+
+    renderIconToImage(iconKey, function (img) {
+      if (!img) return;
+      graph.getModel().beginUpdate();
+      try {
+        // Guard: remove stale icon that may have been added between the outer
+        // check and this async callback resolving.
+        const stale = edgeIconOverlayMap.get(edge);
+        if (stale) {
+          graph.removeCellOverlay(edge, stale);
+          edgeIconOverlayMap.delete(edge);
+        }
+
+        // Float the icon ABOVE the edge midpoint (0, -20) so it never overlaps
+        // the error-badge overlay which sits at (0, 0) on the edge itself.
+        const overlay = new mxCellOverlay(
+          img,
+          '',
+          mxConstants.ALIGN_CENTER,
+          mxConstants.ALIGN_MIDDLE,
+          new mxPoint(0, -20)
+        );
+        edgeIconOverlayMap.set(edge, overlay);
+        graph.addCellOverlay(edge, overlay);
+      } finally {
+        graph.getModel().endUpdate();
+      }
+    });
+  }
+
+
   function showEdgeAnnotationDialog(edge) {
     const props = getEdgeProps(edge);
 
@@ -697,6 +1000,8 @@ Draw.loadPlugin(function (ui) {
       errEl.textContent = '';
 
       setEdgeProps(edge, { identifiability: ident, linkability: link, pseudonymity: pseudo, data_labels: labels });
+      addEdgeIcon(edge);
+      
       ui.hideDialog();
 
       // Auto-validate silently after annotation save: update console without opening modal.
@@ -751,6 +1056,7 @@ Draw.loadPlugin(function (ui) {
     const processOut = {}; // processId -> [rank, …]
 
     edges.forEach(edge => {
+      addEdgeIcon(edge) // Add icons to an edge when highlighting is changed 
       const src = model.getTerminal(edge, true);
       const tgt = model.getTerminal(edge, false);
       if (!src || !tgt) return;
@@ -1010,6 +1316,11 @@ Draw.loadPlugin(function (ui) {
 
   const violationHighlightedEdges = new Map();
 
+  // ====== NOLAI - {Frontend} /Sprint 3/ Task 133 — overlay fix ======
+  const edgeIconOverlayMap  = new Map();
+  const edgeErrorOverlayMap = new Map(); 
+  // ====== end overlay fix ======
+
   // Keeps track of violation messages for hover tooltip
   const cellViolationMessages = new Map();
 
@@ -1085,57 +1396,16 @@ Draw.loadPlugin(function (ui) {
     if (violationHighlightedEdges.size === 0) return;
     model.beginUpdate();
     try {
-      violationHighlightedEdges.forEach(function (originalStyle, edge) {
-        graph.setCellStyle(originalStyle, [edge]);
-        graph.removeCellOverlays(edge);
-      });
+      violationHighlightedEdges.forEach(function (originalStyle, cell) {
+        graph.setCellStyle(originalStyle, [cell]);
 
-      // Cleanup for reloaded files that were previously saved with highlight styles.
-      // Supports both marker-tagged styles and older highlight styles without markers.
-      var allEdges = collectAllCells().edges;
-      allEdges.forEach(function (edge) {
-        var style = edge.style || '';
-        var hasMarker = /(^|;)dpdViolation=1(;|$)/.test(style);
-        var hasLegacyHighlight = /(^|;)strokeWidth=4(;|$)/.test(style) &&
-          /(^|;)strokeColor=(#ff4444|#ffaa00)(;|$)/i.test(style);
-
-        if (hasMarker || hasLegacyHighlight) {
-          var cleaned = style
-            .replace(/(^|;)dpdViolation=1(?=;|$)/g, '')
-            .replace(/strokeColor=[^;]*(;|$)/g, '')
-            .replace(/strokeWidth=[^;]*(;|$)/g, '')
-            .replace(/;;+/g, ';')
-            .replace(/^;|;$/g, '');
-
-          graph.setCellStyle(cleaned, [edge]);
-          graph.removeCellOverlays(edge);
-
-          // Also clear any persisted style values stored on the cell's XML/value
-          // (some saved diagrams may include style fragments in the value element).
-          try {
-            var val = model.getValue(edge);
-            if (val && typeof val === 'object' && typeof val.getAttribute === 'function') {
-              var valStyle = val.getAttribute('style') || '';
-              var cleanedValStyle = valStyle
-                .replace(/strokeColor=[^;]*(;|$)/g, '')
-                .replace(/strokeWidth=[^;]*(;|$)/g, '')
-                .replace(/;;+/g, ';')
-                .replace(/^;|;$/g, '');
-
-              if (cleanedValStyle !== valStyle) {
-                var newVal = val.cloneNode(true);
-                if (cleanedValStyle) {
-                  newVal.setAttribute('style', cleanedValStyle);
-                } else {
-                  newVal.removeAttribute('style');
-                }
-                model.setValue(edge, newVal);
-              }
-            }
-          } catch (e) {
-            console.warn('[DPD] Error cleaning persisted value style for edge', e);
-          }
+        // ====== NOLAI - {Frontend} /Sprint 3/ Task 133 — overlay fix ======
+        const badge = edgeErrorOverlayMap.get(cell);
+        if (badge) {
+          graph.removeCellOverlay(cell, badge);
+          edgeErrorOverlayMap.delete(cell);
         }
+        // ====== end overlay fix ======
       });
     } finally {
       model.endUpdate();
@@ -1243,7 +1513,12 @@ Draw.loadPlugin(function (ui) {
           new mxPoint(0, 0)
         );
 
-        graph.removeCellOverlays(edge);
+        // ====== NOLAI - {Frontend} /Sprint 3/ Task 133 — overlay fix ======
+        // Remove only the previous error badge, not the icon overlay.
+        var oldBadge = edgeErrorOverlayMap.get(edge);
+        if (oldBadge) graph.removeCellOverlay(edge, oldBadge);
+        edgeErrorOverlayMap.set(edge, overlay);
+        // ====== end overlay fix ======
         graph.addCellOverlay(edge, overlay);
       });
 
@@ -1290,7 +1565,12 @@ Draw.loadPlugin(function (ui) {
           new mxPoint(0, 0)
         );
 
-        graph.removeCellOverlays(vertex);
+        // ====== NOLAI - {Frontend} /Sprint 3/ Task 133 — overlay fix ======
+        // Remove only the previous error badge overlay for this vertex.
+        var oldVertexBadge = edgeErrorOverlayMap.get(vertex);
+        if (oldVertexBadge) graph.removeCellOverlay(vertex, oldVertexBadge);
+        edgeErrorOverlayMap.set(vertex, overlay);
+        // ====== end overlay fix ======
         graph.addCellOverlay(vertex, overlay);
 
       });
@@ -1394,6 +1674,7 @@ Draw.loadPlugin(function (ui) {
     return origPopup(menu, cell, evt);
   };
   // ====== end of changes by SE ======
+
 
   console.log('DPD Plugin Loaded');
   console.log('[DPD] Plugin loaded — 15 rules active (R-S1–4, R-I1–5, R-L1–2, R-P1–4)');
