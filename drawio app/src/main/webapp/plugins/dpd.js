@@ -1073,6 +1073,7 @@ Draw.loadPlugin(function (ui) {
     const processOut = {}; // processId -> [rank, …]
 
     edges.forEach(edge => {
+      addEdgeIcon(edge) // Add icons to an edge when highlighting is changed 
       const src = model.getTerminal(edge, true);
       const tgt = model.getTerminal(edge, false);
       if (!src || !tgt) return;
