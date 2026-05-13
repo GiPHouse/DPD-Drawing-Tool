@@ -2250,53 +2250,6 @@ function getSharesForFile(filename, remotePath, nextcloudUrl, username, password
 
 // ====== NOLAI - {- Backend -} /Sprint 4/ Task 192 ======
 //
-// createPublicLink — creates a Nextcloud public share link (shareType=3) for a
-// .drawio file so the owner can distribute a read-only URL to external parties.
-//
-// Parameters:
-//   filename     — bare filename, e.g. 'myDiagram.drawio'
-//   remotePath   — folder path relative to the user's DAV root, e.g. '/' or '/subdir'
-//   nextcloudUrl — bare origin, e.g. 'https://localhost'
-//   username     — Nextcloud uid (the sha-256 hash used by user_oidc unique-uid)
-//   password     — Nextcloud app password from Login Flow v2
-//
-// Returns a Promise that resolves to the share object from OCS (includes .url,
-// .token, .id) or rejects with a descriptive Error.
-// ====== end of changes by SE ======
-function createPublicLink(filename, remotePath, nextcloudUrl, username, password) {
-    var folder = (remotePath || '/').replace(/^\/+|\/+$/g, '');
-    var ocsPath = folder ? ('/' + folder + '/' + filename) : ('/' + filename);
-
-    var body = new URLSearchParams();
-    body.append('path', ocsPath);
-    body.append('shareType', '3'); // 3 = public link
-
-    return fetch(
-        nextcloudUrl + '/ocs/v2.php/apps/files_sharing/api/v1/shares?format=json',
-        {
-            method: 'POST',
-            headers: {
-                'Authorization':  'Basic ' + btoa(username + ':' + password),
-                'OCS-APIRequest': 'true',
-                'Content-Type':   'application/x-www-form-urlencoded',
-            },
-            body: body.toString(),
-            mode: 'cors',
-            credentials: 'omit',
-        }
-    )
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-        if (!data.ocs || !data.ocs.data) {
-            var msg = (data.ocs && data.ocs.meta && data.ocs.meta.message) || 'Unknown error';
-            throw new Error('createPublicLink failed: ' + msg);
-        }
-        return data.ocs.data;
-    });
-}
-
-// ====== NOLAI - {- Backend -} /Sprint 4/ Task 192 ======
-//
 // removeShare — removes an existing Nextcloud share (any type) by its numeric
 // share ID. Used by both the user-share list (×) and the public link toggle.
 //
