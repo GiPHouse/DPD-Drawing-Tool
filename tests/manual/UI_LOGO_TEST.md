@@ -20,7 +20,7 @@ Status:  <span style="color: green">PASS</span>
 ## Test 2 – Resizing Browser Window Horizontally
 
 **Action:**
-Resize Broswser window on x-axis
+Resize Browser window on x-axis
 
 **Expected Result:**
 - Logo preserving its size
@@ -43,7 +43,7 @@ Status: <span style="color: green">PASS</span>
 ## Test 3 – Resizing Browser Window Vertically
 
 **Action:**
-Resize Broswser window on y-axis
+Resize Browser window on y-axis
 
 **Expected Result:**
 - Logo preserving its size

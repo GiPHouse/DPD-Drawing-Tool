@@ -859,27 +859,166 @@
 		*/
 		// ======	NOLAI - {- Backend -} /Sprint 1/ Task 16	=====
 		// ======   NOLAI - {- Frontend -} /Sprint 2/ Task 98   =====
+		// ======   NOLAI - {- Backend / Frontend -} /Sprint 4/ Task 148 — Smart Save / Save As / ⌘+S =====
+		//
+		// SAVE / SAVE AS — professional-app behaviour.
+		//
+		// Two actions are registered:
+		//   'Save'     — quick path: PUTs the current XML straight back to the
+		//                Nextcloud file the editor is currently bound to (recorded
+		//                in _nolaiCurrentNextcloudFile). Falls through to the Save
+		//                As dialog when there's no bound file yet (first save) or
+		//                when no Nextcloud session is available.
+		//   'Save As'  — always opens the dialog so the user can pick / change
+		//                the filename. Useful for first-time saves or "save a copy".
+		//
+		// Both actions converge on finalizeSaveSuccess() once the WebDAV PUT
+		// returns 2xx — that helper handles every UI side-effect a "real" save
+		// triggers in a desktop app:
+		//   1. Update the in-memory LocalFile.title so any later rename or save
+		//      uses the new filename as the source.
+		//   2. Update the title bar via updateNolaiFileTitle.
+		//   3. Record the binding in _nolaiCurrentNextcloudFile so future
+		//      ⌘+S calls hit the quick path.
+		//   4. Clear editorUi.editor.modified so drawio's "unsaved changes"
+		//      affordance (titlebar asterisk, beforeunload warning) clears.
+		//   5. Show a status line.
+		//
+		// WHY one helper rather than duplicating the success block:
+		//   The two save flows have to do exactly the same work on success;
+		//   keeping the code in one place removes the risk of drift (e.g. one
+		//   path forgets to clear modified and ⌘+S keeps re-prompting).
+		// ====== end of changes by SE ======
 
-		editorUi.actions.addAction('Save', function()
+		// nolaiNextcloudBaseUrl — the Nextcloud root that all save/load WebDAV
+		// calls in this file build URLs against. Centralised so the constant
+		// only appears once and the multiple actions below stay aligned.
+		var nolaiNextcloudBaseUrl = 'https://localhost';
+
+		// finalizeSaveSuccess — single source of truth for what "save was
+		// successful" means in UI terms. Called by both the quick save path
+		// and the Save As dialog when the WebDAV PUT returns 2xx.
+		function finalizeSaveSuccess(fname, remotePath)
 		{
-			// Get filename and ensure that it is a valid file
+			// Update the in-memory LocalFile so subsequent rename / save uses
+			// the saved filename as the source. Setting `title` directly
+			// rather than calling rename() to avoid recursing into our rename
+			// override, which would attempt another WebDAV operation.
+			var current = editorUi.getCurrentFile();
+			if (current != null) { current.title = fname; }
+
+			// Record the binding so the next ⌘+S goes straight to a silent PUT.
+			if (typeof nolaiSetCurrentNextcloudFile === 'function')
+			{
+				nolaiSetCurrentNextcloudFile(fname, remotePath || '/');
+			}
+
+			// Update the toolbar filename and document title.
+			if (typeof updateNolaiFileTitle === 'function') { updateNolaiFileTitle(fname); }
+
+			// Clear the modified flag so drawio stops flagging the file as
+			// dirty (titlebar asterisk, beforeunload, etc.).
+			editorUi.editor.modified = false;
+			if (current != null && typeof current.setModified === 'function')
+			{
+				try { current.setModified(false); } catch (e) { /* not all file types support this */ }
+			}
+
+			editorUi.editor.setStatus('Saved to Nextcloud — ' + fname);
+		}
+
+		// quickSaveCurrentFile — synchronous attempt at a no-dialog save. Returns
+		// true if the save was started (caller should not open a dialog), false
+		// if the preconditions weren't met (caller should open Save As).
+		//
+		// Preconditions: a tracked Nextcloud file AND a cached signed-in session.
+		// If either is missing, we cannot do a silent save without surprising
+		// the user, so we return false and let the dialog flow take over.
+		function quickSaveCurrentFile()
+		{
+			if (typeof saveDrawIOToNextcloudXML !== 'function') { return false; }
+			if (typeof nolaiGetCurrentNextcloudFile !== 'function') { return false; }
+
+			var bound = nolaiGetCurrentNextcloudFile();
+			var session = (typeof _nextcloudSessionCache !== 'undefined') ? _nextcloudSessionCache : null;
+
+			if (!bound || !session || !session.username || !session.password)
+			{
+				return false;
+			}
+
+			// ====== NOLAI - {- Backend -} /Sprint 4/ Task 148 — staleness guard ======
+			// If the editor's current LocalFile no longer matches what the tracker
+			// thinks we're bound to (e.g. the user clicked File → New and is now
+			// editing a fresh untitled document), the binding is stale and a
+			// silent PUT would overwrite the wrong Nextcloud file. In that case
+			// drop the binding and force the caller into the Save As dialog.
+			//
+			// Title equality is sufficient because every place that updates the
+			// tracker also updates currentFile.title to the same value.
+			// ====== end of changes by SE ======
+			var current = editorUi.getCurrentFile();
+			var currentTitle = (current != null && typeof current.getTitle === 'function')
+				? current.getTitle() : null;
+			if (currentTitle !== bound.filename)
+			{
+				if (typeof nolaiClearCurrentNextcloudFile === 'function') { nolaiClearCurrentNextcloudFile(); }
+				return false;
+			}
+
+			var fname = bound.filename;
+			var remotePath = bound.remotePath || '/';
+			var xmlContent = editorUi.getFileData(true);
+			var url = nolaiNextcloudBaseUrl + '/remote.php/dav/files/' + encodeURIComponent(session.username) + '/';
+
+			editorUi.spinner.spin(document.body, 'Saving…');
+
+			saveDrawIOToNextcloudXML(fname, xmlContent, url, session.username, session.password, remotePath)
+				.then(function(ok)
+				{
+					editorUi.spinner.stop();
+					if (ok)
+					{
+						finalizeSaveSuccess(fname, remotePath);
+					}
+					else
+					{
+						// Quick save failed — the file may have been deleted or
+						// renamed on the server. Drop the binding and let the
+						// next action open the Save As dialog so the user can
+						// pick a new name.
+						if (typeof nolaiClearCurrentNextcloudFile === 'function') { nolaiClearCurrentNextcloudFile(); }
+						editorUi.handleError({message: 'Save failed. The file may have been moved or deleted on Nextcloud — please use Save As.'});
+					}
+				})
+				.catch(function(err)
+				{
+					editorUi.spinner.stop();
+					editorUi.handleError({message: 'Save error: ' + err.message});
+				});
+
+			return true;
+		}
+
+		// openSaveAsDialog — the existing professional Save dialog, extracted
+		// so both 'Save' (when there's no bound file) and 'Save As' can reuse it.
+		// On success it converges on finalizeSaveSuccess just like the quick path.
+		function openSaveAsDialog()
+		{
 			var currentFile = editorUi.getCurrentFile();
 			var filename = (currentFile != null && currentFile.getTitle() != null) ?
 				currentFile.getTitle() : editorUi.defaultFilename;
-			
+
 			if (!filename.endsWith('.drawio') && !filename.endsWith('.xml'))
 			{
-				filename += '.drawio';
+				filename = filename.replace(/\.[^/.]+$/, '') + '.drawio';
 			}
-			
-			var xmlContent = editorUi.getFileData(true);
+
 			var nolaiColor = '#008f89';
 
-			// Main container for dialog UI
 			var div = document.createElement('div');
 			div.style.cssText = 'padding: 20px; font-family: Helvetica, Arial, sans-serif; color: #333;';
 
-			// The title for the dialog
 			var title = document.createElement('h2');
 			title.innerHTML = 'Save diagram to Nextcloud';
 			title.style.cssText = 'margin: 0 0 15px 0; color: ' + nolaiColor + '; font-size: 18px; border-bottom: 2px solid ' + nolaiColor + '; padding-bottom: 10px;';
@@ -887,7 +1026,7 @@
 
 			// ====== NOLAI - {- Backend -} /Sprint 3/ Task 151 ======
 			// Nextcloud base URL — WebDAV paths are built from this + the uid returned by the banner.
-			var nextcloudBaseUrl = 'https://localhost';
+			var nextcloudBaseUrl = nolaiNextcloudBaseUrl;
 			var nextcloudUsername = null; // uid, populated by the session banner on connect
 			var nextcloudPassword = null; // app password for WebDAV Basic Auth, also from banner
 
@@ -993,45 +1132,111 @@
 				var fname = baseVal + '.drawio';
 				// ====== end of changes by SE ======
 
-				if (typeof saveDrawIOToNextcloudXML === 'function')
-				{
-					editorUi.spinner.spin(document.body, 'Saving to Nextcloud...');
-
-					// App password used for Basic Auth; session cookie deliberately omitted (see buildNextcloudWebdavBaseContext).
-					saveDrawIOToNextcloudXML(fname, xmlContent, url, null, nextcloudPassword, '/').then(function(success)
-					{
-						editorUi.spinner.stop();
-						if (success)
-						{
-							editorUi.editor.setStatus('Saved to Nextcloud successfully');
-							// Update the title bar overlay to reflect the saved filename.
-							if (typeof updateNolaiFileTitle === 'function') { updateNolaiFileTitle(fname); }
-						}
-						else
-						{
-							editorUi.handleError({message: 'Failed to save to Nextcloud. Check console for details.'});
-						}
-					}).catch(function(error)
-					{
-						editorUi.spinner.stop();
-						editorUi.handleError({message: 'Error: ' + error.message});
-					});
-				}
-				else
+				if (typeof saveDrawIOToNextcloudXML !== 'function')
 				{
 					editorUi.handleError({message: 'NextcloudFile.js is not loaded'});
+					return;
 				}
+
+				editorUi.spinner.spin(document.body, 'Saving to Nextcloud...');
+
+				// Take the editor XML at SAVE TIME (not dialog-open time) so any
+				// edits the user made while the dialog was open are persisted.
+				var xmlContent = editorUi.getFileData(true);
+
+				// App password used for Basic Auth; session cookie deliberately omitted (see buildNextcloudWebdavBaseContext).
+				saveDrawIOToNextcloudXML(fname, xmlContent, url, nextcloudUsername, nextcloudPassword, '/').then(function(ok)
+				{
+					editorUi.spinner.stop();
+					if (ok)
+					{
+						// Converge on the same success-side-effects as quickSaveCurrentFile.
+						finalizeSaveSuccess(fname, '/');
+					}
+					else
+					{
+						editorUi.handleError({message: 'Failed to save to Nextcloud. Check console for details.'});
+					}
+				}).catch(function(error)
+				{
+					editorUi.spinner.stop();
+					editorUi.handleError({message: 'Error: ' + error.message});
+				});
 			});
 
-			// Styling the OK button for saving files.
 			dlg.okButton.innerHTML = 'Save Diagram';
-    		dlg.okButton.style.backgroundColor = nolaiColor;
+			dlg.okButton.style.backgroundColor = nolaiColor;
 			dlg.okButton.style.backgroundImage = 'none';
 			dlg.okButton.style.color = '#fff';
 
 			editorUi.showDialog(dlg.container, 450, 280, true, true);
 			filenameInput.focus();
+		}
+
+		// 'Save' — quick save when possible, dialog when not. Hooked to ⌘+S
+		// further below by overriding the createRevision action's funct.
+		editorUi.actions.addAction('Save', function()
+		{
+			if (!quickSaveCurrentFile())
+			{
+				openSaveAsDialog();
+			}
 		});
+
+		// 'Save As' — always opens the dialog. Useful for first-time saves and
+		// for saving a copy under a new name without breaking the binding for
+		// the original (we deliberately update the binding to the new name on
+		// success — matching desktop apps where Save As re-binds the editor
+		// to the just-created file).
+		editorUi.actions.addAction('Save As', function()
+		{
+			openSaveAsDialog();
+		});
+
+		// ====== NOLAI - {- Frontend -} /Sprint 4/ Task 148 — keyboard shortcut & built-in save routing ======
+		//
+		// drawio's keyboard handler in js/grapheditor/EditorUi.js (line ~6464)
+		// binds Ctrl/⌘+S directly to the lowercase 'save' action, and ⌘+Shift+S
+		// to 'saveAs'. Those built-in actions, when triggered against a LocalFile
+		// or in the standalone editor, open drawio's native "Save as" dialog —
+		// the one with Google Drive / OneDrive / Dropbox in the "Where:" dropdown.
+		// In our deployment that's wrong: the only sanctioned remote storage is
+		// Nextcloud, and we already have a dedicated Save dialog for it.
+		//
+		// We replace the funct on those built-in Action objects so EVERY path
+		// that ends up calling them — keyboard shortcuts, theme menus, internal
+		// drawio code that invokes editorUi.actions.get('save').funct() — routes
+		// into our Nextcloud Save / Save As flow instead. This is safe because
+		// bindAction's closure reads action.funct at invocation time (see
+		// keyHandler.bindAction in grapheditor/EditorUi.js), so the binding
+		// established at startup picks up our override automatically.
+		//
+		// We also override 'createRevision' for completeness — it has the same
+		// keyboard hint metadata and some themes display it as a separate menu
+		// item that delegates to 'save'.
+		//
+		// Local-disk download remains accessible through File → Export → XML
+		// (drawio's separate 'export' action, which we deliberately leave
+		// untouched). Cloud storage providers other than Nextcloud are no
+		// longer reachable via Save / Save As.
+		// ====== end of changes by SE ======
+		(function() {
+			// Helper: replace an action's funct if the action exists. Logging on
+			// success makes it obvious in the console which built-in actions were
+			// successfully captured at startup.
+			function redirectAction(actionName, target)
+			{
+				var a = editorUi.actions.get(actionName);
+				if (a)
+				{
+					a.funct = function() { editorUi.actions.get(target).funct(); };
+				}
+			}
+
+			redirectAction('save',           'Save');     // Ctrl+S        → smart Save
+			redirectAction('saveAs',         'Save As');  // Ctrl+Shift+S  → Save As dialog
+			redirectAction('createRevision', 'Save');     // legacy menu item → smart Save
+		})();
 	
 		// ======	NOLAI - {- Backend -} /Sprint 1/ Task 92	=====
 		// ======   NOLAI - {- Frontend -} /Sprint 2/ Task 100  =====
@@ -1135,6 +1340,14 @@
 									editorUi.editor.setStatus('Loaded from Nextcloud successfully');
 									// Update the title bar overlay to reflect the loaded filename.
 									if (typeof updateNolaiFileTitle === 'function') { updateNolaiFileTitle(selected.name); }
+									// ====== NOLAI - {- Backend -} /Sprint 4/ Task 148 — bind editor to Nextcloud file ======
+									// Record which Nextcloud file the editor is now editing, so the next
+									// ⌘+S quick-saves to the same path instead of re-prompting.
+									// ====== end of changes by SE ======
+									if (typeof nolaiSetCurrentNextcloudFile === 'function')
+									{
+										nolaiSetCurrentNextcloudFile(selected.name, selected.remotePath || '/');
+									}
 								}
 								catch (e)
 								{
@@ -1287,6 +1500,493 @@
 				// session banner callback once the user authenticates.
 				loginDlg.okButton.style.display = 'none';
 
+				editorUi.showDialog(loginDlg.container, 450, 240, true, true);
+			}
+		});
+
+		// ====== end of changes by SE	======
+
+		// ======	NOLAI - {- Backend -} /Sprint 4/ Task 148 (Version Control)	=====
+		// ======   NOLAI - {- Frontend -} /Sprint 4/ Task 148 (Version Control)   =====
+		//
+		// 'Version History' action — opens an in-app version-control UI that lists
+		// every server-side version of the currently open .drawio file, lets the
+		// user preview any version on a read-only Graph, and atomically rolls the
+		// live file back to a chosen version via WebDAV MOVE to the Nextcloud
+		// /restore/target marker.
+		//
+		// WHY a custom dialog (and not draw.io's built-in RevisionDialog):
+		//   The native dialog is wired to ui.getRevisions(), which plugins/nextcloud.js
+		//   implements via remoteInvoke('getFileRevisions') — a postMessage RPC that
+		//   only works when drawio is embedded inside Nextcloud's parent window. In
+		//   our standalone NOLAI deployment drawio is a separate origin, so the
+		//   postMessage path has no listener and the native dialog never resolves.
+		//   This action calls the Nextcloud Versions WebDAV endpoint directly using
+		//   the same auth path as Save / My Files / rename, so it works without any
+		//   embedding. The native action is intentionally left untouched so that
+		//   future embedded usage (if drawio is ever loaded inside Nextcloud's iframe
+		//   integration) keeps working without a code change.
+		//
+		// Assumptions:
+		//   - The file lives at the user's DAV root ('/'). This matches the rename
+		//     override and the Save dialog defaults; subfolder support would require
+		//     tracking remotePath on LocalFile during load and is a known follow-up.
+		//   - The user is signed in to Nextcloud via the existing session banner /
+		//     top-bar chip (cached in _nextcloudSessionCache). If not, the dialog
+		//     embeds the same session banner used elsewhere so the user can sign in
+		//     without leaving Version History.
+		//   - The current file has been saved at least once (otherwise no fileid /
+		//     no versions exist) — this is detected by a PROPFIND for fileid and
+		//     the user is shown a "Save first" message with a shortcut button.
+		// ====== end of changes by SE ======
+		editorUi.actions.addAction('Version History', function()
+		{
+			var nolaiColor = '#008f89';
+			var nextcloudBaseUrl = 'https://localhost';
+			var nextcloudUsername = null;
+			var nextcloudPassword = null;
+
+			// Guard: every helper used here is defined in NextcloudFile.js. If the
+			// script failed to load we surface an immediate error rather than a
+			// confusing "x is not a function" trace later in the flow.
+			if (typeof getFileIdFromNextcloud !== 'function' ||
+				typeof listFileVersionsInNextcloud !== 'function' ||
+				typeof getVersionContentFromNextcloud !== 'function' ||
+				typeof restoreVersionInNextcloud !== 'function')
+			{
+				editorUi.handleError({message: 'Version control helpers are not loaded (NextcloudFile.js).'});
+				return;
+			}
+
+			// formatRelative — renders ms-since-epoch as "5 minutes ago" / "2 days ago".
+			// WHY a tiny inline implementation rather than a date library: draw.io
+			// already ships with no date library and adding one for one widget is
+			// disproportionate; this covers the four buckets users actually scan for.
+			function formatRelative(ms)
+			{
+				if (!ms) { return ''; }
+				var diff = Math.max(0, Date.now() - ms);
+				var s = Math.floor(diff / 1000);
+				if (s < 60)    { return 'just now'; }
+				var m = Math.floor(s / 60);
+				if (m < 60)    { return m + (m === 1 ? ' minute ago' : ' minutes ago'); }
+				var h = Math.floor(m / 60);
+				if (h < 24)    { return h + (h === 1 ? ' hour ago'   : ' hours ago'); }
+				var d = Math.floor(h / 24);
+				if (d < 30)    { return d + (d === 1 ? ' day ago'    : ' days ago'); }
+				var mo = Math.floor(d / 30);
+				if (mo < 12)   { return mo + (mo === 1 ? ' month ago' : ' months ago'); }
+				var y = Math.floor(d / 365);
+				return y + (y === 1 ? ' year ago' : ' years ago');
+			}
+
+			// formatBytes — converts a byte count to a short "12.3 KB" string.
+			function formatBytes(b)
+			{
+				if (b == null) { return ''; }
+				if (b < 1024)               { return b + ' B'; }
+				if (b < 1024 * 1024)        { return (b / 1024).toFixed(1) + ' KB'; }
+				return (b / (1024 * 1024)).toFixed(1) + ' MB';
+			}
+
+			// showSaveFirst — replaces the dialog body with a friendly "save first"
+			// message + a button that triggers the existing Save action. This is
+			// shown when the file is untitled or has no fileid on the server.
+			function showSaveFirst(container, reasonText)
+			{
+				container.innerHTML = '';
+
+				var title = document.createElement('h2');
+				title.innerHTML = 'Version History';
+				title.style.cssText = 'margin: 0 0 15px 0; color: ' + nolaiColor + '; font-size: 18px; border-bottom: 2px solid ' + nolaiColor + '; padding-bottom: 10px;';
+				container.appendChild(title);
+
+				var msg = document.createElement('div');
+				msg.style.cssText = 'padding: 16px; background: #fff8e1; border: 1px solid #ffb300; border-radius: 6px; color: #5d4037; font-size: 13px; line-height: 1.5;';
+				msg.innerHTML = (reasonText ||
+					'This diagram has not yet been saved to Nextcloud, so no versions exist.') +
+					'<br><br>Save the diagram to Nextcloud first — Nextcloud automatically captures a new version every time you save.';
+				container.appendChild(msg);
+
+				var btnRow = document.createElement('div');
+				btnRow.style.cssText = 'display: flex; justify-content: flex-end; margin-top: 16px;';
+
+				var saveBtn = document.createElement('button');
+				saveBtn.innerHTML = 'Save to Nextcloud…';
+				saveBtn.style.cssText = 'padding: 8px 16px; border: none; border-radius: 4px; background: ' + nolaiColor + '; color: #fff; cursor: pointer; font-weight: 600;';
+				saveBtn.onclick = function()
+				{
+					editorUi.hideDialog();
+					editorUi.actions.get('Save').funct();
+				};
+				btnRow.appendChild(saveBtn);
+				container.appendChild(btnRow);
+			}
+
+			// renderVersionList — once we have credentials AND a confirmed fileid,
+			// this builds the actual two-pane Version History UI.
+			//
+			// Layout (700×460):
+			//   Header row     — title + session banner (gives the user a way to
+			//                    re-authenticate without closing the dialog if their
+			//                    app password is rejected mid-session).
+			//   Filename strip — small caption above the list, so the user always
+			//                    knows which file they are viewing versions of.
+			//   Body grid      — left: 220px scrollable version list
+			//                    right: ~430px live preview pane with a read-only
+			//                           Graph (matches the native RevisionDialog style).
+			//   Footer row     — error/status line + Restore + Close buttons.
+			function renderVersionList(container, filename, fileId, versions)
+			{
+				container.innerHTML = '';
+				container.style.fontFamily = 'Helvetica, Arial, sans-serif';
+
+				var title = document.createElement('h2');
+				title.innerHTML = 'Version History';
+				title.style.cssText = 'margin: 0 0 8px 0; color: ' + nolaiColor + '; font-size: 18px; border-bottom: 2px solid ' + nolaiColor + '; padding-bottom: 8px;';
+				container.appendChild(title);
+
+				// Filename caption: ellipsis on overflow so very long names do not
+				// break the layout.
+				var fileLine = document.createElement('div');
+				fileLine.style.cssText = 'color:#555; font-size:12px; margin: 0 0 12px 0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
+				fileLine.innerHTML = '<strong>File:</strong> ' + filename;
+				container.appendChild(fileLine);
+
+				if (!versions || versions.length === 0)
+				{
+					var empty = document.createElement('div');
+					empty.style.cssText = 'padding: 16px; background: #f5f5f5; border-radius: 6px; color: #555; font-size: 13px;';
+					empty.innerHTML =
+						'No prior versions yet.<br><br>' +
+						'Nextcloud only starts keeping versions <em>after</em> the first re-save. ' +
+						'Save the file again to create the first historical version.';
+					container.appendChild(empty);
+					return;
+				}
+
+				// Two-pane body grid.
+				var body = document.createElement('div');
+				body.style.cssText = 'display: grid; grid-template-columns: 220px 1fr; gap: 12px; height: 320px;';
+				container.appendChild(body);
+
+				// ---- Left: version list ----
+				// Plain styled buttons rather than a <select> so we can show
+				// multi-line entries (timestamp + relative time + size) cleanly.
+				var listWrap = document.createElement('div');
+				listWrap.style.cssText = 'border: 1px solid #ddd; border-radius: 6px; overflow-y: auto; background: #fafafa;';
+				body.appendChild(listWrap);
+
+				// ---- Right: preview pane ----
+				var previewWrap = document.createElement('div');
+				previewWrap.style.cssText = 'border: 1px solid #ddd; border-radius: 6px; position: relative; overflow: hidden; background: #fff;';
+				body.appendChild(previewWrap);
+
+				var previewStatus = document.createElement('div');
+				previewStatus.style.cssText = 'position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); color: #888; font-size: 12px; pointer-events: none;';
+				previewStatus.innerText = 'Select a version to preview';
+				previewWrap.appendChild(previewStatus);
+
+				// Read-only preview Graph. We use the same approach as the native
+				// RevisionDialog (Dialogs.js): instantiate a Graph, disable input,
+				// then decode the version XML into its model. Pan + scroll is kept
+				// on so users can move around large diagrams.
+				var previewGraph = new Graph(previewWrap);
+				previewGraph.setTooltips(false);
+				previewGraph.setEnabled(false);
+				previewGraph.setPanning(true);
+				previewGraph.panningHandler.ignoreCell = true;
+				previewGraph.panningHandler.useLeftButtonForPanning = true;
+
+				// ---- Footer: status line + buttons ----
+				var footer = document.createElement('div');
+				footer.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-top: 14px;';
+				container.appendChild(footer);
+
+				var status = document.createElement('span');
+				status.style.cssText = 'flex: 1; color: #666; font-size: 12px; min-height: 16px;';
+				footer.appendChild(status);
+
+				var closeBtn = document.createElement('button');
+				closeBtn.innerHTML = 'Close';
+				closeBtn.style.cssText = 'padding: 7px 14px; border: 1px solid #ccc; border-radius: 4px; background: #fff; color: #333; cursor: pointer;';
+				closeBtn.onclick = function() { editorUi.hideDialog(); };
+				footer.appendChild(closeBtn);
+
+				var restoreBtn = document.createElement('button');
+				restoreBtn.innerHTML = 'Restore this version';
+				restoreBtn.disabled = true;
+				restoreBtn.style.cssText = 'padding: 7px 14px; border: none; border-radius: 4px; background: ' + nolaiColor + '; color: #fff; cursor: pointer; font-weight: 600; opacity: 0.5;';
+				footer.appendChild(restoreBtn);
+
+				// selectedVersion — the entry currently shown in the preview pane,
+				// also the version that the Restore button will act on.
+				var selectedVersion = null;
+				var selectedRow = null;
+
+				// applyXmlToPreview — decodes XML into the preview Graph. We pull
+				// the first <diagram> element out of an <mxfile>; that's how
+				// drawio's RevisionDialog renders previews. If the XML is just an
+				// <mxGraphModel> (older format) we pass it through directly.
+				function applyXmlToPreview(xml)
+				{
+					try
+					{
+						var doc = mxUtils.parseXml(xml);
+						var node = doc.documentElement;
+						if (node.nodeName === 'mxfile')
+						{
+							var diagram = node.getElementsByTagName('diagram')[0];
+							if (diagram)
+							{
+								node = Editor.parseDiagramNode(diagram);
+							}
+						}
+						var codec = new mxCodec(node.ownerDocument);
+						previewGraph.getModel().clear();
+						codec.decode(node, previewGraph.getModel());
+						previewGraph.maxFitScale = 1;
+						previewGraph.fit(8);
+						previewGraph.center();
+						previewStatus.style.display = 'none';
+					}
+					catch (e)
+					{
+						previewStatus.style.display = '';
+						previewStatus.innerText = 'Could not render preview: ' + e.message;
+					}
+				}
+
+				// selectVersion — visually marks the row, fetches the XML, renders.
+				function selectVersion(version, rowEl)
+				{
+					if (selectedRow) { selectedRow.style.background = ''; selectedRow.style.color = ''; }
+					selectedRow = rowEl;
+					selectedVersion = version;
+					rowEl.style.background = nolaiColor;
+					rowEl.style.color = '#fff';
+
+					restoreBtn.disabled = false;
+					restoreBtn.style.opacity = '1';
+
+					previewStatus.style.display = '';
+					previewStatus.innerText = 'Loading preview…';
+					status.innerText = '';
+
+					getVersionContentFromNextcloud(version.absUrl, nextcloudBaseUrl, nextcloudUsername, nextcloudPassword)
+						.then(function(xml)
+						{
+							if (!xml) { throw new Error('empty response'); }
+							applyXmlToPreview(xml);
+						})
+						.catch(function(err)
+						{
+							previewStatus.style.display = '';
+							previewStatus.innerText = 'Preview failed: ' + err.message;
+						});
+				}
+
+				// Build version rows. The most recent version is selected by default
+				// so users see something useful immediately on dialog open.
+				versions.forEach(function(v, idx)
+				{
+					var row = document.createElement('div');
+					row.style.cssText = 'padding: 8px 10px; border-bottom: 1px solid #eee; cursor: pointer; font-size: 12px; line-height: 1.35; transition: background 0.1s;';
+
+					var dateStr = v.mtime ? new Date(v.mtime).toLocaleString() : '(unknown date)';
+					var rel = formatRelative(v.mtime);
+					var sizeStr = formatBytes(v.size);
+
+					row.innerHTML =
+						'<div style="font-weight:600;">' + dateStr + '</div>' +
+						'<div style="opacity:0.85;">' + rel + (sizeStr ? ' &middot; ' + sizeStr : '') + '</div>';
+
+					row.onmouseover = function()
+					{
+						if (row !== selectedRow) { row.style.background = '#eef7f7'; }
+					};
+					row.onmouseout = function()
+					{
+						if (row !== selectedRow) { row.style.background = ''; }
+					};
+					row.onclick = function() { selectVersion(v, row); };
+
+					listWrap.appendChild(row);
+
+					// Auto-select the newest entry (top of the list).
+					if (idx === 0) { setTimeout(function() { selectVersion(v, row); }, 0); }
+				});
+
+				// ---- Restore handler ----
+				// Two-step: confirm dialog, then MOVE, then reload the live file
+				// from Nextcloud so the editor reflects the restored content.
+				restoreBtn.onclick = function()
+				{
+					if (!selectedVersion) { return; }
+
+					var when = selectedVersion.mtime ? new Date(selectedVersion.mtime).toLocaleString() : 'this version';
+					editorUi.confirm(
+						'Restore the version from ' + when + '?\n\n' +
+						'The current diagram will be replaced. The version you are replacing will itself be saved as a new historical entry, so this action is reversible.',
+						null,
+						function()
+						{
+							restoreBtn.disabled = true;
+							restoreBtn.style.opacity = '0.5';
+							status.innerText = 'Restoring…';
+
+							restoreVersionInNextcloud(selectedVersion.absUrl, nextcloudBaseUrl, nextcloudUsername, nextcloudPassword)
+								.then(function()
+								{
+									// After the server has restored, pull the live file
+									// fresh so the editor canvas reflects the rolled-back
+									// state. Same load path as My Files.
+									return getDrawIOFromNextcloudXML(filename, nextcloudBaseUrl + '/remote.php/dav/files/' + encodeURIComponent(nextcloudUsername) + '/', null, nextcloudPassword, '/');
+								})
+								.then(function(xml)
+								{
+									if (!xml) { throw new Error('Could not reload restored file from Nextcloud.'); }
+									editorUi.fileLoaded(new LocalFile(editorUi, xml, filename, true), true);
+									editorUi.editor.modified = false;
+									if (typeof updateNolaiFileTitle === 'function') { updateNolaiFileTitle(filename); }
+									// Re-bind the editor to the restored file so a follow-up ⌘+S
+									// goes to the same Nextcloud path. The filename hasn't changed,
+									// but fileLoaded constructs a fresh LocalFile so the binding
+									// would otherwise look "missing" until the user manually saved.
+									if (typeof nolaiSetCurrentNextcloudFile === 'function')
+									{
+										nolaiSetCurrentNextcloudFile(filename, '/');
+									}
+									editorUi.editor.setStatus('Version restored');
+									editorUi.hideDialog();
+								})
+								.catch(function(err)
+								{
+									status.innerText = 'Restore failed: ' + err.message;
+									restoreBtn.disabled = false;
+									restoreBtn.style.opacity = '1';
+								});
+						},
+						mxResources.get('cancel'),
+						'Restore'
+					);
+				};
+			}
+
+			// loadVersionsForCurrentFile — runs once both credentials and a current
+			// file are known. Resolves the fileid (404 → "save first"), lists
+			// versions, then hands off to renderVersionList.
+			function loadVersionsForCurrentFile(container)
+			{
+				var file = editorUi.getCurrentFile();
+				var filename = (file != null && typeof file.getTitle === 'function') ? file.getTitle() : null;
+
+				if (!filename)
+				{
+					showSaveFirst(container, 'No diagram is open in the editor.');
+					return;
+				}
+				if (!/\.drawio$/i.test(filename))
+				{
+					// Match Save dialog convention — only .drawio files round-trip
+					// cleanly through the Nextcloud workflow.
+					showSaveFirst(container, 'The current diagram is not yet saved as a .drawio file in Nextcloud.');
+					return;
+				}
+
+				container.innerHTML =
+					'<h2 style="margin:0 0 12px 0;color:' + nolaiColor + ';font-size:18px;border-bottom:2px solid ' + nolaiColor + ';padding-bottom:8px;">Version History</h2>' +
+					'<div style="padding:16px;color:#666;font-size:13px;">Loading versions for <strong>' + filename + '</strong>…</div>';
+
+				// WHY pass nextcloudUsername explicitly:
+				//   nextcloudBaseUrl is the bare 'https://localhost' root with no DAV path,
+				//   so buildNextcloudWebdavBaseContext cannot derive the uid from the URL
+				//   (its regex looks for /remote.php/dav/files/{uid}/). Other callers like
+				//   My Files pre-build a DAV-style URL with the uid embedded and so pass
+				//   null safely; we don't, so we must supply the uid as the username arg.
+				getFileIdFromNextcloud(filename, nextcloudBaseUrl, nextcloudUsername, nextcloudPassword, '/')
+					.then(function(fileId)
+					{
+						if (!fileId)
+						{
+							showSaveFirst(container,
+								'The file <strong>' + filename + '</strong> was not found at the root of your Nextcloud folder.');
+							return null;
+						}
+						return listFileVersionsInNextcloud(fileId, nextcloudBaseUrl, nextcloudUsername, nextcloudPassword)
+							.then(function(versions) { return { fileId: fileId, versions: versions }; });
+					})
+					.then(function(result)
+					{
+						if (!result) { return; } // showSaveFirst already rendered
+						renderVersionList(container, filename, result.fileId, result.versions);
+					})
+					.catch(function(err)
+					{
+						container.innerHTML = '';
+						var title = document.createElement('h2');
+						title.innerHTML = 'Version History';
+						title.style.cssText = 'margin:0 0 12px 0;color:' + nolaiColor + ';font-size:18px;border-bottom:2px solid ' + nolaiColor + ';padding-bottom:8px;';
+						container.appendChild(title);
+						var errBox = document.createElement('div');
+						errBox.style.cssText = 'padding:16px;background:#fdecea;border:1px solid #f44336;border-radius:6px;color:#b71c1c;font-size:13px;';
+						errBox.innerText = 'Could not load versions: ' + err.message;
+						container.appendChild(errBox);
+					});
+			}
+
+			// ---- Build the dialog shell ----
+			//
+			// We always start with the session banner attached (just like My Files)
+			// so the user can authenticate from inside the dialog if they aren't
+			// already signed in. The banner's onLoggedIn callback fires both for
+			// brand-new logins and for cached sessions, so loadVersionsForCurrentFile
+			// runs in both cases.
+			var rootDiv = document.createElement('div');
+			rootDiv.style.cssText = 'padding: 20px; font-family: Helvetica, Arial, sans-serif; color: #333;';
+
+			var preTitle = document.createElement('h2');
+			preTitle.innerHTML = 'Version History';
+			preTitle.style.cssText = 'margin:0 0 12px 0;color:' + nolaiColor + ';font-size:18px;border-bottom:2px solid ' + nolaiColor + ';padding-bottom:8px;';
+			rootDiv.appendChild(preTitle);
+
+			if (typeof attachNextcloudSessionBanner !== 'function')
+			{
+				editorUi.handleError({message: 'Nextcloud session banner is not available.'});
+				return;
+			}
+
+			var sessionReady = false;
+			attachNextcloudSessionBanner(rootDiv, nextcloudBaseUrl, function(username, appPassword)
+			{
+				nextcloudUsername = username;
+				nextcloudPassword = appPassword;
+				sessionReady = true;
+				// Replace the placeholder dialog with the real Version History UI
+				// once we have credentials. We swap content rather than reopening
+				// a new dialog so the user's "this is one continuous flow" mental
+				// model is preserved.
+				loadVersionsForCurrentFile(rootDiv);
+				// Re-show the dialog with a larger size now that we're showing
+				// the two-pane layout.
+				editorUi.hideDialog();
+				var dlg = new CustomDialog(editorUi, rootDiv, null);
+				// Hide CustomDialog's stock OK and Cancel buttons. The Version
+				// History footer has its own integrated Close + Restore row, so
+				// keeping the stock buttons would just produce a redundant
+				// "Cancel" sitting below the dialog content.
+				dlg.okButton.style.display = 'none';
+				if (dlg.cancelBtn) { dlg.cancelBtn.style.display = 'none'; }
+				editorUi.showDialog(dlg.container, 720, 500, true, false);
+			});
+
+			if (!sessionReady)
+			{
+				// User has no cached session — show the slim sign-in dialog. Once
+				// they complete login the callback above replaces it with the full
+				// Version History UI.
+				var loginDlg = new CustomDialog(editorUi, rootDiv, null);
+				loginDlg.okButton.style.display = 'none';
 				editorUi.showDialog(loginDlg.container, 450, 240, true, true);
 			}
 		});
@@ -5405,9 +6105,13 @@
 			
 			if (urlParams['noFileMenu'] != '1')
 			{
-				editorUi.menus.addMenuItems(menu, ['Save', 'My Files'], parent);
+				// ====== NOLAI - {- Frontend -} /Sprint 4/ Task 148 (Version Control) ======
+				// 'Version History' added next to Save / My Files so the in-app version
+				// control UI is reachable from every theme that exposes the File menu.
+				// ====== end of changes by SE ======
+				editorUi.menus.addMenuItems(menu, ['Save', 'Save As', 'My Files', 'Version History'], parent);
 			}
-	
+
 			if (Editor.currentTheme != 'simple' && Editor.currentTheme != 'min')
 			{
 				editorUi.menus.addMenuItems(menu, ['-',  'findReplace'], parent);
@@ -5554,8 +6258,12 @@
 					}
 					else
 					{
-						this.addMenuItems(menu, ['Save', 'My Files'], parent);
-						
+						// ====== NOLAI - {- Frontend -} /Sprint 4/ Task 148 (Version Control) ======
+						// Version History exposed in the embedded-file menu path too so the
+						// entry point is consistent regardless of how drawio is launched.
+						// ====== end of changes by SE ======
+						this.addMenuItems(menu, ['Save', 'Save As', 'My Files', 'Version History'], parent);
+
 						if (urlParams['saveAndExit'] == '1')
 						{
 							this.addMenuItems(menu, ['saveAndExit'], parent);
@@ -5697,8 +6405,9 @@
 					this.addMenuItems(menu, ['new'], parent);
 				}
 				// ======	NOLAI - {- Frontend -} /Sprint 2 & 3/ Task 98, Task 100 and Task 151	=====
+				// ======	NOLAI - {- Frontend -} /Sprint 4/ Task 148 — added 'Version History'	=====
 				menu.addSeparator(parent);
-				this.addMenuItems(menu, ['Save', 'My Files', 'share'], parent);
+				this.addMenuItems(menu, ['Save', 'Save As', 'My Files', 'Version History', 'share'], parent);
 				// ====== end of changes by SE	======
 			
 				if (file != null && file.constructor == DriveFile)
@@ -5808,7 +6517,7 @@
 
 				if (urlParams['noDevice'] != '1')
 				{
-					menu.addItem(mxResources.get('device') + '...', null, function()
+					menu.addItem(mxResources.get('importFrom') + ' ' + mxResources.get('device') + '...', null, function()
 					{
 						editorUi.importLocalFile(true);
 					}, parent);

@@ -582,12 +582,6 @@ Draw.loadPlugin(function (ui) {
   }
 
   // ====== NOLAI - {Frontend} /Sprint 3/ Task 133 — test icon SVGs ======
-  // Pill-shaped text-label icons used as the fallback (and for QA) when the
-  // mxGraph rendering path fails.  Each entry has svg/w/h so the mxImage is
-  // sized to match the actual SVG dimensions rather than a fixed square.
-  //
-  // Positioning: the icon floats ABOVE the edge midpoint (y-offset -20 in
-  // addEdgeIcon) so it never overlaps the error-badge which sits at y=0.
   
   function createIcon(iconKey) {
     let isDark = false;
@@ -797,16 +791,6 @@ Draw.loadPlugin(function (ui) {
 
   function renderIconToImage(iconKey, callback) {
     // ====== NOLAI - {Frontend} /Sprint 3/ Task 133 — icon render ======
-    // The original approach used `new mxGraph(container)` to re-render the
-    // ICON_XML mxGraphModel into an SVG.  This always throws in the plugin
-    // context because draw.io's minified mxGraph build patches the constructor
-    // with UI-specific theme helpers (e.g. getAdaptiveColors) that don't exist
-    // in a detached div — there is no way to fix this from plugin code.
-    //
-    // The pill-label SVGs in createIcon are therefore the canonical icons.
-    // They are self-contained, always render, and are more informative than
-    // the original symbol-only artwork.  ICON_XML is kept for reference but
-    // is no longer used at runtime.
     const icon = createIcon(iconKey);
     if (!icon) {
       console.warn('[DPD] renderIconToImage: unknown icon key', iconKey);
@@ -826,8 +810,6 @@ Draw.loadPlugin(function (ui) {
     const iconKey = resolveIconKey(props.identifiability, props.pseudonymity);
 
     // ====== NOLAI - {Frontend} /Sprint 3/ Task 133 — overlay fix ======
-    // Remove only the existing ICON overlay for this edge, not the error badge.
-    // Using removeCellOverlay (singular) instead of removeCellOverlays (all).
     const existingIcon = edgeIconOverlayMap.get(edge);
     if (existingIcon) {
       graph.removeCellOverlay(edge, existingIcon);
@@ -1335,11 +1317,8 @@ Draw.loadPlugin(function (ui) {
   const violationHighlightedEdges = new Map();
 
   // ====== NOLAI - {Frontend} /Sprint 3/ Task 133 — overlay fix ======
-  // Independent overlay tracking so icon overlays and error badge overlays
-  // never clobber each other.  Use graph.removeCellOverlay(cell, instance)
-  // (singular) rather than graph.removeCellOverlays(cell) (plural = all).
-  const edgeIconOverlayMap  = new Map();  // cell → mxCellOverlay (identifiability icon)
-  const edgeErrorOverlayMap = new Map();  // cell → mxCellOverlay (violation badge)
+  const edgeIconOverlayMap  = new Map();
+  const edgeErrorOverlayMap = new Map(); 
   // ====== end overlay fix ======
 
   // Keeps track of violation messages for hover tooltip
@@ -1405,6 +1384,8 @@ Draw.loadPlugin(function (ui) {
       }
     } else {
       validateGraph();
+      highlightsVisible = true;
+      setEditLockState(true);
       if (ui.dpdConsole && typeof ui.dpdConsole.setHighlightToggleState === 'function') {
         ui.dpdConsole.setHighlightToggleState(highlightsVisible);
       }
@@ -1419,9 +1400,6 @@ Draw.loadPlugin(function (ui) {
         graph.setCellStyle(originalStyle, [cell]);
 
         // ====== NOLAI - {Frontend} /Sprint 3/ Task 133 — overlay fix ======
-        // Remove only the error BADGE overlay for this cell.
-        // removeCellOverlays (all) is intentionally NOT used here — it would
-        // also destroy the identifiability icon overlay on the same edge.
         const badge = edgeErrorOverlayMap.get(cell);
         if (badge) {
           graph.removeCellOverlay(cell, badge);
@@ -1496,12 +1474,13 @@ Draw.loadPlugin(function (ui) {
 
         var color = info.hasError ? '#ff4444' : '#ffaa00';
         var base = (edge.style || '')
+          .replace(/(^|;)dpdViolation=1(?=;|$)/g, '')
           .replace(/strokeColor=[^;]*(;|$)/g, '')
           .replace(/strokeWidth=[^;]*(;|$)/g, '')
           .replace(/;;+/g, ';')
           .replace(/^;|;$/g, '');
         var newStyle = (base ? base + ';' : '') +
-          'strokeColor=' + color + ';strokeWidth=4';
+          'strokeColor=' + color + ';strokeWidth=4;dpdViolation=1';
         graph.setCellStyle(newStyle, [edge]);
 
         var label = info.indices.join(',');
@@ -1697,9 +1676,6 @@ Draw.loadPlugin(function (ui) {
   // ====== end of changes by SE ======
 
   // ====== NOLAI - {Frontend} /Sprint 3/ Task 133 — startup icon sweep ======
-  // Re-apply identifiability icons for any edges that are already annotated
-  // when the diagram first loads (e.g. opening a saved file).  Without this,
-  // icons only appear after the annotation dialog is saved in the same session.
   setTimeout(function () {
     var allCells = collectAllCells();
     allCells.edges.forEach(function (edge) {
@@ -1709,10 +1685,12 @@ Draw.loadPlugin(function (ui) {
       }
     });
   }, 600);
-  // ====== end startup icon sweep ======
+
 
   console.log('DPD Plugin Loaded');
   console.log('[DPD] Plugin loaded — 15 rules active (R-S1–4, R-I1–5, R-L1–2, R-P1–4)');
   ui._dpdValidate = validateGraph;
 
 });
+
+  // ====== end of changes by SE ======

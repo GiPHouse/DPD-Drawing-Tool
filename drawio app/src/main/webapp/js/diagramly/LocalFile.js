@@ -166,6 +166,25 @@ LocalFile.prototype.getLatestVersion = function(success, error)
  */
 LocalFile.prototype.saveFile = function(title, revision, success, error, useCurrentData, unloading, overwrite)
 {
+	var dpdConsole = (this.ui != null) ? this.ui.dpdConsole : null;
+
+	if (dpdConsole != null && dpdConsole.toggleBtn != null && dpdConsole.toggleBtn._active)
+	{
+		if (typeof dpdConsole.onToggleHighlights === 'function')
+		{
+			dpdConsole.onToggleHighlights();
+		}
+		else
+		{
+			if (error != null)
+			{
+				error({message: mxResources.get('errorSavingFile')});
+			}
+
+			return;
+		}
+	}
+
 	if (title != this.title)
 	{
 		this.fileHandle = null;
