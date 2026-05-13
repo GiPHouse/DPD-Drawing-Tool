@@ -1849,3 +1849,115 @@ function restoreVersionInNextcloud(versionAbsUrl, nextcloudUrl, username, passwo
         throw new Error('Version restore (MOVE) failed: HTTP ' + resp.status);
     });
 }
+
+// ====== NOLAI - {- Backend -} /SprintX/ Task YYY (File Sharing) ======
+//
+// searchNextcloudUsers — searches for Nextcloud users by display name.
+//
+// Uses the OCS autocomplete endpoint, which is the same source Nextcloud's
+// own sharing UI queries. It returns both the internal UID (needed for the
+// Share API) and the human-readable display name (shown in the picker UI)
+// in a single call — bridging the SHA-256 UID ↔ Authentik display name gap.
+//
+// Parameters:
+//   query         {string} — partial display name or username to search for
+//   nextcloudUrl  {string} — Nextcloud base URL, e.g. "https://localhost"
+//   username      {string} — authenticated user's Nextcloud UID
+//   password      {string} — app password from Login Flow v2
+//
+// Returns a Promise resolving to an array of { id, label } objects:
+//   id    — the Nextcloud UID (SHA-256 hash) used in the Share API
+//   label — the human-readable display name shown in the picker UI
+// ====== end of changes by SE ======
+function searchNextcloudUsers(query, nextcloudUrl, username, password) {
+    var url = nextcloudUrl +
+        '/ocs/v2.php/core/autocomplete/get' +
+        '?search=' + encodeURIComponent(query) +
+        '&shareTypes[]=0' +
+        '&format=json';
+
+    return fetch(url, {
+        headers: {
+            'Authorization': 'Basic ' + btoa(username + ':' + password),
+            'OCS-APIRequest': 'true',
+        },
+        mode: 'cors',
+        credentials: 'omit',
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        return (data.ocs && data.ocs.data) ? data.ocs.data : [];
+    })
+    .catch(function() { return []; });
+}
+
+// ====== NOLAI - {- Backend -} /SprintX/ Task YYY (File Sharing) ======
+//
+// shareFileWithUser — shares a Nextcloud file with another user via the OCS Share API.
+//
+// WHY permissions default to 3 (READ + UPDATE):
+//   The goal is collaborative editing — the recipient should be able to save
+//   changes back to the file. READ-only (1) would prevent saves.
+//   We deliberately exclude CREATE/DELETE/SHARE (4/8/16) to limit scope.
+//
+// WHY path uses OCS format (not the WebDAV URL):
+//   The OCS Share API takes a server-relative path from the user's files root,
+//   not the full WebDAV URL. For a file at DAV root, this is just "/{filename}".
+//   For a subfolder, it is "/{folder}/{filename}".
+//
+// Parameters:
+//   filename      {string} — e.g. "MyDiagram.drawio"
+//   targetUid     {string} — Nextcloud UID from searchNextcloudUsers()
+//   nextcloudUrl  {string} — Nextcloud base URL
+//   username      {string} — authenticated user's Nextcloud UID
+//   password      {string} — app password
+//   remotePath    {string} — subfolder, e.g. "/" for root
+//   permissions   {number} — bitmask: 1=read, 2=update; default 3
+//
+// Returns a Promise resolving to the share object on success, or rejecting
+// with an Error on failure.
+// ====== end of changes by SE ======
+function shareFileWithUser(filename, targetUid, nextcloudUrl, username, password, remotePath, permissions) {
+    var perms = (permissions != null) ? permissions : 3; // READ + UPDATE
+
+    // Build the OCS-relative path. Strips leading/trailing slashes from
+    // remotePath so the join is always clean regardless of caller format.
+    var folder = (remotePath || '/').replace(/^\/+|\/+$/g, '');
+    var ocsPath = folder ? ('/' + folder + '/' + filename) : ('/' + filename);
+
+    var body = [
+        'path='      + encodeURIComponent(ocsPath),
+        'shareType=0',                                // 0 = user share
+        'shareWith=' + encodeURIComponent(targetUid),
+        'permissions=' + perms,
+    ].join('&');
+
+    return fetch(nextcloudUrl + '/ocs/v2.php/apps/files_sharing/api/v1/shares', {
+        method: 'POST',
+        headers: {
+            'Authorization':  'Basic ' + btoa(username + ':' + password),
+            'OCS-APIRequest': 'true',
+            'Content-Type':   'application/x-www-form-urlencoded',
+        },
+        mode: 'cors',
+        credentials: 'omit',
+        body: body,
+    })
+    .then(function(r) {
+        if (!r.ok) {
+            return r.json().then(function(err) {
+                throw new Error(
+                    (err.ocs && err.ocs.meta && err.ocs.meta.message)
+                    || ('Share API failed: HTTP ' + r.status)
+                );
+            });
+        }
+        return r.json();
+    })
+    .then(function(data) {
+        if (!data.ocs || !data.ocs.data) {
+            throw new Error('Unexpected Share API response shape');
+        }
+        return data.ocs.data;
+    });
+}
