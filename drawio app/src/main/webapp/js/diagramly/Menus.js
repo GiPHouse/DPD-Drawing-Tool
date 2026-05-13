@@ -4673,20 +4673,29 @@
 							var item = raw[i];
 							var email = null;
 							var name = null;
+							// ====== NOLAI - {- Frontend -} /Sprint 4/ Task 191 ======
+							// shareInfo holds the email (or username fallback) from
+							// shareWithDisplayNameUnique — the same secondary field
+							// Nextcloud's own sharing UI shows below the display name.
+							// ====== end of changes by SE ======
+							var shareInfo = null;
 
 							if (typeof item === 'string')
 							{
 								email = item;
 								name = item;
+								shareInfo = '';
 							}
 							else if (item != null)
 							{
 								email = item.email || item.mail || item.userId || item.id || '';
 								name = item.displayName || item.name || item.label || email;
+								shareInfo = item.shareWithDisplayNameUnique || item.subline || '';
 							}
 
 							email = mxUtils.trim(String(email || ''));
 							name = mxUtils.trim(String(name || email));
+							shareInfo = mxUtils.trim(String(shareInfo || ''));
 
 							if (email.length == 0)
 							{
@@ -4698,7 +4707,7 @@
 							if (!seen[key])
 							{
 								seen[key] = true;
-								result.push({name: name, email: email});
+								result.push({name: name, email: email, shareInfo: shareInfo});
 							}
 						}
 
@@ -4745,7 +4754,12 @@
 						for (var i = 0; i < allPeople.length; i++)
 						{
 							var person = allPeople[i];
-							var haystack = (person.name + ' ' + person.email).toLowerCase();
+							// ====== NOLAI - {- Frontend -} /Sprint 4/ Task 191 ======
+							// Include shareInfo (email) in the local haystack so typing an
+							// email address filters the already-loaded list immediately,
+							// while the debounced API call runs in parallel for fresh results.
+							// ====== end of changes by SE ======
+							var haystack = (person.name + ' ' + person.shareInfo).toLowerCase();
 
 							if (filter.length > 0 && haystack.indexOf(filter) < 0)
 							{
@@ -4775,11 +4789,21 @@
 							mxUtils.write(nameEl, person.name);
 							textWrap.appendChild(nameEl);
 
-							var emailEl = document.createElement('span');
-							emailEl.style.color = '#666';
-							emailEl.style.fontSize = '12px';
-							mxUtils.write(emailEl, person.email);
-							textWrap.appendChild(emailEl);
+							// ====== NOLAI - {- Frontend -} /Sprint 4/ Task 191 ======
+							// Show the email (shareWithDisplayNameUnique) below the display
+							// name, matching the pattern of Nextcloud's own sharing UI.
+							// Only rendered when shareInfo is non-empty and differs from the
+							// display name — avoids showing a redundant duplicate line for
+							// users whose display name happens to equal their email.
+							// ====== end of changes by SE ======
+							if (person.shareInfo && person.shareInfo !== person.name)
+							{
+								var shareInfoEl = document.createElement('span');
+								shareInfoEl.style.color = '#666';
+								shareInfoEl.style.fontSize = '12px';
+								mxUtils.write(shareInfoEl, person.shareInfo);
+								textWrap.appendChild(shareInfoEl);
+							}
 
 							row.appendChild(textWrap);
 							listContainer.appendChild(row);
@@ -4850,8 +4874,16 @@
 						searchNextcloudUsers('', cache.baseUrl, cache.username, cache.password)
 							.then(function(users)
 							{
-								// Exclude the currently signed-in user from the list.
-								var others = users.filter(function(u) { return u.id !== cache.username; });
+								// ====== NOLAI - {- Frontend -} /Sprint 4/ Task 191 ======
+								// Exclude the signed-in user and the Nextcloud built-in admin
+								// account. The admin account (uid 'admin') is a Nextcloud
+								// system user, not an Authentik SSO user, and is never a
+								// valid share recipient in normal use.
+								// ====== end of changes by SE ======
+								var others = users.filter(function(u)
+								{
+									return u.id !== cache.username && u.id !== 'admin';
+								});
 								setPeople(others);
 							})
 							.catch(function()
@@ -4888,7 +4920,10 @@
 							searchNextcloudUsers(query, cache.baseUrl, cache.username, cache.password)
 								.then(function(users)
 								{
-									var others = users.filter(function(u) { return u.id !== cache.username; });
+									var others = users.filter(function(u)
+									{
+										return u.id !== cache.username && u.id !== 'admin';
+									});
 									allPeople = normalizePeople(others);
 									renderList(searchInput.value);
 								});
