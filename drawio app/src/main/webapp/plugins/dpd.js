@@ -627,7 +627,7 @@ Draw.loadPlugin(function (ui) {
         w: 28,
         h: 32,
         svg: `
-        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="32" viewBox="0 0 28 32">
+        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
           <!-- head -->
           <circle cx="14" cy="8" r="6.5"
             fill="${fill_color}"
@@ -640,9 +640,13 @@ Draw.loadPlugin(function (ui) {
             stroke="${stroke_color}"
             stroke-width="2.2"/>
 
-          <!-- filled arrow -->
-          <polygon points="20,16 27,12 23,19"
-            fill="${stroke_color}"/>
+          <!-- checkmark bottom-right -->
+          <polyline points="22,25 24,28 29,22"
+            fill="none"
+            stroke="${stroke_color}"
+            stroke-width="2.2"
+            stroke-linecap="round"
+            stroke-linejoin="round"/>
         </svg>
         `,
       },
@@ -666,13 +670,13 @@ Draw.loadPlugin(function (ui) {
 
           <!-- ~ hook -->
           <path d="
-            M20 24
-            Q22 21 24 24
-            Q25 25 26 23
+            M20 29
+            Q22 27 24 29
+            Q25 30 27 28
           "
             fill="none"
             stroke="${stroke_color}"
-            stroke-width="2.2"
+            stroke-width="2"
             stroke-linecap="round"
             stroke-linejoin="round"/>
         </svg>
@@ -683,7 +687,7 @@ Draw.loadPlugin(function (ui) {
         w: 28,
         h: 32,
         svg: `
-        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="32" viewBox="0 0 28 32">
+        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
           <!-- head -->
           <circle cx="14" cy="8" r="6.5"
             fill="${fill_color}"
@@ -697,11 +701,11 @@ Draw.loadPlugin(function (ui) {
             stroke-width="2.2"/>
 
           <!-- X -->
-          <line x1="20" y1="12" x2="27" y2="19"
+          <line x1="22" y1="22" x2="29" y2="29"
             stroke="${stroke_color}"
             stroke-width="2.2"/>
 
-          <line x1="27" y1="12" x2="20" y2="19"
+          <line x1="29" y1="22" x2="22" y2="29"
             stroke="${stroke_color}"
             stroke-width="2.2"/>
         </svg>
@@ -712,7 +716,7 @@ Draw.loadPlugin(function (ui) {
         w: 28,
         h: 32,
         svg: `
-        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="32" viewBox="0 0 28 32">
+        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
           <!-- head -->
           <circle cx="14" cy="8" r="6.5"
             fill="${fill_color}"
@@ -726,20 +730,15 @@ Draw.loadPlugin(function (ui) {
             stroke-width="2.2"/>
 
           <!-- asterisk -->
-          <line x1="24" y1="6" x2="24" y2="14"
+          <line x1="26" y1="6" x2="26" y2="14"
             stroke="${stroke_color}"
             stroke-width="2"/>
 
-          <line x1="20.5" y1="8" x2="27.5" y2="12"
+          <line x1="22.5" y1="8" x2="29.5" y2="12"
             stroke="${stroke_color}"
             stroke-width="2"/>
 
-          <line x1="20.5" y1="12" x2="27.5" y2="8"
-            stroke="${stroke_color}"
-            stroke-width="2"/>
-
-          <!-- small vertical line -->
-          <line x1="24" y1="15" x2="24" y2="19"
+          <line x1="22.5" y1="12" x2="29.5" y2="8"
             stroke="${stroke_color}"
             stroke-width="2"/>
         </svg>
@@ -750,7 +749,7 @@ Draw.loadPlugin(function (ui) {
         w: 28,
         h: 32,
         svg: `
-        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="32" viewBox="0 0 28 32">
+        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
           <!-- head -->
           <circle cx="14" cy="8" r="6.5"
             fill="${fill_color}"
@@ -764,27 +763,29 @@ Draw.loadPlugin(function (ui) {
             stroke-width="2.2"/>
 
           <!-- asterisk -->
-          <line x1="24" y1="6" x2="24" y2="14"
+          <line x1="26" y1="6" x2="26" y2="14"
             stroke="${stroke_color}"
             stroke-width="2"/>
 
-          <line x1="20.5" y1="8" x2="27.5" y2="12"
+          <line x1="22.5" y1="8" x2="29.5" y2="12"
             stroke="${stroke_color}"
             stroke-width="2"/>
 
-          <line x1="20.5" y1="12" x2="27.5" y2="8"
+          <line x1="22.5" y1="12" x2="29.5" y2="8"
             stroke="${stroke_color}"
             stroke-width="2"/>
 
-          <!-- hooked arrow -->
-          <line x1="20" y1="18" x2="25" y2="21"
-            stroke="${stroke_color}"
-            stroke-width="2"/>
-
-          <polyline points="21,21 25,21 25,17"
+          <!-- ~ hook -->
+          <path d="
+            M20 29
+            Q22 27 24 29
+            Q25 30 27 28
+          "
             fill="none"
             stroke="${stroke_color}"
-            stroke-width="2"/>
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"/>
         </svg>
         `,
       },
