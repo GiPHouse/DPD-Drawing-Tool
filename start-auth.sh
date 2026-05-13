@@ -206,6 +206,17 @@ ak_post() {
         "${API}${1}"
 }
 
+# Helper: make an authenticated PATCH request with a JSON body
+# Used to update an existing resource (e.g. patching the OAuth2 provider's
+# backchannel_logout_url after the Nextcloud user_oidc provider ID is known).
+ak_patch() {
+    curl -sf -X PATCH \
+        -H "Authorization: Bearer ${AUTHENTIK_BOOTSTRAP_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d "$2" \
+        "${API}${1}"
+}
+
 # -- 5a. Fetch the default authorization and invalidation flow PKs --
 # goauthentik ships with default flows. We use the implicit-consent auth flow
 # (no separate consent screen — appropriate for an internal tool) and the
@@ -465,6 +476,44 @@ $OCC user_oidc:provider goauthentik \
 # goauthentik SSO. Comment this line out temporarily if you need direct
 # admin access without SSO (e.g. to recover a locked-out account).
 $OCC config:app:set user_oidc allow_multiple_user_backends --value=0
+
+# ====== NOLAI - {- Backend -} /Sprint 4/ Task 192 ======
+# Configure Authentik backchannel logout so that hitting Authentik's end_session
+# endpoint causes Authentik to POST a logout token to Nextcloud, which then
+# invalidates the user's Nextcloud session automatically.
+#
+# HOW IT WORKS:
+#   1. The Nextcloud user_oidc app exposes a backchannel logout endpoint at
+#      /index.php/apps/user_oidc/backchannel-logout/{providerId}, where
+#      {providerId} is the numeric ID of the "goauthentik" provider row in
+#      Nextcloud's database.
+#   2. We read that ID via `occ user_oidc:provider list` and parse the table.
+#   3. We PATCH the Authentik OAuth2 provider (already created above) with the
+#      full URL. On future end_session calls, Authentik will POST a signed JWT
+#      logout token to that URL, and Nextcloud will kill the matching sessions.
+#
+# WHY backchannel over front-channel:
+#   Front-channel logout requires the browser to load iframes for each RP and
+#   is unreliable when the draw.io popup closes before iframes finish loading.
+#   Backchannel is a direct server-to-server POST — no browser involvement.
+# ====== end of changes by SE ======
+OIDC_PROVIDER_ID=$($OCC user_oidc:provider list 2>/dev/null \
+    | grep -E '\bgoauthentik\b' \
+    | grep -oP '^\|\s+\K[0-9]+' \
+    || echo "")
+
+if [ -n "$OIDC_PROVIDER_ID" ]; then
+    BACKCHANNEL_URL="https://localhost/index.php/apps/user_oidc/backchannel-logout/${OIDC_PROVIDER_ID}"
+    ak_patch "/providers/oauth2/${PROVIDER_PK}/" \
+        "{\"backchannel_logout_url\": \"${BACKCHANNEL_URL}\", \"backchannel_logout_session_required\": false}" \
+        > /dev/null
+    echo "  Backchannel logout configured (provider ID: ${OIDC_PROVIDER_ID})"
+    echo "  Backchannel URL: ${BACKCHANNEL_URL}"
+else
+    echo "  WARNING: Could not determine user_oidc provider ID — backchannel logout NOT configured."
+    echo "           Run: docker exec --user www-data nextcloud-main php occ user_oidc:provider list"
+    echo "           Then manually PATCH /api/v3/providers/oauth2/${PROVIDER_PK}/ with the correct URL."
+fi
 
 echo "  user_oidc configured."
 
