@@ -139,7 +139,7 @@ global.createMockGraph = (model) => ({
   addListener:        jest.fn(),
   setEnabled:         jest.fn(),
   setCellStyle:       jest.fn(),
-  removeCellOverlays: jest.fn(),
+  removeCellOverlay: jest.fn(),
   addCellOverlay:     jest.fn(),
   connectionHandler:  createMockConnectionHandler(),
   popupMenuHandler:   { factoryMethod: jest.fn(() => null) },

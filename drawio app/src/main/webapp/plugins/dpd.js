@@ -1675,22 +1675,9 @@ Draw.loadPlugin(function (ui) {
   };
   // ====== end of changes by SE ======
 
-  // ====== NOLAI - {Frontend} /Sprint 3/ Task 133 — startup icon sweep ======
-  setTimeout(function () {
-    var allCells = collectAllCells();
-    allCells.edges.forEach(function (edge) {
-      var props = getEdgeProps(edge);
-      if (props.identifiability) {
-        addEdgeIcon(edge);
-      }
-    });
-  }, 600);
-
 
   console.log('DPD Plugin Loaded');
   console.log('[DPD] Plugin loaded — 15 rules active (R-S1–4, R-I1–5, R-L1–2, R-P1–4)');
   ui._dpdValidate = validateGraph;
 
 });
-
-  // ====== end of changes by SE ======
