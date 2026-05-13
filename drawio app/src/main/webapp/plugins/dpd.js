@@ -588,173 +588,211 @@ Draw.loadPlugin(function (ui) {
   //
   // Positioning: the icon floats ABOVE the edge midpoint (y-offset -20 in
   // addEdgeIcon) so it never overlaps the error-badge which sits at y=0.
-  const TEST_ICON_SVG = {
-    directly_identifiable: {
-      w: 28,
-      h: 32,
-      svg: `
-      <svg xmlns="http://www.w3.org/2000/svg" width="28" height="32" viewBox="0 0 28 32">
-        <!-- head -->
-        <circle cx="14" cy="8" r="6.5"
-          fill="white"
-          stroke="#1e1e1e"
-          stroke-width="2.2"/>
+  
+  function createIcon(iconKey) {
+    let isDark = false;
+    if (ui.theme === 'dark') {
+      isDark = true;
+    } else if (typeof ui.isDarkMode === 'function' && ui.isDarkMode()) {
+      isDark = true;
+    } else if (ui.editor && typeof ui.editor.isDarkMode === 'function' && ui.editor.isDarkMode()) {
+      isDark = true;
+    } else if (document.body.classList.contains('geDark') ||
+      document.documentElement.classList.contains('geDark') ||
+      document.documentElement.getAttribute('data-color-mode') === 'dark' ||
+      document.body.getAttribute('data-theme') === 'dark') {
+      isDark = true;
+    } else {
+      try {
+        const container = ui.container || document.body;
+        const bgColor = window.getComputedStyle(container).backgroundColor;
+        const match = bgColor.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+        if (match) {
+          const r = parseInt(match[1], 10);
+          const g = parseInt(match[2], 10);
+          const b = parseInt(match[3], 10);
+          const luminance = (0.299 * r + 0.587 * g + 0.114 * b);
+          isDark = luminance < 128;
+        }
+      } catch (e) {
+        console.warn('[DPD] Could not compute background color for theme detection');
+      }
+    }
 
-        <!-- body -->
-        <rect x="4" y="18" width="20" height="10"
-          fill="white"
-          stroke="#1e1e1e"
-          stroke-width="2.2"/>
+    const stroke_color = isDark ? "#d3d3d3" : "#1e1e1e";
+    const fill_color = isDark ? "black" : "white";
 
-        <!-- filled arrow -->
-        <polygon points="20,16 27,12 23,19"
-          fill="#1e1e1e"/>
-      </svg>
-      `,
-    },
+    const TEST_ICON_SVG = {
+      directly_identifiable: {
+        w: 28,
+        h: 32,
+        svg: `
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="32" viewBox="0 0 28 32">
+          <!-- head -->
+          <circle cx="14" cy="8" r="6.5"
+            fill="${fill_color}"
+            stroke="${stroke_color}"
+            stroke-width="2.2"/>
 
-    indirectly_identifiable: {
-      w: 28,
-      h: 32,
-      svg: `
-      <svg xmlns="http://www.w3.org/2000/svg" width="28" height="32" viewBox="0 0 28 32">
-        <!-- head -->
-        <circle cx="14" cy="8" r="6.5"
-          fill="white"
-          stroke="#1e1e1e"
-          stroke-width="2.2"/>
+          <!-- body -->
+          <rect x="4" y="18" width="20" height="10"
+            fill="${fill_color}"
+            stroke="${stroke_color}"
+            stroke-width="2.2"/>
 
-        <!-- body -->
-        <rect x="4" y="18" width="20" height="10"
-          fill="white"
-          stroke="#1e1e1e"
-          stroke-width="2.2"/>
+          <!-- filled arrow -->
+          <polygon points="20,16 27,12 23,19"
+            fill="${stroke_color}"/>
+        </svg>
+        `,
+      },
 
-        <!-- ~ hook -->
-        <path d="
-          M20 24
-          Q22 21 24 24
-          Q25 25 26 23
-        "
-          fill="none"
-          stroke="#1e1e1e"
-          stroke-width="2.2"
-          stroke-linecap="round"
-          stroke-linejoin="round"/>
-      </svg>
-      `,
-    },
+      indirectly_identifiable: {
+        w: 28,
+        h: 32,
+        svg: `
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="32" viewBox="0 0 28 32">
+          <!-- head -->
+          <circle cx="14" cy="8" r="6.5"
+            fill="${fill_color}"
+            stroke="${stroke_color}"
+            stroke-width="2.2"/>
 
-    anonymous: {
-      w: 28,
-      h: 32,
-      svg: `
-      <svg xmlns="http://www.w3.org/2000/svg" width="28" height="32" viewBox="0 0 28 32">
-        <!-- head -->
-        <circle cx="14" cy="8" r="6.5"
-          fill="white"
-          stroke="#1e1e1e"
-          stroke-width="2.2"/>
+          <!-- body -->
+          <rect x="4" y="18" width="20" height="10"
+            fill="${fill_color}"
+            stroke="${stroke_color}"
+            stroke-width="2.2"/>
 
-        <!-- body -->
-        <rect x="4" y="18" width="20" height="10"
-          fill="white"
-          stroke="#1e1e1e"
-          stroke-width="2.2"/>
+          <!-- ~ hook -->
+          <path d="
+            M20 24
+            Q22 21 24 24
+            Q25 25 26 23
+          "
+            fill="none"
+            stroke="${stroke_color}"
+            stroke-width="2.2"
+            stroke-linecap="round"
+            stroke-linejoin="round"/>
+        </svg>
+        `,
+      },
 
-        <!-- X -->
-        <line x1="20" y1="12" x2="27" y2="19"
-          stroke="#1e1e1e"
-          stroke-width="2.2"/>
+      anonymous: {
+        w: 28,
+        h: 32,
+        svg: `
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="32" viewBox="0 0 28 32">
+          <!-- head -->
+          <circle cx="14" cy="8" r="6.5"
+            fill="${fill_color}"
+            stroke="${stroke_color}"
+            stroke-width="2.2"/>
 
-        <line x1="27" y1="12" x2="20" y2="19"
-          stroke="#1e1e1e"
-          stroke-width="2.2"/>
-      </svg>
-      `,
-    },
+          <!-- body -->
+          <rect x="4" y="18" width="20" height="10"
+            fill="${fill_color}"
+            stroke="${stroke_color}"
+            stroke-width="2.2"/>
 
-    strict_pseudonymous: {
-      w: 28,
-      h: 32,
-      svg: `
-      <svg xmlns="http://www.w3.org/2000/svg" width="28" height="32" viewBox="0 0 28 32">
-        <!-- head -->
-        <circle cx="14" cy="8" r="6.5"
-          fill="white"
-          stroke="#1e1e1e"
-          stroke-width="2.2"/>
+          <!-- X -->
+          <line x1="20" y1="12" x2="27" y2="19"
+            stroke="${stroke_color}"
+            stroke-width="2.2"/>
 
-        <!-- body -->
-        <rect x="4" y="18" width="20" height="10"
-          fill="white"
-          stroke="#1e1e1e"
-          stroke-width="2.2"/>
+          <line x1="27" y1="12" x2="20" y2="19"
+            stroke="${stroke_color}"
+            stroke-width="2.2"/>
+        </svg>
+        `,
+      },
 
-        <!-- asterisk -->
-        <line x1="24" y1="6" x2="24" y2="14"
-          stroke="#1e1e1e"
-          stroke-width="2"/>
+      strict_pseudonymous: {
+        w: 28,
+        h: 32,
+        svg: `
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="32" viewBox="0 0 28 32">
+          <!-- head -->
+          <circle cx="14" cy="8" r="6.5"
+            fill="${fill_color}"
+            stroke="${stroke_color}"
+            stroke-width="2.2"/>
 
-        <line x1="20.5" y1="8" x2="27.5" y2="12"
-          stroke="#1e1e1e"
-          stroke-width="2"/>
+          <!-- body -->
+          <rect x="4" y="18" width="20" height="10"
+            fill="${fill_color}"
+            stroke="${stroke_color}"
+            stroke-width="2.2"/>
 
-        <line x1="20.5" y1="12" x2="27.5" y2="8"
-          stroke="#1e1e1e"
-          stroke-width="2"/>
+          <!-- asterisk -->
+          <line x1="24" y1="6" x2="24" y2="14"
+            stroke="${stroke_color}"
+            stroke-width="2"/>
 
-        <!-- small vertical line -->
-        <line x1="24" y1="15" x2="24" y2="19"
-          stroke="#1e1e1e"
-          stroke-width="2"/>
-      </svg>
-      `,
-    },
+          <line x1="20.5" y1="8" x2="27.5" y2="12"
+            stroke="${stroke_color}"
+            stroke-width="2"/>
 
-    soft_pseudonymous: {
-      w: 28,
-      h: 32,
-      svg: `
-      <svg xmlns="http://www.w3.org/2000/svg" width="28" height="32" viewBox="0 0 28 32">
-        <!-- head -->
-        <circle cx="14" cy="8" r="6.5"
-          fill="white"
-          stroke="#1e1e1e"
-          stroke-width="2.2"/>
+          <line x1="20.5" y1="12" x2="27.5" y2="8"
+            stroke="${stroke_color}"
+            stroke-width="2"/>
 
-        <!-- body -->
-        <rect x="4" y="18" width="20" height="10"
-          fill="white"
-          stroke="#1e1e1e"
-          stroke-width="2.2"/>
+          <!-- small vertical line -->
+          <line x1="24" y1="15" x2="24" y2="19"
+            stroke="${stroke_color}"
+            stroke-width="2"/>
+        </svg>
+        `,
+      },
 
-        <!-- asterisk -->
-        <line x1="24" y1="6" x2="24" y2="14"
-          stroke="#1e1e1e"
-          stroke-width="2"/>
+      soft_pseudonymous: {
+        w: 28,
+        h: 32,
+        svg: `
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="32" viewBox="0 0 28 32">
+          <!-- head -->
+          <circle cx="14" cy="8" r="6.5"
+            fill="${fill_color}"
+            stroke="${stroke_color}"
+            stroke-width="2.2"/>
 
-        <line x1="20.5" y1="8" x2="27.5" y2="12"
-          stroke="#1e1e1e"
-          stroke-width="2"/>
+          <!-- body -->
+          <rect x="4" y="18" width="20" height="10"
+            fill="${fill_color}"
+            stroke="${stroke_color}"
+            stroke-width="2.2"/>
 
-        <line x1="20.5" y1="12" x2="27.5" y2="8"
-          stroke="#1e1e1e"
-          stroke-width="2"/>
+          <!-- asterisk -->
+          <line x1="24" y1="6" x2="24" y2="14"
+            stroke="${stroke_color}"
+            stroke-width="2"/>
 
-        <!-- hooked arrow -->
-        <line x1="20" y1="18" x2="25" y2="21"
-          stroke="#1e1e1e"
-          stroke-width="2"/>
+          <line x1="20.5" y1="8" x2="27.5" y2="12"
+            stroke="${stroke_color}"
+            stroke-width="2"/>
 
-        <polyline points="21,21 25,21 25,17"
-          fill="none"
-          stroke="#1e1e1e"
-          stroke-width="2"/>
-      </svg>
-      `,
-    },
-  };
+          <line x1="20.5" y1="12" x2="27.5" y2="8"
+            stroke="${stroke_color}"
+            stroke-width="2"/>
+
+          <!-- hooked arrow -->
+          <line x1="20" y1="18" x2="25" y2="21"
+            stroke="${stroke_color}"
+            stroke-width="2"/>
+
+          <polyline points="21,21 25,21 25,17"
+            fill="none"
+            stroke="${stroke_color}"
+            stroke-width="2"/>
+        </svg>
+        `,
+      },
+    };
+    return TEST_ICON_SVG[iconKey];
+  }
+
+  
 
   function renderIconToImage(iconKey, callback) {
     // ====== NOLAI - {Frontend} /Sprint 3/ Task 133 — icon render ======
@@ -764,11 +802,11 @@ Draw.loadPlugin(function (ui) {
     // with UI-specific theme helpers (e.g. getAdaptiveColors) that don't exist
     // in a detached div — there is no way to fix this from plugin code.
     //
-    // The pill-label SVGs in TEST_ICON_SVG are therefore the canonical icons.
+    // The pill-label SVGs in createIcon are therefore the canonical icons.
     // They are self-contained, always render, and are more informative than
     // the original symbol-only artwork.  ICON_XML is kept for reference but
     // is no longer used at runtime.
-    const icon = TEST_ICON_SVG[iconKey];
+    const icon = createIcon(iconKey);
     if (!icon) {
       console.warn('[DPD] renderIconToImage: unknown icon key', iconKey);
       callback(null);
