@@ -11323,9 +11323,11 @@
 				// ====== NOLAI - {UI} /Sprint 4/ Task #193 ======
 				// Expand console to fill the full right bar when highlights are active; restore on deactivate.
 				var origSetHighlightToggleState = this.dpdConsole.setHighlightToggleState.bind(this.dpdConsole);
+				var dpdConsole = this.dpdConsole;
 				this.dpdConsole.setHighlightToggleState = function(visible)
 				{
-					origSetHighlightToggleState(visible);
+					// Apply layout change first so the Highlights button is at its final
+					// position before _showHighlightPointer reads getBoundingClientRect.
 					if (visible)
 					{
 						formatTop.style.flex = '0 0 0%';
@@ -11337,6 +11339,23 @@
 						formatTop.style.flex = '0 0 50%';
 						formatTop.style.overflow = 'auto';
 						consoleBottom.style.flex = '0 0 50%';
+					}
+
+					// Force synchronous layout so the new button position is observable.
+					if (dpdConsole.toggleBtn) { void dpdConsole.toggleBtn.getBoundingClientRect(); }
+
+					// Suppress re-animation when activating an already active state
+					var wasActive = !!(dpdConsole.toggleBtn && dpdConsole.toggleBtn._active);
+					if (visible && wasActive && typeof dpdConsole._showHighlightPointer === 'function')
+					{
+						var origShow = dpdConsole._showHighlightPointer;
+						dpdConsole._showHighlightPointer = function() {};
+						try { origSetHighlightToggleState(visible); }
+						finally { dpdConsole._showHighlightPointer = origShow; }
+					}
+					else
+					{
+						origSetHighlightToggleState(visible);
 					}
 				};
 				// ====== end of changes by SE ======
