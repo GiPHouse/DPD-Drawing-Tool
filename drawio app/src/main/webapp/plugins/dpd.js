@@ -212,38 +212,6 @@ Draw.loadPlugin(function (ui) {
   const originalIsValidConnection = graph.isValidConnection.bind(graph);
 
   graph.isValidConnection = function (source, target) {
-    if (source && target) {
-      const st = getComponentType(source);
-      const tt = getComponentType(target);
-
-      if (st === 'data_store' && tt === 'data_store') {
-        pushConsoleViolation('R-S1', 'Data stores cannot connect directly to each other. A process must mediate the flow.', 'error', {
-          sourceType: st,
-          targetType: tt,
-        });
-        return true;
-      }
-
-      if (st === 'external_entity' && tt === 'external_entity') {
-        pushConsoleViolation('R-S2', 'External entities cannot connect directly to each other.', 'error', {
-          sourceType: st,
-          targetType: tt,
-        });
-        return true;
-      }
-
-      if (
-        (st === 'data_store' && tt === 'external_entity') ||
-        (st === 'external_entity' && tt === 'data_store')
-      ) {
-        pushConsoleViolation('R-S3', 'Data stores cannot connect directly to external entities. At least one end must be a process.', 'error', {
-          sourceType: st,
-          targetType: tt,
-        });
-        return true;
-      }
-    }
-
     return originalIsValidConnection(source, target);
   };
 
