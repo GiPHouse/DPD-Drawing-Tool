@@ -38,7 +38,10 @@ Draw.loadPlugin(function (ui) {
     'box-shadow: 0 2px 6px rgba(0,0,0,0.3)',
     'pointer-events: none'
   ].join(';');
-  warningBanner.innerHTML = '⚠ Diagram editing is locked while Highlights are active.';
+  warningBanner.innerHTML = '⚠ Diagram editing is locked while Highlights are active.' +
+    '<div style="font-size:11px;font-weight:normal;margin-top:3px;opacity:0.75;">' +
+    'Press <kbd style="background:#000;color:#ffaa00;border-radius:3px;padding:0 4px;">Esc</kbd>' +
+    ' or click <strong>Highlights</strong> to disable</div>';
   document.body.appendChild(warningBanner);
 
   function setEditLockState(locked) {
@@ -1080,6 +1083,15 @@ Draw.loadPlugin(function (ui) {
       }
     }
   }
+
+  // ====== NOLAI - {UI} /Sprint 4/ Task #193 ======
+  // Pressing Escape while highlights are active turns them off.
+  document.addEventListener('keydown', function(evt) {
+    if (evt.key === 'Escape' && highlightsVisible) {
+      toggleHighlights();
+    }
+  });
+  // ====== end of changes by SE ======
 
   function clearViolationHighlights() {
     if (violationHighlightedEdges.size === 0) return;

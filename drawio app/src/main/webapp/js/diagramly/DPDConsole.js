@@ -416,6 +416,7 @@ DPDConsole.prototype.setHighlightToggleState = function(visible)
 		this.toggleBtn.style.borderColor = '#ff8800';
 		this.toggleBtn.style.opacity    = '1';
 		this.toggleBtn._active = true;
+		this._showFingerPointer();
 	}
 	else
 	{
@@ -427,6 +428,73 @@ DPDConsole.prototype.setHighlightToggleState = function(visible)
 		this.toggleBtn._active = false;
 	}
 };
+
+// ====== NOLAI - DPD Console /Sprint 4/ Task #finger-animation  ======
+/**
+ * NOLAI: Animate a pointing finger that rises from the bottom of the screen and
+ * points at the Highlights button whenever highlights are activated.
+ */
+DPDConsole.prototype._showFingerPointer = function()
+{
+	var existing = document.getElementById('dpd-finger-pointer');
+	if (existing && existing.parentNode) { existing.parentNode.removeChild(existing); }
+
+	if (!this.toggleBtn) return;
+
+	var btn = this.toggleBtn;
+	var rect = btn.getBoundingClientRect();
+	var imgW = 80;
+
+	var img = document.createElement('img');
+	img.id = 'dpd-finger-pointer';
+	img.src = 'images/finger.png';
+	img.alt = '';
+	img.style.cssText = [
+		'position:fixed',
+		'width:' + imgW + 'px',
+		'height:auto',
+		'pointer-events:none',
+		'z-index:99999',
+		'left:' + Math.round(rect.left - imgW / 2) + 'px',
+		'top:' + (window.innerHeight + 100) + 'px',
+		'transform:rotate(60deg)',
+		'transform-origin:50% 90%',
+		'opacity:0',
+	].join(';');
+
+	document.body.appendChild(img);
+
+	// Animate in: slide up from below the screen while rotating to point at button
+	requestAnimationFrame(function() {
+		requestAnimationFrame(function() {
+			img.style.transition = [
+				'top 0.9s cubic-bezier(0.34, 1.56, 0.64, 1)',
+				'transform 0.9s cubic-bezier(0.34, 1.56, 0.64, 1)',
+				'opacity 0.3s ease'
+			].join(',');
+			img.style.top = (rect.bottom + 8) + 'px';
+			img.style.transform = 'rotate(0deg)';
+			img.style.opacity = '1';
+
+			// Hold for 1.8 s, then slide back down and fade
+			setTimeout(function() {
+				img.style.transition = [
+					'top 0.6s ease-in',
+					'transform 0.6s ease-in',
+					'opacity 0.5s ease-in'
+				].join(',');
+				img.style.top = (window.innerHeight + 100) + 'px';
+				img.style.transform = 'rotate(-30deg)';
+				img.style.opacity = '0';
+
+				setTimeout(function() {
+					if (img.parentNode) { img.parentNode.removeChild(img); }
+				}, 700);
+			}, 1800);
+		});
+	});
+};
+// ====== end of changes by SE ======
 
 /**
  * Clear all violations from the console

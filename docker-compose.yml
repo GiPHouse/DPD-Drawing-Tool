@@ -108,14 +108,13 @@ services:
       OVERWRITEPROTOCOL:        https
       OVERWRITEHOST:            ${NEXTCLOUD_TRUSTED_DOMAINS}
       TRUSTED_PROXIES:          caddy
-      # ---- Goauthentik OIDC (uncomment when auth integration is implemented) ----
-      # The client's Goauthentik instance URL and credentials go here.
-      # The container does not run Goauthentik — it connects to the client's
-      # existing instance. See docker/entrypoint.sh for how the single-container
-      # image uses these same variables.
-      # OIDC_PROVIDER_URL:      ${OIDC_PROVIDER_URL}
-      # OIDC_CLIENT_ID:         ${OIDC_CLIENT_ID}
-      # OIDC_CLIENT_SECRET:     ${OIDC_CLIENT_SECRET}
+      # ---- Goauthentik OIDC ----
+      # Leave these empty in .env to skip OIDC and use built-in login.
+      # Populate them (via start-client-auth.sh or manually) to enable SSO
+      # against the client's Goauthentik server.N
+      OIDC_PROVIDER_URL:      ${OIDC_PROVIDER_URL:-}
+      OIDC_CLIENT_ID:         ${OIDC_CLIENT_ID:-}
+      OIDC_CLIENT_SECRET:     ${OIDC_CLIENT_SECRET:-}
     depends_on:
       db:
         condition: service_healthy

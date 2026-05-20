@@ -1853,9 +1853,11 @@ ArrangePanel.prototype.addGroupOps = function(div)
 	resetSelect.className = 'geFullWidthElement';
 	resetSelect.style.marginBottom = '2px';
 
+	// ====== NOLAI - {UI} /Sprint 4/ Task #193 ======
+	// clearWaypoints removed per client request — not a desired option in the Arrange panel
 	var ops = [{label: mxResources.get('reset') + '...', action: 'reset'},
-		{label: mxResources.get('waypoints'), action: 'clearWaypoints'},
 		{label: mxResources.get('connectionPoints'), action: 'clearAnchors'}];
+	// ====== end of changes by SE ======
 
 	for (var i = 0; i < ops.length; i++)
 	{
