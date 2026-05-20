@@ -4287,56 +4287,56 @@
 			editorUi.userPanel.style.top = '10px';
 		});
 
-		this.put('theme', new Menu(mxUtils.bind(this, function(menu, parent)
-		{
-			var theme = (urlParams['sketch'] == '1') ? 'sketch' : mxSettings.getUi();
+		// this.put('theme', new Menu(mxUtils.bind(this, function(menu, parent)
+		// {
+		// 	var theme = (urlParams['sketch'] == '1') ? 'sketch' : mxSettings.getUi();
 			
-			var autoItem = menu.addItem(mxResources.get('automatic'), null, function()
-			{
-				editorUi.setCurrentTheme('');
-			}, parent);
+		// 	var autoItem = menu.addItem(mxResources.get('automatic'), null, function()
+		// 	{
+		// 		editorUi.setCurrentTheme('');
+		// 	}, parent);
 			
-			var item = menu.addItem(mxResources.get('classic'), null, function()
-			{
-				editorUi.setCurrentTheme('kennedy');
-			}, parent);
+		// 	var item = menu.addItem(mxResources.get('classic'), null, function()
+		// 	{
+		// 		editorUi.setCurrentTheme('kennedy');
+		// 	}, parent);
 
-			var themeFound = false;
+		// 	var themeFound = false;
 
-			if (theme == 'kennedy' || theme == 'dark')
-			{
-				menu.addCheckmark(item, Editor.checkmarkImage);
-				themeFound = true;
-			}
+		// 	if (theme == 'kennedy' || theme == 'dark')
+		// 	{
+		// 		menu.addCheckmark(item, Editor.checkmarkImage);
+		// 		themeFound = true;
+		// 	}
 
-			for (var i = 0; i < Editor.themes.length; i++)
-			{
-				(mxUtils.bind(this, function(key)
-				{
-					item = menu.addItem(mxResources.get((key == 'min') ?
-						'minimal' : key), null, function()
-					{
-						editorUi.setCurrentTheme(key);
-					}, parent);
+		// 	for (var i = 0; i < Editor.themes.length; i++)
+		// 	{
+		// 		(mxUtils.bind(this, function(key)
+		// 		{
+		// 			item = menu.addItem(mxResources.get((key == 'min') ?
+		// 				'minimal' : key), null, function()
+		// 			{
+		// 				editorUi.setCurrentTheme(key);
+		// 			}, parent);
 
-					if (theme == key)
-					{
-						menu.addCheckmark(item, Editor.checkmarkImage);
-						themeFound = true;
-					}
+		// 			if (theme == key)
+		// 			{
+		// 				menu.addCheckmark(item, Editor.checkmarkImage);
+		// 				themeFound = true;
+		// 			}
 					
-					if (key == 'simple')
-					{
-						menu.addSeparator(parent);
-					}
-				})(Editor.themes[i]));
-			}
+		// 			if (key == 'simple')
+		// 			{
+		// 				menu.addSeparator(parent);
+		// 			}
+		// 		})(Editor.themes[i]));
+		// 	}
 			
-			if (!themeFound)
-			{
-				menu.addCheckmark(autoItem, Editor.checkmarkImage);
-			}
-		})));
+		// 	if (!themeFound)
+		// 	{
+		// 		menu.addCheckmark(autoItem, Editor.checkmarkImage);
+		// 	}
+		// })));
 
 		var renameAction = this.editorUi.actions.addAction('rename...', mxUtils.bind(this, function()
 		{
