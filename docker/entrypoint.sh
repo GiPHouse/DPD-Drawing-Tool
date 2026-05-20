@@ -158,15 +158,18 @@ SQL
     sudo -u www-data php /var/www/nextcloud/occ app:enable drawio || true
 
     # ---- Goauthentik OIDC configuration ----
-    # ====== NOLAI - Infrastructure / Sprint 4 / Task #188 ======
+    # ====== NOLAI - Infrastructure / Sprint 2 / Task: OIDC Integration Stub ======
     #
-    # Configures Nextcloud to authenticate against the client's existing
-    # Goauthentik server via OpenID Connect. Only runs when OIDC_PROVIDER_URL
-    # is set; leave it unset to fall back to built-in username/password login.
+    # This block configures Nextcloud to authenticate against the client's
+    # existing Goauthentik server via OpenID Connect.
     #
-    # OIDC_PROVIDER_URL may be either the base application URL
-    # (https://auth.example.com/application/o/nextcloud/) or the full discovery
-    # endpoint — the script normalises it either way.
+    # It only runs when OIDC_PROVIDER_URL is set. Leave it unset to skip OIDC
+    # and use Nextcloud's built-in username/password login instead.
+    #
+    # The other engineers implementing the Goauthentik integration should:
+    #   1. Expand this block with any additional occ user_oidc commands needed.
+    #   2. Uncomment the OIDC vars in docker-compose.yml and .env.example.
+    #   3. Test against the client's Goauthentik instance.
     #
     # ====== end of changes by SE ======
     if [ -n "${OIDC_PROVIDER_URL}" ]; then
@@ -175,54 +178,17 @@ SQL
         : "${OIDC_CLIENT_ID:?ERROR: OIDC_CLIENT_ID is required when OIDC_PROVIDER_URL is set}"
         : "${OIDC_CLIENT_SECRET:?ERROR: OIDC_CLIENT_SECRET is required when OIDC_PROVIDER_URL is set}"
 
-        # user_oidc 7.5+ requires the full /.well-known/openid-configuration path.
-        # Accept both the base URL and the full path so .env is forgiving.
-        DISCOVERY_URI="${OIDC_PROVIDER_URL}"
-        if [[ "${DISCOVERY_URI}" != *".well-known/openid-configuration" ]]; then
-            DISCOVERY_URI="${DISCOVERY_URI%/}/.well-known/openid-configuration"
-        fi
-
-        # Allow Nextcloud to reach the OIDC server even when it is on a private
-        # network (VPN, internal Docker network during testing, etc.).
-        sudo -u www-data php /var/www/nextcloud/occ \
-            config:system:set allow_local_remote_servers --value=true --type=boolean
-
-        # Allow Draw.io (origin https://<APP_DOMAIN>:5443) to make cross-origin
-        # WebDAV and OCS requests to Nextcloud.
-        sudo -u www-data php /var/www/nextcloud/occ \
-            config:system:set cors.allowed-domains 0 --value="https://${APP_DOMAIN}:5443"
-
-        # Install and enable the OIDC login app.
+        # Install the Nextcloud OIDC login app if not already present
         sudo -u www-data php /var/www/nextcloud/occ app:install user_oidc 2>/dev/null || true
-        sudo -u www-data php /var/www/nextcloud/occ app:enable  user_oidc
+        sudo -u www-data php /var/www/nextcloud/occ app:enable  user_oidc || true
 
-        # Register the Goauthentik provider.
-        #
-        # WHY --unique-uid=1 and --mapping-uid=sub:
-        #   Required for Login Flow v2 (used by the Draw.io WebDAV integration).
-        #   user_oidc 7.5 has a bug where unique-uid=0 leaves the user field
-        #   empty in the Login Flow v2 session, causing "State token does not
-        #   match" after the OIDC redirect. The Goauthentik provider must be
-        #   created with sub_mode=user_username so 'sub' is the plain username
-        #   rather than a per-app SHA-256 hash.
-        #
-        # WHY --mapping-display-name=sub:
-        #   Shows the Goauthentik username in the Nextcloud UI rather than an
-        #   opaque internal hash.
-        sudo -u www-data php /var/www/nextcloud/occ user_oidc:provider goauthentik \
+        # Register the Goauthentik provider
+        sudo -u www-data php /var/www/nextcloud/occ user_oidc:provider add \
             --clientid="${OIDC_CLIENT_ID}" \
             --clientsecret="${OIDC_CLIENT_SECRET}" \
-            --discoveryuri="${DISCOVERY_URI}" \
-            --unique-uid=1 \
-            --mapping-uid=sub \
-            --mapping-display-name=sub
+            --discoveryuri="${OIDC_PROVIDER_URL}" || true
 
-        # Require all users to log in via Goauthentik SSO.
-        # Comment this line out temporarily to allow direct admin login for recovery.
-        sudo -u www-data php /var/www/nextcloud/occ \
-            config:app:set user_oidc allow_multiple_user_backends --value=0
-
-        echo "  OIDC configured. Discovery URI: ${DISCOVERY_URI}"
+        echo "  OIDC configured. Provider: ${OIDC_PROVIDER_URL}"
     else
         echo "  OIDC_PROVIDER_URL not set — skipping Goauthentik configuration."
         echo "  Nextcloud will use built-in username/password login."
