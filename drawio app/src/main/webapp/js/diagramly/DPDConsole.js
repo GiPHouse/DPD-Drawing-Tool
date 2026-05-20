@@ -447,7 +447,8 @@ DPDConsole.prototype._showHighlightPointer = function()
 
 	var img = document.createElement('img');
 	img.id = 'dpd-highlight-pointer';
-	img.src = 'images/highlight-pointer.png';
+	// easter egg
+	img.src = Math.random() < 0.03 ? 'images/highlight-pointer-alt.png' : 'images/highlight-pointer.png';
 	img.alt = '';
 	img.style.cssText = [
 		'position:fixed',
