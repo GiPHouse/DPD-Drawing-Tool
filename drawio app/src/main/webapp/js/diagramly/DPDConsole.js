@@ -416,7 +416,7 @@ DPDConsole.prototype.setHighlightToggleState = function(visible)
 		this.toggleBtn.style.borderColor = '#ff8800';
 		this.toggleBtn.style.opacity    = '1';
 		this.toggleBtn._active = true;
-		this._showFingerPointer();
+		this._showHighlightPointer();
 	}
 	else
 	{
@@ -429,14 +429,14 @@ DPDConsole.prototype.setHighlightToggleState = function(visible)
 	}
 };
 
-// ====== NOLAI - DPD Console /Sprint 4/ Task #finger-animation  ======
+// ====== NOLAI - DPD Console /Sprint 4/ Task #highlight-pointer ======
 /**
- * NOLAI: Animate a pointing finger that rises from the bottom of the screen and
+ * NOLAI: Animate a pointer that rises from the bottom of the screen and
  * points at the Highlights button whenever highlights are activated.
  */
-DPDConsole.prototype._showFingerPointer = function()
+DPDConsole.prototype._showHighlightPointer = function()
 {
-	var existing = document.getElementById('dpd-finger-pointer');
+	var existing = document.getElementById('dpd-highlight-pointer');
 	if (existing && existing.parentNode) { existing.parentNode.removeChild(existing); }
 
 	if (!this.toggleBtn) return;
@@ -446,8 +446,8 @@ DPDConsole.prototype._showFingerPointer = function()
 	var imgW = 80;
 
 	var img = document.createElement('img');
-	img.id = 'dpd-finger-pointer';
-	img.src = 'images/finger.png';
+	img.id = 'dpd-highlight-pointer';
+	img.src = 'images/highlight-pointer.png';
 	img.alt = '';
 	img.style.cssText = [
 		'position:fixed',
