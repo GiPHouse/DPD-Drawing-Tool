@@ -574,7 +574,10 @@ Menus.prototype.init = function()
 		this.addSubmenu('navigation', menu, parent);
 		this.addSubmenu('insert', menu, parent);
 		this.addSubmenu('layout', menu, parent);
-		this.addMenuItems(menu, ['-', 'group', 'ungroup', 'removeFromGroup', '-', 'clearWaypoints', 'autosize'], parent);
+		// ====== NOLAI - {UI} /Sprint 4/ Task #193 ======
+		// clearWaypoints removed per client request
+		this.addMenuItems(menu, ['-', 'group', 'ungroup', 'removeFromGroup', '-', 'autosize'], parent);
+		// ====== end of changes by SE ======
 	}))).isEnabled = isGraphEnabled;
 	this.put('insert', new Menu(mxUtils.bind(this, function(menu, parent)
 	{
@@ -1735,18 +1738,16 @@ Menus.prototype.addPopupMenuCellItems = function(menu, cell, evt)
 						}
 					}
 					
-					this.addMenuItems(menu, [(isWaypoint) ? 'removeWaypoint' : 'addWaypoint'], null, evt);
+					// ====== NOLAI - {UI} /Sprint 4/ Task #193 ======
+					// this.addMenuItems(menu, [(isWaypoint) ? 'removeWaypoint' : 'addWaypoint'], null, evt);
+					// ====== end of changes by SE ======
 				}
 			}
 		}
 
-		if (this.isShowCellEditItems() &&
-			((ss.vertices.length == 0 && ss.edges.length > 0) ||
-			(hasWaypoints || (graph.getModel().isVertex(cell) &&
-			graph.getModel().getEdgeCount(cell) > 0))))
-		{
-			this.addMenuItems(menu, ['clearWaypoints'], null, evt);
-		}
+		// ====== NOLAI - {UI} /Sprint 4/ Task #193 ======
+		// clearWaypoints removed from edge right-click context menu per client request
+		// ====== end of changes by SE ======
 		
 		if (this.isShowCellEditItems() &&
 			graph.getSelectionCount() == 1 &&

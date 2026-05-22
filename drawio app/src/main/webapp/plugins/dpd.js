@@ -38,7 +38,10 @@ Draw.loadPlugin(function (ui) {
     'box-shadow: 0 2px 6px rgba(0,0,0,0.3)',
     'pointer-events: none'
   ].join(';');
-  warningBanner.innerHTML = '⚠ Diagram editing is locked while Highlights are active.';
+  warningBanner.innerHTML = '⚠ Diagram editing is locked while Highlights are active.' +
+    '<div style="font-size:11px;font-weight:normal;margin-top:3px;opacity:0.75;">' +
+    'Press <kbd style="background:#000;color:#ffaa00;border-radius:3px;padding:0 4px;">Esc</kbd>' +
+    ' or click <strong>Highlights</strong> to disable</div>';
   document.body.appendChild(warningBanner);
 
   function setEditLockState(locked) {
@@ -209,38 +212,6 @@ Draw.loadPlugin(function (ui) {
   const originalIsValidConnection = graph.isValidConnection.bind(graph);
 
   graph.isValidConnection = function (source, target) {
-    if (source && target) {
-      const st = getComponentType(source);
-      const tt = getComponentType(target);
-
-      if (st === 'data_store' && tt === 'data_store') {
-        pushConsoleViolation('R-S1', 'Data stores cannot connect directly to each other. A process must mediate the flow.', 'error', {
-          sourceType: st,
-          targetType: tt,
-        });
-        return true;
-      }
-
-      if (st === 'external_entity' && tt === 'external_entity') {
-        pushConsoleViolation('R-S2', 'External entities cannot connect directly to each other.', 'error', {
-          sourceType: st,
-          targetType: tt,
-        });
-        return true;
-      }
-
-      if (
-        (st === 'data_store' && tt === 'external_entity') ||
-        (st === 'external_entity' && tt === 'data_store')
-      ) {
-        pushConsoleViolation('R-S3', 'Data stores cannot connect directly to external entities. At least one end must be a process.', 'error', {
-          sourceType: st,
-          targetType: tt,
-        });
-        return true;
-      }
-    }
-
     return originalIsValidConnection(source, target);
   };
 
@@ -1391,6 +1362,15 @@ Draw.loadPlugin(function (ui) {
       }
     }
   }
+
+  // ====== NOLAI - {UI} /Sprint 4/ Task #193 ======
+  // Pressing Escape while highlights are active turns them off.
+  document.addEventListener('keydown', function(evt) {
+    if (evt.key === 'Escape' && highlightsVisible) {
+      toggleHighlights();
+    }
+  });
+  // ====== end of changes by SE ======
 
   function clearViolationHighlights() {
     if (violationHighlightedEdges.size === 0) return;

@@ -11296,10 +11296,13 @@
 				typeof DPDConsole !== 'undefined' && this.dpdConsole == null)
 			{
 				var formatTop = document.createElement('div');
-				formatTop.style.cssText = 'position: relative; flex: 0 0 65%; min-height: 0; overflow: auto;';
+				// ====== NOLAI - {UI} /Sprint 4/ Task #193 ======
+				// Console enlarged to 50% (was 65%/35%) and expands to 100% when highlights are active
+				formatTop.style.cssText = 'position: relative; flex: 0 0 50%; min-height: 0; overflow: auto;';
 
 				var consoleBottom = document.createElement('div');
-				consoleBottom.style.cssText = 'position: relative; flex: 0 0 35%; min-height: 0; overflow: hidden;';
+				consoleBottom.style.cssText = 'position: relative; flex: 0 0 50%; min-height: 0; overflow: hidden;';
+				// ====== end of changes by SE ======
 
 				this.formatContainer.innerHTML = '';
 				this.formatContainer.style.display = 'flex';
@@ -11316,6 +11319,46 @@
 				this.format.refresh();
 
 				this.dpdConsole = new DPDConsole(this, consoleBottom);
+
+				// ====== NOLAI - {UI} /Sprint 4/ Task #193 ======
+				// Expand console to fill the full right bar when highlights are active; restore on deactivate.
+				var origSetHighlightToggleState = this.dpdConsole.setHighlightToggleState.bind(this.dpdConsole);
+				var dpdConsole = this.dpdConsole;
+				this.dpdConsole.setHighlightToggleState = function(visible)
+				{
+					// Apply layout change first so the Highlights button is at its final
+					// position before _showHighlightPointer reads getBoundingClientRect.
+					if (visible)
+					{
+						formatTop.style.flex = '0 0 0%';
+						formatTop.style.overflow = 'hidden';
+						consoleBottom.style.flex = '0 0 100%';
+					}
+					else
+					{
+						formatTop.style.flex = '0 0 50%';
+						formatTop.style.overflow = 'auto';
+						consoleBottom.style.flex = '0 0 50%';
+					}
+
+					// Force synchronous layout so the new button position is observable.
+					if (dpdConsole.toggleBtn) { void dpdConsole.toggleBtn.getBoundingClientRect(); }
+
+					// Suppress re-animation when activating an already active state
+					var wasActive = !!(dpdConsole.toggleBtn && dpdConsole.toggleBtn._active);
+					if (visible && wasActive && typeof dpdConsole._showHighlightPointer === 'function')
+					{
+						var origShow = dpdConsole._showHighlightPointer;
+						dpdConsole._showHighlightPointer = function() {};
+						try { origSetHighlightToggleState(visible); }
+						finally { dpdConsole._showHighlightPointer = origShow; }
+					}
+					else
+					{
+						origSetHighlightToggleState(visible);
+					}
+				};
+				// ====== end of changes by SE ======
 			}
 
 			// END OF CHANGES SE team: sprint 2 - task 112 - adds console to format panel #NOLAI
@@ -11777,10 +11820,9 @@
 
 								var geo = graph.getModel().getGeometry(cell);
 
-								if (geo != null && geo.points != null && geo.points.length > 0)
-								{
-									this.addMenuItems(menu, ['clearWaypoints'], null, evt);
-								}
+								// ====== NOLAI - {UI} /Sprint 4/ Task #193 ======
+								// clearWaypoints removed from edge right-click context menu per client request
+								// ====== end of changes by SE ======
 							}
 						}
 
