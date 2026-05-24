@@ -1866,29 +1866,13 @@ App.prototype.init = function()
 		{
 			this.setCompactMode(true);
 		}
-		// ======	NOLAI - Frontend/Sprint 1/ Task #89	=====
-		if (Editor.currentTheme == 'atlas' || urlParams['atlas'] == '1')
-		{	
-			this.icon = document.createElement('img');
 
-			// NOLAI - Sprint 1 - Change site logo to nolai logo
-			this.icon.setAttribute('src', IMAGE_PATH + '/NOLAI_logo.png');
-
-			this.icon.setAttribute('title', mxResources.get('draw.io'));
-			this.icon.className = 'geSmallAppIcon';
-			// this.icon.style.padding = '0 4px 0 0';
-
-			if (urlParams['embed'] != '1')
-			{
-				this.icon.style.cursor = 'pointer';
-				
-				mxEvent.addListener(this.icon, 'click', mxUtils.bind(this, function(evt)
-				{
-					this.appIconClicked(evt);
-				}));
-			}
-			
-			this.menubar.container.insertBefore(this.icon, this.menubar.container.firstChild);
+		// ======	NOLAI - Frontend/Sprint 4/ Task #196	=====
+		// Force the correct theme to be used
+		if (Editor.currentTheme != 'kennedy')
+		{
+			console.log("Forcing 'Kennedy' theme");
+			Editor.currentTheme = 'kennedy';
 		}
 		// ====== end of changes by SE	======
 	}
