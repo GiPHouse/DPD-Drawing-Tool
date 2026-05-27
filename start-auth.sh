@@ -206,20 +206,47 @@ ak_post() {
         "${API}${1}"
 }
 
+# Helper: make an authenticated PATCH request with a JSON body
+# Used to update an existing resource (e.g. patching the OAuth2 provider's
+# backchannel_logout_url after the Nextcloud user_oidc provider ID is known).
+ak_patch() {
+    curl -sf -X PATCH \
+        -H "Authorization: Bearer ${AUTHENTIK_BOOTSTRAP_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d "$2" \
+        "${API}${1}"
+}
+
 # -- 5a. Fetch the default authorization and invalidation flow PKs --
 # goauthentik ships with default flows. We use the implicit-consent auth flow
 # (no separate consent screen — appropriate for an internal tool) and the
 # default invalidation flow (became a required field in goauthentik 2026.x).
-FLOW_PK=$(ak_get "/flows/instances/?slug=default-provider-authorization-implicit-consent" \
-    | jq -r '.results[0].pk // empty')
-
-if [ -z "$FLOW_PK" ]; then
-    echo ""
-    echo "ERROR: Could not find the default authorization flow in goauthentik."
-    echo "       goauthentik may not have finished its first-boot migration."
-    echo "       Wait 30 seconds and re-run this script."
-    exit 1
-fi
+#
+# WHY retry loop: goauthentik's Docker healthcheck passes once the HTTP server
+# is accepting connections, but the first-boot Django management commands
+# (migrations, flow seeding, default object creation) continue running for
+# another 30-60 s afterwards. Polling until the flow appears is more robust
+# than a fixed sleep and avoids a misleading hard failure on fresh installs.
+FLOW_PK=""
+FLOW_WAIT=0
+FLOW_MAX=120
+printf "  Waiting for goauthentik default flows to be seeded..."
+until [ -n "$FLOW_PK" ]; do
+    if [ "$FLOW_WAIT" -ge "$FLOW_MAX" ]; then
+        echo ""
+        echo "ERROR: Could not find the default authorization flow in goauthentik after ${FLOW_MAX}s."
+        echo "       Check logs: $DC logs authentik-server"
+        exit 1
+    fi
+    FLOW_PK=$(ak_get "/flows/instances/?slug=default-provider-authorization-implicit-consent" \
+        2>/dev/null | jq -r '.results[0].pk // empty' 2>/dev/null || true)
+    if [ -z "$FLOW_PK" ]; then
+        sleep 5
+        FLOW_WAIT=$((FLOW_WAIT + 5))
+        printf " %ds..." "$FLOW_WAIT"
+    fi
+done
+echo " done."
 
 INVALIDATION_FLOW_PK=$(ak_get "/flows/instances/?designation=invalidation" \
     | jq -r '.results[0].pk // empty')
@@ -324,7 +351,64 @@ EOF
 )" >/dev/null
 echo "  goauthentik application 'nextcloud' created."
 
-# -- 5d. Write credentials back to .env --
+# ====== NOLAI - Infrastructure / Sprint 4 / Task 192 ======
+#
+# -- 5d. Create a second dev user so file-sharing can be tested locally --
+#
+# WHY a second user is needed:
+#   The file-sharing feature (Sprint 4 / Task 192) lets a logged-in user share
+#   a draw.io file with another Nextcloud user. Testing this end-to-end requires
+#   at least two distinct accounts — the sharer (akadmin) and a recipient.
+#   The bootstrap only creates akadmin, so we provision 'devuser' here via the
+#   goauthentik API so every developer gets a working second account without any
+#   manual UI steps.
+#
+# IDEMPOTENCY:
+#   We check whether the user already exists before creating. If it does, we
+#   skip creation but still call set_password so re-running the script resets
+#   the password to the known value — useful after a stack wipe.
+#
+# CREDENTIALS (dev stack only — never use these in production):
+#   akadmin  / ${AUTHENTIK_BOOTSTRAP_PASSWORD}   (goauthentik bootstrap admin)
+#   devuser  / devpass123                         (second test user)
+# ====== end of changes by SE ======
+DEV_USER_USERNAME="devuser"
+DEV_USER_NAME="Dev User"
+DEV_USER_EMAIL="devuser@example.com"
+DEV_USER_PASSWORD="devpass123"
+
+EXISTING_DEV_USER_PK=$(ak_get "/core/users/?username=${DEV_USER_USERNAME}" \
+    | jq -r '.results[0].pk // empty')
+
+if [ -z "$EXISTING_DEV_USER_PK" ]; then
+    DEV_USER_RESPONSE=$(ak_post "/core/users/" "$(cat <<EOF
+{
+  "username": "${DEV_USER_USERNAME}",
+  "name":     "${DEV_USER_NAME}",
+  "email":    "${DEV_USER_EMAIL}",
+  "is_active": true,
+  "type":     "internal"
+}
+EOF
+)")
+    EXISTING_DEV_USER_PK=$(echo "$DEV_USER_RESPONSE" | jq -r '.pk // empty')
+    if [ -z "$EXISTING_DEV_USER_PK" ]; then
+        echo "  WARNING: Could not create dev user '${DEV_USER_USERNAME}' — sharing tests will require manual user setup."
+    else
+        echo "  Dev user '${DEV_USER_USERNAME}' created (pk: ${EXISTING_DEV_USER_PK})."
+    fi
+else
+    echo "  Dev user '${DEV_USER_USERNAME}' already exists (pk: ${EXISTING_DEV_USER_PK}) — skipping creation."
+fi
+
+# Always set the password so re-running the script restores the known value.
+if [ -n "$EXISTING_DEV_USER_PK" ]; then
+    ak_post "/core/users/${EXISTING_DEV_USER_PK}/set_password/" \
+        "{\"password\": \"${DEV_USER_PASSWORD}\"}" >/dev/null
+    echo "  Password set for '${DEV_USER_USERNAME}'."
+fi
+
+# -- 5f. Write credentials back to .env --
 # Store the credentials generated above so subsequent runs and the
 # Nextcloud occ step below always use the same values.
 update_env_var() {
@@ -409,6 +493,44 @@ $OCC user_oidc:provider goauthentik \
 # admin access without SSO (e.g. to recover a locked-out account).
 $OCC config:app:set user_oidc allow_multiple_user_backends --value=0
 
+# ====== NOLAI - {- Backend -} /Sprint 4/ Task 192 ======
+# Configure Authentik backchannel logout so that hitting Authentik's end_session
+# endpoint causes Authentik to POST a logout token to Nextcloud, which then
+# invalidates the user's Nextcloud session automatically.
+#
+# HOW IT WORKS:
+#   1. The Nextcloud user_oidc app exposes a backchannel logout endpoint at
+#      /index.php/apps/user_oidc/backchannel-logout/{providerId}, where
+#      {providerId} is the numeric ID of the "goauthentik" provider row in
+#      Nextcloud's database.
+#   2. We read that ID via `occ user_oidc:provider list` and parse the table.
+#   3. We PATCH the Authentik OAuth2 provider (already created above) with the
+#      full URL. On future end_session calls, Authentik will POST a signed JWT
+#      logout token to that URL, and Nextcloud will kill the matching sessions.
+#
+# WHY backchannel over front-channel:
+#   Front-channel logout requires the browser to load iframes for each RP and
+#   is unreliable when the draw.io popup closes before iframes finish loading.
+#   Backchannel is a direct server-to-server POST — no browser involvement.
+# ====== end of changes by SE ======
+OIDC_PROVIDER_ID=$($OCC user_oidc:provider list 2>/dev/null \
+    | grep -E '\bgoauthentik\b' \
+    | grep -oP '^\|\s+\K[0-9]+' \
+    || echo "")
+
+if [ -n "$OIDC_PROVIDER_ID" ]; then
+    BACKCHANNEL_URL="https://localhost/index.php/apps/user_oidc/backchannel-logout/${OIDC_PROVIDER_ID}"
+    ak_patch "/providers/oauth2/${PROVIDER_PK}/" \
+        "{\"backchannel_logout_url\": \"${BACKCHANNEL_URL}\", \"backchannel_logout_session_required\": false}" \
+        > /dev/null
+    echo "  Backchannel logout configured (provider ID: ${OIDC_PROVIDER_ID})"
+    echo "  Backchannel URL: ${BACKCHANNEL_URL}"
+else
+    echo "  WARNING: Could not determine user_oidc provider ID — backchannel logout NOT configured."
+    echo "           Run: docker exec --user www-data nextcloud-main php occ user_oidc:provider list"
+    echo "           Then manually PATCH /api/v3/providers/oauth2/${PROVIDER_PK}/ with the correct URL."
+fi
+
 echo "  user_oidc configured."
 
 # -----------------------------------------------------------------------
@@ -438,7 +560,10 @@ echo " goauthentik  : http://authentik-server:9000"
 echo "======================================================="
 echo ""
 echo " goauthentik admin UI : http://authentik-server:9000/if/admin/"
-echo " goauthentik admin user: akadmin"
+echo ""
+echo " Dev accounts (for testing file sharing):"
+echo "   akadmin  / ${AUTHENTIK_BOOTSTRAP_PASSWORD}   (admin)"
+echo "   devuser  / devpass123                         (second test user)"
 echo ""
 echo " NEXT STEP — Trust the Caddy certificate (same as start.sh):"
 echo "   macOS: sudo security add-trusted-cert -d -r trustRoot \\"

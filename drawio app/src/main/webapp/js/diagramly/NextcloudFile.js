@@ -754,6 +754,7 @@ function buildNextcloudWebdavDirectoryContext(nextcloudUrl, username, password, 
 }
 
 // ====== NOLAI - {- Backend -} /Sprint 3/ Task 151 ======
+// ====== NOLAI - {- Backend -} /Sprint 4/ Task 192 — first-login retry fix ======
 //
 // openNextcloudLoginPopup(nextcloudBaseUrl)
 //
@@ -776,56 +777,115 @@ function buildNextcloudWebdavDirectoryContext(nextcloudUrl, username, password, 
 //   credentials for SSO users — the server issues the app password directly after
 //   the GoAuthentik flow completes, without requiring a Nextcloud password.
 //
+// WHY one automatic retry when the popup closes without credentials:
+//   On the very first OIDC login, Nextcloud must provision the user account
+//   (create their record in the database) before the Login Flow v2 grant step
+//   can succeed. If the OIDC redirect lands on /login/v2/grant before
+//   provisioning finishes, the server finds user= empty and the state token
+//   check fails — showing "Access denied: State token does not match" and
+//   closing the popup.
+//
+//   Critically, the OIDC session IS fully established by this point — the
+//   user authenticated successfully with Authentik. So starting a new Login
+//   Flow v2 immediately after the failed popup closes will open a second popup
+//   that Nextcloud redirects straight through (no password re-entry) and the
+//   poll resolves within seconds.
+//
+//   We allow exactly one automatic retry (MAX_RETRIES = 1) with a short delay
+//   to give Nextcloud time to finish provisioning. After that, any further
+//   popup-close is treated as a deliberate user cancellation.
+//
 // Returns a Promise resolving to { username, appPassword } on success,
-// or rejecting if the popup is blocked or the user cancels.
+// or rejecting if the popup is blocked or the user cancels after retries.
 // ====== end of changes by SE ======
 function openNextcloudLoginPopup(nextcloudBaseUrl) {
+    var MAX_RETRIES = 1;
+    var POLL_MS     = 2000;
+    // Delay before the automatic retry — gives Nextcloud time to finish
+    // provisioning the account that was created during the first OIDC flow.
+    var RETRY_DELAY_MS = 1500;
+
     return new Promise(function(resolve, reject) {
 
-        initiateNextcloudLoginFlowV2(nextcloudBaseUrl).then(function(flow) {
+        function attemptLogin(retriesLeft) {
+            initiateNextcloudLoginFlowV2(nextcloudBaseUrl).then(function(flow) {
 
-            var popup = window.open(
-                flow.loginUrl,
-                'nextcloud_sso_login',
-                'width=900,height=650,scrollbars=yes,resizable=yes,toolbar=no,menubar=no,location=yes'
-            );
+                var popup = window.open(
+                    flow.loginUrl,
+                    'nextcloud_sso_login',
+                    'width=900,height=650,scrollbars=yes,resizable=yes,toolbar=no,menubar=no,location=yes'
+                );
 
-            if (!popup || popup.closed) {
-                reject(new Error(
-                    'The login popup was blocked. Allow popups for this site and try again.'
-                ));
-                return;
-            }
-
-            var POLL_MS = 2000;
-            var poll = setInterval(function() {
-
-                // If the user closed the popup before finishing, stop polling.
-                if (popup.closed) {
-                    clearInterval(poll);
-                    reject(new Error('Login was cancelled.'));
+                if (!popup || popup.closed) {
+                    reject(new Error(
+                        'The login popup was blocked. Allow popups for this site and try again.'
+                    ));
                     return;
                 }
 
-                // Poll the Login Flow v2 endpoint — null means still pending.
-                pollNextcloudLoginFlowV2(flow.pollEndpoint, flow.pollToken).then(function(creds) {
-                    if (creds) {
+                // Guard against a race where the poll resolves at the same tick
+                // the popup-close check fires — only one outcome should win.
+                var settled = false;
+
+                var poll = setInterval(function() {
+
+                    // If the user closed the popup before the poll resolved:
+                    if (popup.closed) {
                         clearInterval(poll);
-                        try { popup.close(); } catch (e) { /* ignore if already closed */ }
-                        resolve({ username: creds.loginName, appPassword: creds.appPassword });
+                        if (settled) { return; }
+                        settled = true;
+
+                        if (retriesLeft > 0) {
+                            // The popup closed without credentials — most commonly the
+                            // first-OIDC-login race where Nextcloud shows "State token
+                            // does not match" before the user account is fully provisioned.
+                            //
+                            // WHY we do NOT auto-open a new popup here:
+                            //   window.open called from inside setTimeout → fetch → .then()
+                            //   is not a direct user gesture. All modern browsers silently
+                            //   block it as a pop-up. The auto-retry would appear to work
+                            //   in testing (DevTools popup-block override on) but fail for
+                            //   real users.
+                            //
+                            // Instead we reject with a sentinel so the call site can show
+                            // a "Retry" button — a real click event that browsers allow
+                            // to open a new popup. The Authentik session is already
+                            // established at this point so the retry popup completes
+                            // instantly without re-entering a password.
+                            console.warn('[NOLAI] Login popup closed without credentials — signalling RETRY_NEEDED.');
+                            reject(new Error('RETRY_NEEDED'));
+                        } else {
+                            reject(new Error('Login was cancelled.'));
+                        }
+                        return;
                     }
-                    // null means the user has not completed login yet — keep polling.
-                }).catch(function(err) {
-                    clearInterval(poll);
-                    try { popup.close(); } catch (e) { /* ignore */ }
-                    reject(err);
-                });
 
-            }, POLL_MS);
+                    // Poll the Login Flow v2 endpoint — null means still pending.
+                    pollNextcloudLoginFlowV2(flow.pollEndpoint, flow.pollToken).then(function(creds) {
+                        if (creds) {
+                            if (settled) { return; }
+                            settled = true;
+                            clearInterval(poll);
+                            try { popup.close(); } catch (e) { /* ignore if already closed */ }
+                            resolve({ username: creds.loginName, appPassword: creds.appPassword });
+                        }
+                        // null means the user has not completed login yet — keep polling.
+                    }).catch(function(err) {
+                        if (settled) { return; }
+                        settled = true;
+                        clearInterval(poll);
+                        try { popup.close(); } catch (e) { /* ignore */ }
+                        reject(err);
+                    });
 
-        }).catch(function(err) {
-            reject(new Error('Could not start login flow: ' + err.message));
-        });
+                }, POLL_MS);
+
+            }).catch(function(err) {
+                reject(new Error('Could not start login flow: ' + err.message));
+            });
+        }
+
+        attemptLogin(MAX_RETRIES);
     });
 }
 
@@ -968,6 +1028,34 @@ function attachNextcloudTopBarButton(container, nextcloudBaseUrl, onLoggedIn) {
         container.appendChild(btn);
     }
 
+    // showRetryButton — shown when the first login attempt closed without
+    // credentials (first-OIDC race condition). Presents a clickable button so
+    // the retry popup opens from a real user gesture (popup blockers require this).
+    // WHY a separate function rather than re-using showSignInButton: we want a
+    // different label and tooltip to communicate that this is a second step, not
+    // a fresh start, so the user is not confused.
+    function showRetryButton() {
+        _chipState.mode = 'idle';
+        container.innerHTML = '';
+        var dark = _nolaiIsDark();
+        var btn = document.createElement('button');
+        btn.textContent = 'Retry sign-in';
+        btn.title = 'First sign-in sometimes needs a second step — click to complete';
+        btn.style.cssText = [
+            'font-size:12px',
+            'font-family:Helvetica,Arial,sans-serif',
+            'padding:3px 10px',
+            'border-radius:12px',
+            'border:1px solid ' + (dark ? 'rgba(0,190,183,0.5)' : 'rgba(0,143,137,0.4)'),
+            'background:' + (dark ? 'rgba(0,190,183,0.15)' : 'rgba(0,143,137,0.08)'),
+            'color:' + (dark ? '#00beb7' : '#00706b'),
+            'cursor:pointer',
+            'white-space:nowrap',
+        ].join(';');
+        btn.addEventListener('click', function() { startLogin(); });
+        container.appendChild(btn);
+    }
+
     // showSpinner — minimal text shown while the Login Flow v2 popup is open.
     // Colour adapts to dark mode so it reads well on the dark toolbar.
     function showSpinner() {
@@ -990,6 +1078,9 @@ function attachNextcloudTopBarButton(container, nextcloudBaseUrl, onLoggedIn) {
     // rounded chip styled with a subtle NOLAI teal tint.
     // Background opacity, border colour, and text colour all adapt to dark mode
     // so the chip remains legible against both light and dark top bars.
+    //
+    // The chip is non-interactive — it displays the signed-in user's name and avatar only.
+    // ====== NOLAI - {- Frontend -} /Sprint 4/ Task 191 ======
     function showUserChip(username, appPassword, displayName) {
         _chipState.mode        = 'signed-in';
         _chipState.username    = username;
@@ -1000,14 +1091,12 @@ function attachNextcloudTopBarButton(container, nextcloudBaseUrl, onLoggedIn) {
         var dark = _nolaiIsDark();
 
         var chip = document.createElement('div');
-        chip.title = 'Signed in to Nextcloud as ' + (displayName || username);
+        chip.title = 'Signed in as ' + (displayName || username);
         chip.style.cssText = [
             'display:inline-flex',
             'align-items:center',
             'gap:7px',
             'padding:3px 11px 3px 3px',
-            // Slightly higher opacity in dark mode so the tint is visible on the
-            // dark toolbar background without being too vivid.
             'background:' + (dark ? 'rgba(0,190,183,0.18)' : 'rgba(0,143,137,0.10)'),
             'border:1px solid ' + (dark ? 'rgba(0,190,183,0.40)' : 'rgba(0,143,137,0.30)'),
             'border-radius:16px',
@@ -1018,7 +1107,9 @@ function attachNextcloudTopBarButton(container, nextcloudBaseUrl, onLoggedIn) {
             'overflow:hidden',
             'cursor:default',
             'user-select:none',
+            'position:relative',
         ].join(';');
+
 
         // Avatar — starts as initials; replaced by real photo once the fetch resolves.
         var avatarImg = document.createElement('img');
@@ -1033,10 +1124,9 @@ function attachNextcloudTopBarButton(container, nextcloudBaseUrl, onLoggedIn) {
         avatarImg.src = makeInitialsAvatar(displayName || username);
         avatarImg.alt = displayName || username;
 
-        // Swap in the real Nextcloud avatar once it has loaded.
         fetchAvatar(username, appPassword).then(function(url) {
             avatarImg.src = url;
-        }).catch(function() { /* keep initials — no visual change needed */ });
+        }).catch(function() { /* keep initials */ });
 
         var nameEl = document.createElement('span');
         nameEl.textContent = displayName || username;
@@ -1044,7 +1134,6 @@ function attachNextcloudTopBarButton(container, nextcloudBaseUrl, onLoggedIn) {
             'overflow:hidden',
             'text-overflow:ellipsis',
             'font-weight:500',
-            // Light text on dark toolbar; dark text on light toolbar.
             'color:' + (dark ? '#e8e8e8' : '#111'),
             'flex:1',
             'min-width:0',
@@ -1054,6 +1143,7 @@ function attachNextcloudTopBarButton(container, nextcloudBaseUrl, onLoggedIn) {
         chip.appendChild(nameEl);
         container.appendChild(chip);
     }
+    // ====== end of changes by SE ======
 
     // confirmLogin — called once credentials are obtained.  Updates the session
     // cache, renders the chip, and fires the caller's onLoggedIn callback.
@@ -1075,9 +1165,17 @@ function attachNextcloudTopBarButton(container, nextcloudBaseUrl, onLoggedIn) {
             }).catch(function() {
                 confirmLogin(creds.username, creds.appPassword, creds.username);
             });
-        }).catch(function() {
-            // User cancelled or popup was blocked — return to the sign-in button.
-            showSignInButton();
+        }).catch(function(err) {
+            if (err && err.message === 'RETRY_NEEDED') {
+                // First-OIDC race: the popup closed without credentials because
+                // Nextcloud showed "State token does not match" before the user
+                // account was fully provisioned. Show a retry button — the user
+                // must click it so the new popup opens from a real gesture.
+                showRetryButton();
+            } else {
+                // User cancelled or popup was blocked — return to the sign-in button.
+                showSignInButton();
+            }
         });
     }
 
@@ -1301,8 +1399,16 @@ function attachNextcloudSessionBanner(container, nextcloudBaseUrl, onLoggedIn) {
         }).catch(function(err) {
             // Re-enable the button so the user can try again without reopening the dialog.
             loginBtn.disabled = false;
-            loginBtn.innerHTML = 'Sign in';
-            setLoggedOut(err.message);
+            if (err && err.message === 'RETRY_NEEDED') {
+                // First-OIDC race — popup closed without credentials. The Authentik
+                // session is now established so a second attempt will complete instantly.
+                loginBtn.innerHTML = 'Retry sign-in';
+                loginBtn.title = 'First sign-in sometimes needs a second step — click to complete';
+                setLoggedOut('Close the popup if you saw an error, then click Retry sign-in.');
+            } else {
+                loginBtn.innerHTML = 'Sign in';
+                setLoggedOut(err.message);
+            }
         });
     });
 
@@ -1847,5 +1953,290 @@ function restoreVersionInNextcloud(versionAbsUrl, nextcloudUrl, username, passwo
         // 201 Created or 204 No Content both indicate success in WebDAV semantics.
         if (resp.status === 201 || resp.status === 204) { return true; }
         throw new Error('Version restore (MOVE) failed: HTTP ' + resp.status);
+    });
+}
+
+// ====== NOLAI - {- Backend -} /Sprint 4/ Task 192 ======
+//
+// searchNextcloudUsers — searches for Nextcloud users by display name.
+//
+// Uses the OCS autocomplete endpoint, which is the same source Nextcloud's
+// own sharing UI queries. It returns both the internal UID (needed for the
+// Share API) and the human-readable display name (shown in the picker UI)
+// in a single call — bridging the SHA-256 UID ↔ Authentik display name gap.
+//
+// Parameters:
+//   query         {string} — partial display name or username to search for
+//   nextcloudUrl  {string} — Nextcloud base URL, e.g. "https://localhost"
+//   username      {string} — authenticated user's Nextcloud UID
+//   password      {string} — app password from Login Flow v2
+//
+// Returns a Promise resolving to an array of { id, label } objects:
+//   id    — the Nextcloud UID (SHA-256 hash) used in the Share API
+//   label — the human-readable display name shown in the picker UI
+// ====== end of changes by SE ======
+function searchNextcloudUsers(query, nextcloudUrl, username, password) {
+    var url = nextcloudUrl +
+        '/ocs/v2.php/core/autocomplete/get' +
+        '?search=' + encodeURIComponent(query) +
+        '&shareTypes[]=0' +
+        '&format=json';
+
+    return fetch(url, {
+        headers: {
+            'Authorization': 'Basic ' + btoa(username + ':' + password),
+            'OCS-APIRequest': 'true',
+        },
+        mode: 'cors',
+        credentials: 'omit',
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        return (data.ocs && data.ocs.data) ? data.ocs.data : [];
+    })
+    .catch(function() { return []; });
+}
+
+// ====== NOLAI - {- Backend -} /Sprint 4/ Task 192 ======
+//
+// shareFileWithUser — shares a Nextcloud file with another user via the OCS Share API.
+//
+// WHY permissions default to 3 (READ + UPDATE):
+//   The goal is collaborative editing — the recipient should be able to save
+//   changes back to the file. READ-only (1) would prevent saves.
+//   We deliberately exclude CREATE/DELETE/SHARE (4/8/16) to limit scope.
+//
+// WHY path uses OCS format (not the WebDAV URL):
+//   The OCS Share API takes a server-relative path from the user's files root,
+//   not the full WebDAV URL. For a file at DAV root, this is just "/{filename}".
+//   For a subfolder, it is "/{folder}/{filename}".
+//
+// Parameters:
+//   filename      {string} — e.g. "MyDiagram.drawio"
+//   targetUid     {string} — Nextcloud UID from searchNextcloudUsers()
+//   nextcloudUrl  {string} — Nextcloud base URL
+//   username      {string} — authenticated user's Nextcloud UID
+//   password      {string} — app password
+//   remotePath    {string} — subfolder, e.g. "/" for root
+//   permissions   {number} — bitmask: 1=read, 2=update; default 3
+//
+// Returns a Promise resolving to the share object on success, or rejecting
+// with an Error on failure.
+// ====== end of changes by SE ======
+function shareFileWithUser(filename, targetUid, nextcloudUrl, username, password, remotePath, permissions) {
+    var perms = (permissions != null) ? permissions : 3; // READ + UPDATE
+
+    // Build the OCS-relative path. Strips leading/trailing slashes from
+    // remotePath so the join is always clean regardless of caller format.
+    var folder = (remotePath || '/').replace(/^\/+|\/+$/g, '');
+    var ocsPath = folder ? ('/' + folder + '/' + filename) : ('/' + filename);
+
+    var body = [
+        'path='      + encodeURIComponent(ocsPath),
+        'shareType=0',                                // 0 = user share
+        'shareWith=' + encodeURIComponent(targetUid),
+        'permissions=' + perms,
+    ].join('&');
+
+    // WHY ?format=json on the URL:
+    //   The OCS API defaults to XML when no format is specified. Every other OCS
+    //   call in this file uses ?format=json; without it here the response body
+    //   starts with "<?xml" and r.json() throws "Unexpected token '<'".
+    return fetch(nextcloudUrl + '/ocs/v2.php/apps/files_sharing/api/v1/shares?format=json', {
+        method: 'POST',
+        headers: {
+            'Authorization':  'Basic ' + btoa(username + ':' + password),
+            'OCS-APIRequest': 'true',
+            'Content-Type':   'application/x-www-form-urlencoded',
+        },
+        mode: 'cors',
+        credentials: 'omit',
+        body: body,
+    })
+    .then(function(r) {
+        if (!r.ok) {
+            return r.json().then(function(err) {
+                throw new Error(
+                    (err.ocs && err.ocs.meta && err.ocs.meta.message)
+                    || ('Share API failed: HTTP ' + r.status)
+                );
+            });
+        }
+        return r.json();
+    })
+    .then(function(data) {
+        if (!data.ocs || !data.ocs.data) {
+            throw new Error('Unexpected Share API response shape');
+        }
+        return data.ocs.data;
+    });
+}
+
+// ====== NOLAI - {- Backend -} /Sprint 4/ Task 191 ======
+//
+// getSharesForFile — fetches the list of user shares for a specific file via
+// the OCS Share API. Used by the My Files dialog to show collaborator avatars
+// next to each file in the list.
+//
+// WHY per-file rather than a single bulk call:
+//   The OCS Share API offers no endpoint that returns all shares for all files
+//   in one request — it must be queried per file path. Calls are fired in
+//   parallel after the list renders so the UI appears instantly and avatars
+//   load progressively without blocking the dialog.
+//
+// Parameters:
+//   filename      {string} — e.g. "MyDiagram.drawio"
+//   remotePath    {string} — subfolder, e.g. "/" for root
+//   nextcloudUrl  {string} — Nextcloud base URL
+//   username      {string} — authenticated user's Nextcloud UID
+//   password      {string} — app password from Login Flow v2
+//
+// Returns a Promise resolving to an array of share objects. Each object has at
+// minimum: share_type (0 = user), share_with (UID), share_with_displayname.
+// Resolves to [] on any error so callers never need to catch.
+// ====== end of changes by SE ======
+function getSharesForFile(filename, remotePath, nextcloudUrl, username, password) {
+    var folder = (remotePath || '/').replace(/^\/+|\/+$/g, '');
+    var ocsPath = folder ? ('/' + folder + '/' + filename) : ('/' + filename);
+
+    return fetch(
+        nextcloudUrl + '/ocs/v2.php/apps/files_sharing/api/v1/shares' +
+        '?path=' + encodeURIComponent(ocsPath) + '&format=json',
+        {
+            headers: {
+                'Authorization':  'Basic ' + btoa(username + ':' + password),
+                'OCS-APIRequest': 'true',
+            },
+            mode: 'cors',
+            credentials: 'omit',
+        }
+    )
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        return (data.ocs && Array.isArray(data.ocs.data)) ? data.ocs.data : [];
+    })
+    .catch(function() { return []; });
+}
+
+// ====== NOLAI - {- Backend -} /Sprint 4/ Task 192 ======
+//
+// removeShare — removes an existing Nextcloud share (any type) by its numeric
+// share ID. Used by both the user-share list (×) and the public link toggle.
+//
+// Parameters:
+//   shareId      — numeric share ID as returned by getSharesForFile / createPublicLink
+//   nextcloudUrl — bare origin, e.g. 'https://localhost'
+//   username     — Nextcloud uid
+//   password     — Nextcloud app password
+//
+// Returns a Promise<void>; rejects on HTTP or OCS-level error.
+// ====== end of changes by SE ======
+function removeShare(shareId, nextcloudUrl, username, password) {
+    return fetch(
+        nextcloudUrl + '/ocs/v2.php/apps/files_sharing/api/v1/shares/' + encodeURIComponent(shareId) + '?format=json',
+        {
+            method: 'DELETE',
+            headers: {
+                'Authorization':  'Basic ' + btoa(username + ':' + password),
+                'OCS-APIRequest': 'true',
+            },
+            mode: 'cors',
+            credentials: 'omit',
+        }
+    )
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        var statusCode = data.ocs && data.ocs.meta && data.ocs.meta.statuscode;
+        if (statusCode !== 100 && statusCode !== 200) {
+            var msg = (data.ocs && data.ocs.meta && data.ocs.meta.message) || 'Unknown error';
+            throw new Error('removeShare failed: ' + msg);
+        }
+    });
+}
+
+// ====== NOLAI - {- Backend -} /Sprint 4/ Task 192 ======
+//
+// getSharesReceivedForFile — returns shares where the *current user* is the
+// recipient (i.e. files shared WITH me from others). This populates the
+// "Others with access" section in the Sharing tab — other users who have been
+// granted access to a file by the owner, or who the owner received the file from.
+//
+// Parameters:
+//   nextcloudUrl — bare origin, e.g. 'https://localhost'
+//   username     — Nextcloud uid (the logged-in user, i.e. the share recipient)
+//   password     — Nextcloud app password
+//   filename     — bare filename to filter by (optional — pass null to get all)
+//   remotePath   — folder path (optional — pass null to skip filter)
+//
+// Returns a Promise<share[]>; resolves to [] on error so the UI degrades
+// gracefully even when the user has not been shared anything.
+// ====== end of changes by SE ======
+function getSharesReceivedForFile(nextcloudUrl, username, password, filename, remotePath) {
+    var url = nextcloudUrl + '/ocs/v2.php/apps/files_sharing/api/v1/shares?shared_with_me=true&format=json';
+
+    return fetch(url, {
+        headers: {
+            'Authorization':  'Basic ' + btoa(username + ':' + password),
+            'OCS-APIRequest': 'true',
+        },
+        mode: 'cors',
+        credentials: 'omit',
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        var shares = (data.ocs && Array.isArray(data.ocs.data)) ? data.ocs.data : [];
+        // Optionally filter to just the requested file.
+        if (filename) {
+            var folder = (remotePath || '/').replace(/^\/+|\/+$/g, '');
+            var ocsPath = folder ? ('/' + folder + '/' + filename) : ('/' + filename);
+            shares = shares.filter(function(s) { return s.path === ocsPath; });
+        }
+        return shares;
+    })
+    .catch(function() { return []; });
+}
+
+// ====== NOLAI - {- Backend -} /Sprint 4/ Task 192 ======
+//
+// updateSharePermissions — changes the permissions integer on an existing user
+// share. Nextcloud permissions: 1=read, 2=update, 4=create, 8=delete, 16=share.
+// For draw.io files the sensible presets are:
+//   Read-only  : 1
+//   Can edit   : 3  (read + update)
+//
+// Parameters:
+//   shareId      — numeric share ID
+//   permissions  — integer permission bitmask (1 or 3 for draw.io use cases)
+//   nextcloudUrl — bare origin
+//   username     — Nextcloud uid
+//   password     — Nextcloud app password
+//
+// Returns a Promise<void>; rejects on error.
+// ====== end of changes by SE ======
+function updateSharePermissions(shareId, permissions, nextcloudUrl, username, password) {
+    var body = new URLSearchParams();
+    body.append('permissions', String(permissions));
+
+    return fetch(
+        nextcloudUrl + '/ocs/v2.php/apps/files_sharing/api/v1/shares/' + encodeURIComponent(shareId) + '?format=json',
+        {
+            method: 'PUT',
+            headers: {
+                'Authorization':  'Basic ' + btoa(username + ':' + password),
+                'OCS-APIRequest': 'true',
+                'Content-Type':   'application/x-www-form-urlencoded',
+            },
+            body: body.toString(),
+            mode: 'cors',
+            credentials: 'omit',
+        }
+    )
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        var statusCode = data.ocs && data.ocs.meta && data.ocs.meta.statuscode;
+        if (statusCode !== 100 && statusCode !== 200) {
+            var msg = (data.ocs && data.ocs.meta && data.ocs.meta.message) || 'Unknown error';
+            throw new Error('updateSharePermissions failed: ' + msg);
+        }
     });
 }
