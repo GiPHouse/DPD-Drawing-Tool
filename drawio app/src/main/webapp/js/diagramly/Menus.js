@@ -941,6 +941,13 @@
 
 			var bound = nolaiGetCurrentNextcloudFile();
 			var session = (typeof _nextcloudSessionCache !== 'undefined') ? _nextcloudSessionCache : null;
+			var current = editorUi.getCurrentFile();
+
+			if (current != null && typeof current.isEditable === 'function' && !current.isEditable())
+			{
+				editorUi.handleError({message: 'This file is read only.'});
+				return true;
+			}
 
 			if (!bound || !session || !session.username || !session.password)
 			{
@@ -983,12 +990,10 @@
 					}
 					else
 					{
-						// Quick save failed — the file may have been deleted or
-						// renamed on the server. Drop the binding and let the
-						// next action open the Save As dialog so the user can
-						// pick a new name.
+						// Quick save failed. In the read-only case we want a clear
+						// message instead of the generic moved/deleted fallback.
 						if (typeof nolaiClearCurrentNextcloudFile === 'function') { nolaiClearCurrentNextcloudFile(); }
-						editorUi.handleError({message: 'Save failed. The file may have been moved or deleted on Nextcloud — please use Save As.'});
+						editorUi.handleError({message: 'Save failed. Your access level is: "read only". Please use "Save As" to save a copy of this diagram to save edits.'});
 					}
 				})
 				.catch(function(err)
@@ -1266,6 +1271,21 @@
 		editorUi.actions.addAction('My Files', function()
 		{
 			var nolaiColor = '#008f89';
+			var isDark = Editor.isDarkMode();
+			var pageBg = isDark ? '#1f1f1f' : '#ffffff';
+			var panelBg = isDark ? '#252525' : '#ffffff';
+			var panelAltBg = isDark ? '#2c2c2c' : '#fafafa';
+			var rowBg = isDark ? '#2a2a2a' : '#ffffff';
+			var rowAltBg = isDark ? '#222222' : '#f9f9f9';
+			var borderColor = isDark ? '#444' : '#e0e0e0';
+			var softerBorder = isDark ? '#3a3a3a' : '#ddd';
+			var textColor = isDark ? '#e6e6e6' : '#333';
+			var mutedText = isDark ? '#a8a8a8' : '#888';
+			var titleColor = isDark ? '#8ddad3' : nolaiColor;
+			var hoverRow = isDark ? 'rgba(0,143,137,0.22)' : 'rgba(0,0,0,0.04)';
+			var shadow = isDark ? '0 2px 8px rgba(0,0,0,0.45)' : '0 2px 8px rgba(0,0,0,0.10)';
+			var btnBg = isDark ? '#2f2f2f' : '#fff';
+			var btnText = isDark ? '#e6e6e6' : '#333';
 			var nextcloudBaseUrl = 'https://localhost';
 			var nextcloudUsername = null;
 			var nextcloudPassword = null;
@@ -1316,7 +1336,7 @@
 							'border-radius:50%', 'background:' + nolaiColor, 'color:#fff',
 							'font-size:' + Math.floor(sz * 0.5) + 'px', 'font-weight:bold',
 							'display:flex', 'align-items:center', 'justify-content:center',
-							'border:2px solid #fff', 'margin-left:' + (marginLeft || 0) + 'px',
+							'border:2px solid ' + (isDark ? '#1f1f1f' : '#fff'), 'margin-left:' + (marginLeft || 0) + 'px',
 							'cursor:default', 'flex-shrink:0', 'font-family:Helvetica,Arial,sans-serif',
 						].join(';');
 						return chip;
@@ -1324,7 +1344,7 @@
 
 					// ---- Dialog root ----
 					var root = document.createElement('div');
-					root.style.cssText = 'display:flex;flex-direction:column;height:520px;font-family:Helvetica,Arial,sans-serif;color:#333;';
+					root.style.cssText = 'display:flex;flex-direction:column;height:520px;font-family:Helvetica,Arial,sans-serif;color:' + textColor + ';background:' + pageBg + ';';
 
 					var bodyRow = document.createElement('div');
 					bodyRow.style.cssText = 'display:flex;flex:1;overflow:hidden;min-height:0;';
@@ -1332,26 +1352,26 @@
 
 					// ---- Left panel: file list ----
 					var leftPanel = document.createElement('div');
-					leftPanel.style.cssText = 'width:300px;flex-shrink:0;display:flex;flex-direction:column;border-right:1px solid #e0e0e0;';
+					leftPanel.style.cssText = 'width:300px;flex-shrink:0;display:flex;flex-direction:column;border-right:1px solid ' + borderColor + ';background:' + panelBg + ';';
 					bodyRow.appendChild(leftPanel);
 
 					var leftHdr = document.createElement('div');
-					leftHdr.style.cssText = 'padding:14px 16px 10px;font-size:14px;font-weight:600;color:' + nolaiColor + ';border-bottom:1px solid #e0e0e0;flex-shrink:0;';
+					leftHdr.style.cssText = 'padding:14px 16px 10px;font-size:14px;font-weight:600;color:' + titleColor + ';border-bottom:1px solid ' + borderColor + ';flex-shrink:0;';
 					leftHdr.innerHTML = 'Files <span style="color:#999;font-weight:400;font-size:12px;">.drawio only</span>';
 					leftPanel.appendChild(leftHdr);
 
 					var fileListEl = document.createElement('div');
-					fileListEl.style.cssText = 'flex:1;overflow-y:auto;padding:4px 0;outline:none;';
+					fileListEl.style.cssText = 'flex:1;overflow-y:auto;padding:4px 0;outline:none;background:' + panelBg + ';';
 					fileListEl.setAttribute('tabindex', '0');
 					leftPanel.appendChild(fileListEl);
 
 					// ---- Right panel: detail pane ----
 					var rightPanel = document.createElement('div');
-					rightPanel.style.cssText = 'flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;';
+					rightPanel.style.cssText = 'flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;background:' + panelBg + ';';
 					bodyRow.appendChild(rightPanel);
 
 					var noSelEl = document.createElement('div');
-					noSelEl.style.cssText = 'flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;color:#bbb;';
+					noSelEl.style.cssText = 'flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;color:' + mutedText + ';';
 					noSelEl.innerHTML = '<div style="font-size:40px;opacity:0.25;">\uD83D\uDCC4</div><div style="font-size:13px;">Select a file to see details</div>';
 					rightPanel.appendChild(noSelEl);
 
@@ -1360,7 +1380,7 @@
 					rightPanel.appendChild(detailEl);
 
 					var dHdr = document.createElement('div');
-					dHdr.style.cssText = 'padding:14px 16px 10px;border-bottom:1px solid #e0e0e0;flex-shrink:0;';
+					dHdr.style.cssText = 'padding:14px 16px 10px;border-bottom:1px solid ' + borderColor + ';flex-shrink:0;background:' + panelBg + ';';
 					detailEl.appendChild(dHdr);
 
 					var dFilename = document.createElement('div');
@@ -1369,7 +1389,7 @@
 
 					// ---- Tab bar ----
 					var tabBar = document.createElement('div');
-					tabBar.style.cssText = 'display:flex;border-bottom:1px solid #e0e0e0;flex-shrink:0;background:#fafafa;';
+					tabBar.style.cssText = 'display:flex;border-bottom:1px solid ' + borderColor + ';flex-shrink:0;background:' + panelAltBg + ';';
 					detailEl.appendChild(tabBar);
 
 					function makeTabBtn(label, tabId)
@@ -1377,7 +1397,7 @@
 						var btn = document.createElement('button');
 						btn.textContent = label;
 						btn.dataset.tabId = tabId;
-						btn.style.cssText = 'padding:9px 16px;border:none;background:transparent;cursor:pointer;font-size:13px;color:#555;border-bottom:2px solid transparent;margin-bottom:-1px;font-family:Helvetica,Arial,sans-serif;';
+						btn.style.cssText = 'padding:9px 16px;border:none;background:transparent;cursor:pointer;font-size:13px;color:' + (isDark ? '#cfcfcf' : '#555') + ';border-bottom:2px solid transparent;margin-bottom:-1px;font-family:Helvetica,Arial,sans-serif;';
 						btn.onclick = function() { switchTab(tabId); };
 						tabBar.appendChild(btn);
 						return btn;
@@ -1414,7 +1434,7 @@
 
 					// ---- Bottom button row ----
 					var btnRow = document.createElement('div');
-					btnRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-top:1px solid #e0e0e0;flex-shrink:0;background:#fafafa;';
+					btnRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-top:1px solid ' + borderColor + ';flex-shrink:0;background:' + panelAltBg + ';';
 					root.appendChild(btnRow);
 
 					var deleteBtn = document.createElement('button');
@@ -1429,7 +1449,7 @@
 
 					var closeBtn = document.createElement('button');
 					closeBtn.textContent = 'Close';
-					closeBtn.style.cssText = 'padding:8px 14px;border:1px solid #ccc;border-radius:4px;background:#fff;color:#333;cursor:pointer;font-size:13px;font-family:Helvetica,Arial,sans-serif;';
+					closeBtn.style.cssText = 'padding:8px 14px;border:1px solid ' + softerBorder + ';border-radius:4px;background:' + btnBg + ';color:' + btnText + ';cursor:pointer;font-size:13px;font-family:Helvetica,Arial,sans-serif;';
 					closeBtn.onclick = function() { editorUi.hideDialog(); };
 					rightBtns.appendChild(closeBtn);
 
@@ -1445,7 +1465,7 @@
 						if (selectedRowEl) { selectedRowEl.style.background = ''; }
 						selectedFile  = file;
 						selectedRowEl = rowEl;
-						rowEl.style.background = 'rgba(0,143,137,0.12)';
+						rowEl.style.background = hoverRow;
 						loadBtn.disabled   = false; loadBtn.style.opacity   = '1';
 						deleteBtn.disabled = false; deleteBtn.style.opacity = '1';
 						noSelEl.style.display   = 'none';
@@ -1453,7 +1473,7 @@
 						dFilename.textContent   = file.displayPath;
 						sharingPane.innerHTML   = '';
 						var ph = document.createElement('div');
-						ph.style.cssText = 'color:#aaa;font-size:12px;';
+						ph.style.cssText = 'color:' + mutedText + ';font-size:12px;';
 						ph.textContent = 'Loading sharing info\u2026';
 						sharingPane.appendChild(ph);
 						versionsLoadedFor = null;
@@ -1559,7 +1579,7 @@
 						avatarContainer.style.cssText = 'display:flex;align-items:center;flex-shrink:0;';
 						row.appendChild(avatarContainer);
 
-						row.onmouseover = function() { if (row !== selectedRowEl) { row.style.background = 'rgba(0,0,0,0.04)'; } };
+						row.onmouseover = function() { if (row !== selectedRowEl) { row.style.background = hoverRow; } };
 						row.onmouseout  = function() { if (row !== selectedRowEl) { row.style.background = ''; } };
 						row.onclick     = function() { selectFile(file, row); };
 						row.ondblclick  = function() { if (loadBtn && !loadBtn.disabled) { loadBtn.onclick(); } };
@@ -1616,19 +1636,19 @@
 						// -- Share with people --
 						var peopleSec = document.createElement('div');
 						var peopleLabel = document.createElement('div');
-						peopleLabel.style.cssText = 'font-size:13px;font-weight:600;color:#333;margin-bottom:8px;';
+						peopleLabel.style.cssText = 'font-size:13px;font-weight:600;color:' + textColor + ';margin-bottom:8px;';
 						peopleLabel.textContent = 'Share with people';
 						peopleSec.appendChild(peopleLabel);
 
 						var searchInput = document.createElement('input');
 						searchInput.type = 'text'; searchInput.placeholder = 'Search by name or email\u2026';
-						searchInput.style.cssText = 'width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid #ddd;border-radius:4px;font-size:13px;font-family:Helvetica,Arial,sans-serif;outline:none;margin-bottom:6px;';
+						searchInput.style.cssText = 'width:100%;box-sizing:border-box;padding:7px 10px;border:1px solid ' + softerBorder + ';border-radius:4px;font-size:13px;font-family:Helvetica,Arial,sans-serif;outline:none;margin-bottom:6px;background:' + panelBg + ';color:' + textColor + ';';
 						searchInput.onfocus = function() { searchInput.style.borderColor = nolaiColor; };
-						searchInput.onblur  = function() { searchInput.style.borderColor = '#ddd'; setTimeout(function() { searchDrop.style.display = 'none'; }, 200); };
+						searchInput.onblur  = function() { searchInput.style.borderColor = softerBorder; setTimeout(function() { searchDrop.style.display = 'none'; }, 200); };
 						peopleSec.appendChild(searchInput);
 
 						var searchDrop = document.createElement('div');
-						searchDrop.style.cssText = 'border:1px solid #ddd;border-radius:4px;max-height:130px;overflow-y:auto;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,0.1);display:none;margin-bottom:8px;';
+						searchDrop.style.cssText = 'border:1px solid ' + softerBorder + ';border-radius:4px;max-height:130px;overflow-y:auto;background:' + panelBg + ';box-shadow:' + shadow + ';display:none;margin-bottom:8px;';
 						peopleSec.appendChild(searchDrop);
 
 						var searchTimer = null;
@@ -1647,7 +1667,7 @@
 										if (!filtered.length)
 										{
 											var none = document.createElement('div');
-											none.style.cssText = 'padding:8px 12px;color:#999;font-size:12px;';
+											none.style.cssText = 'padding:8px 12px;color:' + mutedText + ';font-size:12px;';
 											none.textContent = 'No users found';
 											searchDrop.appendChild(none);
 										}
@@ -1656,13 +1676,13 @@
 											var label = u.label || u.id;
 											var info  = u.shareWithDisplayNameUnique || u.subline || '';
 											var dr = document.createElement('div');
-											dr.style.cssText = 'display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;font-size:13px;';
-											dr.onmouseover = function() { dr.style.background = '#f0f9f8'; };
+											dr.style.cssText = 'display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;font-size:13px;color:' + textColor + ';';
+											dr.onmouseover = function() { dr.style.background = hoverRow; };
 											dr.onmouseout  = function() { dr.style.background = ''; };
 											dr.appendChild(makeChip(label, 28, 0));
 											var dt = document.createElement('div');
-											dt.innerHTML = '<div style="font-weight:500;">' + label + '</div>' +
-												(info && info !== label ? '<div style="font-size:11px;color:#888;">' + info + '</div>' : '');
+											dt.innerHTML = '<div style="font-weight:500;color:' + textColor + ';">' + label + '</div>' +
+												(info && info !== label ? '<div style="font-size:11px;color:' + mutedText + ';">' + info + '</div>' : '');
 											dr.appendChild(dt);
 											dr.onclick = function()
 											{
@@ -1684,22 +1704,22 @@
 						if (!userShares.length)
 						{
 							var noShareEl = document.createElement('div');
-							noShareEl.style.cssText = 'color:#aaa;font-size:12px;padding:2px 0;';
+								noShareEl.style.cssText = 'color:' + mutedText + ';font-size:12px;padding:2px 0;';
 							noShareEl.textContent = 'No users have access yet.';
 							sharesList.appendChild(noShareEl);
 						}
 						userShares.forEach(function(share)
 						{
 							var sRow = document.createElement('div');
-							sRow.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid #eee;border-radius:6px;background:#fff;';
+								sRow.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid ' + softerBorder + ';border-radius:6px;background:' + rowBg + ';';
 							sRow.appendChild(makeChip(share.share_with_displayname || share.share_with, 30, 0));
 							var sInfo = document.createElement('div');
 							sInfo.style.cssText = 'flex:1;min-width:0;';
-							sInfo.innerHTML = '<div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (share.share_with_displayname || share.share_with) + '</div>' +
-								'<div style="font-size:11px;color:#888;">' + (share.share_with_additional_info || share.share_with) + '</div>';
+								sInfo.innerHTML = '<div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:' + textColor + ';">' + (share.share_with_displayname || share.share_with) + '</div>' +
+									'<div style="font-size:11px;color:' + mutedText + ';">' + (share.share_with_additional_info || share.share_with) + '</div>';
 							sRow.appendChild(sInfo);
 							var permSel = document.createElement('select');
-							permSel.style.cssText = 'font-size:12px;padding:3px 6px;border:1px solid #ddd;border-radius:4px;color:#555;cursor:pointer;font-family:Helvetica,Arial,sans-serif;';
+								permSel.style.cssText = 'font-size:12px;padding:3px 6px;border:1px solid ' + softerBorder + ';border-radius:4px;color:' + textColor + ';cursor:pointer;font-family:Helvetica,Arial,sans-serif;background:' + panelBg + ';';
 							[['Can edit', '3'], ['Read only', '1']].forEach(function(opt)
 							{
 								var o = document.createElement('option');
@@ -1715,9 +1735,9 @@
 							sRow.appendChild(permSel);
 							var rmBtn = document.createElement('button');
 							rmBtn.textContent = '\u00D7'; rmBtn.title = 'Remove access';
-							rmBtn.style.cssText = 'padding:2px 8px;border:none;background:transparent;color:#bbb;cursor:pointer;font-size:18px;line-height:1;border-radius:4px;';
+							rmBtn.style.cssText = 'padding:2px 8px;border:none;background:transparent;color:' + mutedText + ';cursor:pointer;font-size:18px;line-height:1;border-radius:4px;';
 							rmBtn.onmouseover = function() { rmBtn.style.color = '#e74c3c'; };
-							rmBtn.onmouseout  = function() { rmBtn.style.color = '#bbb'; };
+							rmBtn.onmouseout  = function() { rmBtn.style.color = mutedText; };
 							rmBtn.onclick = function()
 							{
 								rmBtn.disabled = true;
@@ -1737,17 +1757,17 @@
 							var othersSec = document.createElement('div');
 							var othersExpanded = false;
 							var othersToggle = document.createElement('button');
-							othersToggle.style.cssText = 'background:none;border:none;cursor:pointer;font-size:13px;color:#555;padding:0;display:flex;align-items:center;gap:4px;font-family:Helvetica,Arial,sans-serif;';
+							othersToggle.style.cssText = 'background:none;border:none;cursor:pointer;font-size:13px;color:' + textColor + ';padding:0;display:flex;align-items:center;gap:4px;font-family:Helvetica,Arial,sans-serif;';
 							othersToggle.innerHTML = '\u25B6 Others with access (' + receivedShares.length + ')';
 							var othersList = document.createElement('div');
 							othersList.style.cssText = 'display:none;flex-direction:column;gap:4px;margin-top:8px;';
 							receivedShares.forEach(function(share)
 							{
 								var oRow = document.createElement('div');
-								oRow.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid #eee;border-radius:6px;background:#f9f9f9;';
+								oRow.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid ' + softerBorder + ';border-radius:6px;background:' + rowAltBg + ';';
 								oRow.appendChild(makeChip(share.displayname_owner || share.uid_owner, 28, 0));
 								var oInfo = document.createElement('div');
-								oInfo.innerHTML = '<div style="font-size:13px;">' + (share.displayname_owner || share.uid_owner) + '</div><div style="font-size:11px;color:#888;">Shared with you</div>';
+								oInfo.innerHTML = '<div style="font-size:13px;color:' + textColor + ';">' + (share.displayname_owner || share.uid_owner) + '</div><div style="font-size:11px;color:' + mutedText + ';">Shared with you</div>';
 								oRow.appendChild(oInfo);
 								othersList.appendChild(oRow);
 							});
@@ -1803,7 +1823,7 @@
 						versionsPane.innerHTML = '';
 						versionsPane.style.cssText = 'display:flex;flex-direction:column;flex:1;overflow:hidden;';
 						var vLoad = document.createElement('div');
-						vLoad.style.cssText = 'padding:16px;color:#888;font-size:13px;';
+								vLoad.style.cssText = 'padding:16px;color:' + mutedText + ';font-size:13px;';
 						vLoad.textContent = 'Loading version history\u2026';
 						versionsPane.appendChild(vLoad);
 
@@ -1819,7 +1839,7 @@
 								{
 									versionsPane.innerHTML = '';
 									var noId = document.createElement('div');
-									noId.style.cssText = 'padding:14px;background:#fff8e1;border:1px solid #ffb300;border-radius:6px;color:#5d4037;font-size:13px;margin:12px;';
+									noId.style.cssText = 'padding:14px;background:' + (isDark ? '#2d2200' : '#fff8e1') + ';border:1px solid #ffb300;border-radius:6px;color:' + (isDark ? '#ffd54f' : '#5d4037') + ';font-size:13px;margin:12px;';
 									noId.textContent = 'File not found on Nextcloud \u2014 save it first to enable version history.';
 									versionsPane.appendChild(noId); return null;
 								}
@@ -1834,31 +1854,31 @@
 								if (!result.versions || !result.versions.length)
 								{
 									var emEl = document.createElement('div');
-									emEl.style.cssText = 'padding:16px;color:#888;font-size:13px;';
-									emEl.innerHTML = 'No prior versions yet.<br><span style="color:#aaa;font-size:11px;">Save the file again to create the first version.</span>';
+									emEl.style.cssText = 'padding:16px;color:' + mutedText + ';font-size:13px;';
+									emEl.innerHTML = 'No prior versions yet.<br><span style="color:' + mutedText + ';font-size:11px;">Save the file again to create the first version.</span>';
 									versionsPane.appendChild(emEl); return;
 								}
 								var vBody = document.createElement('div');
 								vBody.style.cssText = 'display:flex;flex:1;overflow:hidden;min-height:0;';
 								versionsPane.appendChild(vBody);
 								var vList = document.createElement('div');
-								vList.style.cssText = 'width:190px;flex-shrink:0;border-right:1px solid #e0e0e0;overflow-y:auto;background:#fafafa;';
+								vList.style.cssText = 'width:190px;flex-shrink:0;border-right:1px solid ' + borderColor + ';overflow-y:auto;background:' + panelAltBg + ';';
 								vBody.appendChild(vList);
 								var vPreview = document.createElement('div');
-								vPreview.style.cssText = 'flex:1;position:relative;overflow:hidden;background:#fff;';
+								vPreview.style.cssText = 'flex:1;position:relative;overflow:hidden;background:' + panelBg + ';';
 								vBody.appendChild(vPreview);
 								var vMsg = document.createElement('div');
-								vMsg.style.cssText = 'position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);color:#888;font-size:12px;pointer-events:none;text-align:center;';
+								vMsg.style.cssText = 'position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);color:' + mutedText + ';font-size:12px;pointer-events:none;text-align:center;';
 								vMsg.textContent = 'Select a version to preview';
 								vPreview.appendChild(vMsg);
 								var vGraph = new Graph(vPreview);
 								vGraph.setTooltips(false); vGraph.setEnabled(false); vGraph.setPanning(true);
 								vGraph.panningHandler.ignoreCell = true; vGraph.panningHandler.useLeftButtonForPanning = true;
 								var vFooter = document.createElement('div');
-								vFooter.style.cssText = 'display:flex;align-items:center;padding:8px 12px;border-top:1px solid #e0e0e0;flex-shrink:0;gap:8px;';
+								vFooter.style.cssText = 'display:flex;align-items:center;padding:8px 12px;border-top:1px solid ' + borderColor + ';flex-shrink:0;gap:8px;background:' + panelAltBg + ';';
 								versionsPane.appendChild(vFooter);
 								var vStatusLine = document.createElement('span');
-								vStatusLine.style.cssText = 'flex:1;font-size:12px;color:#666;';
+								vStatusLine.style.cssText = 'flex:1;font-size:12px;color:' + mutedText + ';';
 								vFooter.appendChild(vStatusLine);
 								var restoreBtn = document.createElement('button');
 								restoreBtn.textContent = 'Restore this version';
@@ -1893,10 +1913,10 @@
 								result.versions.forEach(function(v, idx)
 								{
 									var vRow = document.createElement('div');
-									vRow.style.cssText = 'padding:8px 10px;border-bottom:1px solid #eee;cursor:pointer;font-size:11px;line-height:1.35;';
-									vRow.innerHTML = '<div style="font-weight:600;">' + (v.mtime ? new Date(v.mtime).toLocaleString() : '(unknown)') + '</div>' +
-										'<div style="opacity:0.8;">' + formatRelative(v.mtime) + (v.size ? ' \u00B7 ' + formatBytes(v.size) : '') + '</div>';
-									vRow.onmouseover = function() { if (vRow !== selVRow) { vRow.style.background = '#eef7f7'; } };
+									vRow.style.cssText = 'padding:8px 10px;border-bottom:1px solid ' + softerBorder + ';cursor:pointer;font-size:11px;line-height:1.35;color:' + textColor + ';';
+									vRow.innerHTML = '<div style="font-weight:600;color:' + textColor + ';">' + (v.mtime ? new Date(v.mtime).toLocaleString() : '(unknown)') + '</div>' +
+										'<div style="opacity:0.8;color:' + mutedText + ';">' + formatRelative(v.mtime) + (v.size ? ' \u00B7 ' + formatBytes(v.size) : '') + '</div>';
+									vRow.onmouseover = function() { if (vRow !== selVRow) { vRow.style.background = hoverRow; } };
 									vRow.onmouseout  = function() { if (vRow !== selVRow) { vRow.style.background = ''; } };
 									vRow.onclick = function() { selectVersion(v, vRow); };
 									vList.appendChild(vRow);
@@ -1933,7 +1953,7 @@
 							{
 								versionsPane.innerHTML = '';
 								var errEl = document.createElement('div');
-								errEl.style.cssText = 'padding:12px;background:#fdecea;border-radius:6px;color:#b71c1c;font-size:12px;margin:12px;';
+									errEl.style.cssText = 'padding:12px;background:' + (isDark ? '#351b1b' : '#fdecea') + ';border-radius:6px;color:' + (isDark ? '#ffb4b4' : '#b71c1c') + ';font-size:12px;margin:12px;';
 								errEl.textContent = 'Could not load versions: ' + err.message;
 								versionsPane.appendChild(errEl);
 							});
