@@ -836,13 +836,24 @@ function openNextcloudLoginPopup(nextcloudBaseUrl) {
                         settled = true;
 
                         if (retriesLeft > 0) {
-                            // Automatic retry — OIDC session is established, a new
-                            // Login Flow v2 will complete without a password prompt.
-                            console.warn(
-                                '[NOLAI] Login popup closed without credentials — ' +
-                                'retrying automatically (' + retriesLeft + ' attempt(s) left).'
-                            );
-                            setTimeout(function() { attemptLogin(retriesLeft - 1); }, RETRY_DELAY_MS);
+                            // The popup closed without credentials — most commonly the
+                            // first-OIDC-login race where Nextcloud shows "State token
+                            // does not match" before the user account is fully provisioned.
+                            //
+                            // WHY we do NOT auto-open a new popup here:
+                            //   window.open called from inside setTimeout → fetch → .then()
+                            //   is not a direct user gesture. All modern browsers silently
+                            //   block it as a pop-up. The auto-retry would appear to work
+                            //   in testing (DevTools popup-block override on) but fail for
+                            //   real users.
+                            //
+                            // Instead we reject with a sentinel so the call site can show
+                            // a "Retry" button — a real click event that browsers allow
+                            // to open a new popup. The Authentik session is already
+                            // established at this point so the retry popup completes
+                            // instantly without re-entering a password.
+                            console.warn('[NOLAI] Login popup closed without credentials — signalling RETRY_NEEDED.');
+                            reject(new Error('RETRY_NEEDED'));
                         } else {
                             reject(new Error('Login was cancelled.'));
                         }
@@ -1017,6 +1028,34 @@ function attachNextcloudTopBarButton(container, nextcloudBaseUrl, onLoggedIn) {
         container.appendChild(btn);
     }
 
+    // showRetryButton — shown when the first login attempt closed without
+    // credentials (first-OIDC race condition). Presents a clickable button so
+    // the retry popup opens from a real user gesture (popup blockers require this).
+    // WHY a separate function rather than re-using showSignInButton: we want a
+    // different label and tooltip to communicate that this is a second step, not
+    // a fresh start, so the user is not confused.
+    function showRetryButton() {
+        _chipState.mode = 'idle';
+        container.innerHTML = '';
+        var dark = _nolaiIsDark();
+        var btn = document.createElement('button');
+        btn.textContent = 'Retry sign-in';
+        btn.title = 'First sign-in sometimes needs a second step — click to complete';
+        btn.style.cssText = [
+            'font-size:12px',
+            'font-family:Helvetica,Arial,sans-serif',
+            'padding:3px 10px',
+            'border-radius:12px',
+            'border:1px solid ' + (dark ? 'rgba(0,190,183,0.5)' : 'rgba(0,143,137,0.4)'),
+            'background:' + (dark ? 'rgba(0,190,183,0.15)' : 'rgba(0,143,137,0.08)'),
+            'color:' + (dark ? '#00beb7' : '#00706b'),
+            'cursor:pointer',
+            'white-space:nowrap',
+        ].join(';');
+        btn.addEventListener('click', function() { startLogin(); });
+        container.appendChild(btn);
+    }
+
     // showSpinner — minimal text shown while the Login Flow v2 popup is open.
     // Colour adapts to dark mode so it reads well on the dark toolbar.
     function showSpinner() {
@@ -1040,10 +1079,7 @@ function attachNextcloudTopBarButton(container, nextcloudBaseUrl, onLoggedIn) {
     // Background opacity, border colour, and text colour all adapt to dark mode
     // so the chip remains legible against both light and dark top bars.
     //
-    // Clicking the chip opens a small dropdown with the user's display name and
-    // a "Sign out" button that clears the session cache and resets to the
-    // sign-in state.  A single document click listener dismisses the dropdown
-    // when the user clicks anywhere else.
+    // The chip is non-interactive — it displays the signed-in user's name and avatar only.
     // ====== NOLAI - {- Frontend -} /Sprint 4/ Task 191 ======
     function showUserChip(username, appPassword, displayName) {
         _chipState.mode        = 'signed-in';
@@ -1055,7 +1091,7 @@ function attachNextcloudTopBarButton(container, nextcloudBaseUrl, onLoggedIn) {
         var dark = _nolaiIsDark();
 
         var chip = document.createElement('div');
-        chip.title = 'Signed in as ' + (displayName || username) + ' — click to sign out';
+        chip.title = 'Signed in as ' + (displayName || username);
         chip.style.cssText = [
             'display:inline-flex',
             'align-items:center',
@@ -1069,13 +1105,11 @@ function attachNextcloudTopBarButton(container, nextcloudBaseUrl, onLoggedIn) {
             'max-width:220px',
             'white-space:nowrap',
             'overflow:hidden',
-            'cursor:pointer',
+            'cursor:default',
             'user-select:none',
             'position:relative',
         ].join(';');
 
-        chip.addEventListener('mouseover', function() { chip.style.opacity = '0.85'; });
-        chip.addEventListener('mouseout',  function() { chip.style.opacity = '1'; });
 
         // Avatar — starts as initials; replaced by real photo once the fetch resolves.
         var avatarImg = document.createElement('img');
@@ -1108,186 +1142,6 @@ function attachNextcloudTopBarButton(container, nextcloudBaseUrl, onLoggedIn) {
         chip.appendChild(avatarImg);
         chip.appendChild(nameEl);
         container.appendChild(chip);
-
-        // ---- Dropdown menu ----
-        // showDropdown — builds and positions a small card below the chip
-        // containing the full display name and a Sign out button.
-        // WHY build on each click rather than toggling: keeps the DOM clean and
-        // ensures dark-mode colours are always fresh.
-        var dropdown = null;
-
-        function removeDropdown() {
-            if (dropdown && dropdown.parentNode) { dropdown.parentNode.removeChild(dropdown); }
-            dropdown = null;
-            document.removeEventListener('click', onDocClick, true);
-        }
-
-        function onDocClick(evt) {
-            // Dismiss if the click is outside the chip
-            if (!chip.contains(evt.target)) { removeDropdown(); }
-        }
-
-        function showDropdown() {
-            if (dropdown) { removeDropdown(); return; } // toggle off
-
-            var darkNow = _nolaiIsDark();
-            dropdown = document.createElement('div');
-            dropdown.style.cssText = [
-                'position:fixed',
-                'z-index:99999',
-                'background:' + (darkNow ? '#2a2a2a' : '#fff'),
-                'border:1px solid ' + (darkNow ? '#444' : '#ddd'),
-                'border-radius:8px',
-                'box-shadow:0 4px 16px rgba(0,0,0,0.18)',
-                'padding:10px 0 6px',
-                'min-width:190px',
-                'font-family:Helvetica,Arial,sans-serif',
-            ].join(';');
-
-            // User info header
-            var userRow = document.createElement('div');
-            userRow.style.cssText = 'display:flex;align-items:center;gap:9px;padding:2px 14px 10px;border-bottom:1px solid ' + (darkNow ? '#3a3a3a' : '#eee') + ';';
-
-            var dropAvatar = document.createElement('img');
-            dropAvatar.src = avatarImg.src; // reuse already-loaded src
-            dropAvatar.style.cssText = 'width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0;';
-            userRow.appendChild(dropAvatar);
-
-            var userInfo = document.createElement('div');
-            userInfo.style.cssText = 'min-width:0;';
-            userInfo.innerHTML =
-                '<div style="font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:' + (darkNow ? '#eee' : '#222') + ';">' + (displayName || username) + '</div>' +
-                '<div style="font-size:11px;color:' + (darkNow ? '#888' : '#999') + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Nextcloud</div>';
-            userRow.appendChild(userInfo);
-            dropdown.appendChild(userRow);
-
-            // Sign out button
-            var signOutBtn = document.createElement('button');
-            signOutBtn.textContent = 'Sign out';
-            signOutBtn.style.cssText = [
-                'display:block',
-                'width:100%',
-                'text-align:left',
-                'padding:8px 14px',
-                'border:none',
-                'background:transparent',
-                'color:' + (darkNow ? '#ff6b6b' : '#c0392b'),
-                'font-size:13px',
-                'font-family:Helvetica,Arial,sans-serif',
-                'cursor:pointer',
-                'margin-top:4px',
-            ].join(';');
-            signOutBtn.addEventListener('mouseover', function() { signOutBtn.style.background = darkNow ? 'rgba(255,100,100,0.12)' : 'rgba(192,57,43,0.08)'; });
-            signOutBtn.addEventListener('mouseout',  function() { signOutBtn.style.background = 'transparent'; });
-            signOutBtn.addEventListener('click', function(evt) {
-                evt.stopPropagation();
-                removeDropdown();
-                // ====== NOLAI - {- Backend -} /Sprint 4/ Task 191 ======
-                // Sign out from both Nextcloud (local cache) and Authentik (server session).
-                //
-                // WHY two steps:
-                //   1. Clearing the local cache stops draw.io sending the old app password on
-                //      future requests, so the next Nextcloud action requires re-authentication.
-                //   2. Hitting Authentik's end_session endpoint invalidates the server-side OIDC
-                //      session so the browser's Authentik cookie is cleared. Without this step
-                //      the Login Flow v2 popup would silently re-authenticate the same user
-                //      instead of showing the Authentik login screen.
-                //
-                // WHY a popup (not a redirect):
-                //   draw.io is a single-page app; navigating the main window away would destroy
-                //   all unsaved work. A small popup completes the server-side logout then closes
-                //   itself, leaving the editor intact.
-                //
-                // The Authentik end_session URL follows the pattern:
-                //   http://authentik-server:9000/application/o/<app-slug>/end-session/
-                // The app slug is 'nextcloud' (set in start-auth.sh when the Authentik
-                // application is created with the name "Nextcloud").
-                // ====== end of changes by SE ======
-                // ====== NOLAI - {- Backend -} /Sprint 4/ Task 192 ======
-                // LOGOUT SEQUENCE (three steps, in order):
-                //
-                //   Step 1 — Revoke the Nextcloud app password server-side.
-                //     The app password was generated by the Login Flow v2 popup and stored in
-                //     _nextcloudSessionCache.password. Calling DELETE /ocs/v2.php/core/apppassword
-                //     while authenticated with that password tells Nextcloud to delete the token
-                //     from its database. This ensures the credential can never be replayed even if
-                //     it was intercepted or is still in browser memory somewhere.
-                //     We fire-and-forget (no await / .catch rethrows) — if the server is
-                //     unreachable the token will simply expire naturally; we still clear local
-                //     state and log out of Authentik regardless.
-                //
-                //   Step 2 — Clear the in-memory session cache.
-                //     Zeroing the cache stops any in-flight or future draw.io saves from sending
-                //     the now-revoked credentials to Nextcloud.
-                //
-                //   Step 3 — Hit Authentik's end_session endpoint in a popup.
-                //     This invalidates the Authentik SSO session cookie in the browser (so the
-                //     next Login Flow v2 popup shows the Authentik login screen instead of
-                //     silently re-authenticating the same user). Because start-auth.sh has now
-                //     configured the backchannel_logout_url on the Authentik OAuth2 provider,
-                //     Authentik will also POST a signed JWT logout token directly to Nextcloud's
-                //     /index.php/apps/user_oidc/backchannel-logout/{providerId} endpoint, which
-                //     kills any remaining Nextcloud sessions for that user — belt-and-suspenders
-                //     alongside the app-password revocation above.
-                // ====== end of changes by SE ======
-
-                // Step 1: revoke app password on Nextcloud server (best-effort)
-                var _revokeUsername = _nextcloudSessionCache.username;
-                var _revokePassword = _nextcloudSessionCache.password;
-                var _revokeBase     = _nextcloudSessionCache.baseUrl;
-                if (_revokeUsername && _revokePassword && _revokeBase) {
-                    fetch(_revokeBase + '/ocs/v2.php/core/apppassword?format=json', {
-                        method: 'DELETE',
-                        headers: {
-                            'Authorization': 'Basic ' + btoa(_revokeUsername + ':' + _revokePassword),
-                            'OCS-APIRequest': 'true'
-                        },
-                        mode: 'cors',
-                        credentials: 'omit'
-                    }).catch(function() { /* best-effort — ignore network errors */ });
-                }
-
-                // Step 2: clear in-memory credentials immediately
-                _nextcloudSessionCache.username    = null;
-                _nextcloudSessionCache.password    = null;
-                _nextcloudSessionCache.baseUrl     = null;
-                _nextcloudSessionCache.displayName = null;
-
-                // Step 3: open Authentik end_session in a small popup. The popup navigates to the
-                // end_session page which clears the Authentik session cookie, then we close
-                // it after 2 s — enough time for Authentik to process the request AND fire the
-                // backchannel logout POST to Nextcloud.
-                var authentikLogoutUrl = 'http://authentik-server:9000/application/o/nextcloud/end-session/';
-                var logoutPopup = window.open(
-                    authentikLogoutUrl,
-                    'authentik_logout',
-                    'width=500,height=400,toolbar=no,menubar=no,location=no,status=no'
-                );
-
-                setTimeout(function() {
-                    try { if (logoutPopup && !logoutPopup.closed) { logoutPopup.close(); } } catch(e) {}
-                }, 2000);
-
-                showSignInButton();
-            });
-            dropdown.appendChild(signOutBtn);
-
-            // Position below the chip
-            document.body.appendChild(dropdown);
-            var rect = chip.getBoundingClientRect();
-            dropdown.style.top  = (rect.bottom + 6) + 'px';
-            dropdown.style.left = Math.max(4, rect.right - dropdown.offsetWidth) + 'px';
-
-            // Dismiss on any outside click (capture phase so it fires before other handlers)
-            setTimeout(function() {
-                document.addEventListener('click', onDocClick, true);
-            }, 0);
-        }
-
-        chip.addEventListener('click', function(evt) {
-            evt.stopPropagation();
-            showDropdown();
-        });
     }
     // ====== end of changes by SE ======
 
@@ -1311,9 +1165,17 @@ function attachNextcloudTopBarButton(container, nextcloudBaseUrl, onLoggedIn) {
             }).catch(function() {
                 confirmLogin(creds.username, creds.appPassword, creds.username);
             });
-        }).catch(function() {
-            // User cancelled or popup was blocked — return to the sign-in button.
-            showSignInButton();
+        }).catch(function(err) {
+            if (err && err.message === 'RETRY_NEEDED') {
+                // First-OIDC race: the popup closed without credentials because
+                // Nextcloud showed "State token does not match" before the user
+                // account was fully provisioned. Show a retry button — the user
+                // must click it so the new popup opens from a real gesture.
+                showRetryButton();
+            } else {
+                // User cancelled or popup was blocked — return to the sign-in button.
+                showSignInButton();
+            }
         });
     }
 
@@ -1537,8 +1399,16 @@ function attachNextcloudSessionBanner(container, nextcloudBaseUrl, onLoggedIn) {
         }).catch(function(err) {
             // Re-enable the button so the user can try again without reopening the dialog.
             loginBtn.disabled = false;
-            loginBtn.innerHTML = 'Sign in';
-            setLoggedOut(err.message);
+            if (err && err.message === 'RETRY_NEEDED') {
+                // First-OIDC race — popup closed without credentials. The Authentik
+                // session is now established so a second attempt will complete instantly.
+                loginBtn.innerHTML = 'Retry sign-in';
+                loginBtn.title = 'First sign-in sometimes needs a second step — click to complete';
+                setLoggedOut('Close the popup if you saw an error, then click Retry sign-in.');
+            } else {
+                loginBtn.innerHTML = 'Sign in';
+                setLoggedOut(err.message);
+            }
         });
     });
 

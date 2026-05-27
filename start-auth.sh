@@ -221,16 +221,32 @@ ak_patch() {
 # goauthentik ships with default flows. We use the implicit-consent auth flow
 # (no separate consent screen — appropriate for an internal tool) and the
 # default invalidation flow (became a required field in goauthentik 2026.x).
-FLOW_PK=$(ak_get "/flows/instances/?slug=default-provider-authorization-implicit-consent" \
-    | jq -r '.results[0].pk // empty')
-
-if [ -z "$FLOW_PK" ]; then
-    echo ""
-    echo "ERROR: Could not find the default authorization flow in goauthentik."
-    echo "       goauthentik may not have finished its first-boot migration."
-    echo "       Wait 30 seconds and re-run this script."
-    exit 1
-fi
+#
+# WHY retry loop: goauthentik's Docker healthcheck passes once the HTTP server
+# is accepting connections, but the first-boot Django management commands
+# (migrations, flow seeding, default object creation) continue running for
+# another 30-60 s afterwards. Polling until the flow appears is more robust
+# than a fixed sleep and avoids a misleading hard failure on fresh installs.
+FLOW_PK=""
+FLOW_WAIT=0
+FLOW_MAX=120
+printf "  Waiting for goauthentik default flows to be seeded..."
+until [ -n "$FLOW_PK" ]; do
+    if [ "$FLOW_WAIT" -ge "$FLOW_MAX" ]; then
+        echo ""
+        echo "ERROR: Could not find the default authorization flow in goauthentik after ${FLOW_MAX}s."
+        echo "       Check logs: $DC logs authentik-server"
+        exit 1
+    fi
+    FLOW_PK=$(ak_get "/flows/instances/?slug=default-provider-authorization-implicit-consent" \
+        2>/dev/null | jq -r '.results[0].pk // empty' 2>/dev/null || true)
+    if [ -z "$FLOW_PK" ]; then
+        sleep 5
+        FLOW_WAIT=$((FLOW_WAIT + 5))
+        printf " %ds..." "$FLOW_WAIT"
+    fi
+done
+echo " done."
 
 INVALIDATION_FLOW_PK=$(ak_get "/flows/instances/?designation=invalidation" \
     | jq -r '.results[0].pk // empty')
