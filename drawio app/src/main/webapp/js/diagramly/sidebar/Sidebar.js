@@ -1243,7 +1243,7 @@
 								}));
 							}
 							else
-							{							
+							{
 								this.addPalette(entry.id + '.' + k, this.editorUi.getResource(lib.title),
 									false, mxUtils.bind(this, function(c, t)
 								{
@@ -1251,7 +1251,7 @@
 									title = t;
 									barrier();
 								}));
-								
+
 								if (lib.data != null)
 								{
 									this.setCurrentSearchEntryLibrary(entry.id, entry.id + '.' + k);
@@ -1259,6 +1259,19 @@
 									this.setCurrentSearchEntryLibrary();
 									data = lib.data;
 									barrier();
+
+									// ======	NOLAI - Frontend /Sprint 4/ Task #195	======
+									// Open the DPD shapes library by default
+									if (entry.id == 'dpds')
+									{
+										var dpdPalette = this.palettes[entry.id + '.' + k];
+
+										if (dpdPalette != null && dpdPalette[0] != null)
+										{
+											dpdPalette[0].click();
+										}
+									}
+									// ====== end of changes by SE	======
 								}
 								else if (lib.url != null)
 								{

@@ -6513,11 +6513,13 @@
 				Editor.currentTheme == 'sketch' ||
 				Editor.currentTheme == 'min')
 			{
-				if (langMenu != null && (urlParams['embed'] != '1' || urlParams['lang'] == null))
-				{
-					editorUi.menus.addSubmenu('language', menu, parent);
-				}
-				
+				// ======	NOLAI - Frontend /Sprint 4/ Task #190	======
+				// if (langMenu != null && (urlParams['embed'] != '1' || urlParams['lang'] == null))
+				// {
+				// 	editorUi.menus.addSubmenu('language', menu, parent);
+				// }
+				// ====== end of changes by SE	======
+
 				if ((urlParams['embed'] != '1' || urlParams['atlas'] == '1') &&
 					urlParams['extAuth'] != '1' && urlParams['embedInline'] != '1')
 				{
@@ -6566,11 +6568,14 @@
 			}
 			else
 			{
-				if (urlParams['embed'] != '1' || urlParams['lang'] == null)
-				{
-					this.addSubmenu('language', menu, parent);
-				}
-				
+				// ======	NOLAI - Frontend /Sprint 4/ Task #190 (English-only)	======
+				// Language selector hidden from the UI; app is English-only for the client.
+				// if (urlParams['embed'] != '1' || urlParams['lang'] == null)
+				// {
+				// 	this.addSubmenu('language', menu, parent);
+				// }
+				// ====== end of changes by SE	======
+
 				if (urlParams['embed'] != '1' || urlParams['atlas'] == '1')
 				{
 					editorUi.menus.addSubmenu('appearance', menu, parent);
