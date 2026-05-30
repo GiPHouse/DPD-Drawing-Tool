@@ -84,6 +84,19 @@ var _nolaiTopBarRefresh = null;
 // ====== end of changes by SE ======
 var _nolaiTopBarSetSignedOut = null;
 
+// ====== NOLAI - {- Frontend -} /Sprint 4/ Task 186 ======
+// Nextcloud's user_oidc app exposes a single-logout route that forwards the
+// browser through the provider's end_session_endpoint. We use this instead of
+// only clearing local memory so the browser session and GoAuthentik session are
+// both actually ended.
+// ====== end of changes by SE ======
+function _nolaiLogoutViaNextcloudSingleLogout(nextcloudBaseUrl) {
+    if (!nextcloudBaseUrl) { return; }
+
+    var logoutBase = nextcloudBaseUrl.replace(/\/$/, '');
+    window.location.assign(logoutBase + '/index.php/apps/user_oidc/sls');
+}
+
 
 // ====== NOLAI - {- Frontend -} /Sprint 3/ Task 151 ======
 // _nolaiIsDark() — safe wrapper around Editor.isDarkMode().
@@ -1267,16 +1280,13 @@ function attachNextcloudTopBarButton(container, nextcloudBaseUrl, onLoggedIn) {
         logoutBtn.addEventListener('click', function(evt) {
             evt.preventDefault();
             evt.stopPropagation();
-            setMenuOpen(false);
-            document.removeEventListener('click', closeMenuOnOutsideClick, true);
             // ====== NOLAI - {- Frontend -} /Sprint 4/ Task 186 ======
-            // Sign-out keeps existing behavior: clear the shared Nextcloud cache,
-            // reset this widget to the signed-out button, and notify any toolbar
-            // observers so other entry points reflect the same session state.
+            // Sign-out now routes through Nextcloud's single logout service so the
+            // app password cache is cleared and the GoAuthentik browser session is
+            // ended at the identity provider too.
             // ====== end of changes by SE ======
             clearSessionCache();
-            showSignInButton();
-            if (typeof _nolaiTopBarSetSignedOut === 'function') { _nolaiTopBarSetSignedOut(); }
+            _nolaiLogoutViaNextcloudSingleLogout(nextcloudBaseUrl);
         });
         chip.addEventListener('click', function(evt) {
             evt.preventDefault();
@@ -1604,12 +1614,12 @@ function attachNextcloudSessionBanner(container, nextcloudBaseUrl, onLoggedIn) {
         });
     });
     // ====== NOLAI - {- Frontend -} /Sprint 4/ Task 186 ======
-    // The username chip doubles as the trigger for the sign-out action so the
-    // logout control stays visually grouped with the account identity.
+    // The logout action goes through Nextcloud's single logout route so the
+    // GoAuthentik session is actually ended instead of only clearing the local
+    // in-memory cache.
     logoutBtn.addEventListener('click', function() {
         clearSessionCache();
-        setLoggedOut(null);
-        if (typeof _nolaiTopBarSetSignedOut === 'function') { _nolaiTopBarSetSignedOut(); }
+        _nolaiLogoutViaNextcloudSingleLogout(nextcloudBaseUrl);
     });
     // ====== end of changes by SE ======
 
