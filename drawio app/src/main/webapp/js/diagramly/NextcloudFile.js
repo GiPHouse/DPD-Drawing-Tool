@@ -1197,7 +1197,7 @@ function attachNextcloudTopBarButton(container, nextcloudBaseUrl, onLoggedIn) {
         logoutDropdown.style.cssText = [
             'position:fixed',
             'z-index:100000',
-            'min-width:172px',
+            'min-width:72px',
             'display:none',
         ].join(';');
 
@@ -1226,7 +1226,8 @@ function attachNextcloudTopBarButton(container, nextcloudBaseUrl, onLoggedIn) {
             'min-width:0',
             'box-sizing:border-box',
             'justify-content:flex-start',
-            'margin:6px 0 6px 6px',
+            'margin:6px',
+            'width:calc(100% - 12px)',
             'padding:6px 14px',
             'background:' + (dark ? 'rgba(0,190,183,0.18)' : 'rgba(0,143,137,0.10)'),
             'border:1px solid ' + (dark ? 'rgba(0,190,183,0.40)' : 'rgba(0,143,137,0.30)'),
@@ -1253,19 +1254,31 @@ function attachNextcloudTopBarButton(container, nextcloudBaseUrl, onLoggedIn) {
         // document.body with fixed positioning so it always stays in the foreground
         // even when toolbar containers clip overflow.
         // ====== end of changes by SE ======
+        var _resizeHandler = null;
+
+        function repositionDropdown() {
+            var chipRect = chip.getBoundingClientRect();
+            logoutDropdown.style.left = Math.round(chipRect.left) + 'px';
+            logoutDropdown.style.top = Math.round(chipRect.bottom + 6) + 'px';
+        }
+
         function setMenuOpen(isOpen) {
             if (isOpen) {
                 if (logoutDropdown.parentNode !== document.body) {
                     document.body.appendChild(logoutDropdown);
                 }
-                var chipRect = chip.getBoundingClientRect();
-                var panelWidth = Math.round(chipRect.width);
-                logoutDropdown.style.width = panelWidth + 'px';
-                logoutDropdown.style.left = Math.round(chipRect.left) + 'px';
-                logoutDropdown.style.top = Math.round(chipRect.bottom + 6) + 'px';
+                repositionDropdown();
                 logoutDropdown.style.display = 'block';
+                if (_resizeHandler === null) {
+                    _resizeHandler = repositionDropdown;
+                    window.addEventListener('resize', _resizeHandler);
+                }
             } else {
                 logoutDropdown.style.display = 'none';
+                if (_resizeHandler !== null) {
+                    window.removeEventListener('resize', _resizeHandler);
+                    _resizeHandler = null;
+                }
             }
             chevronEl.style.transform = isOpen ? 'rotate(180deg)' : 'rotate(0deg)';
         }
