@@ -126,53 +126,13 @@ window.mxLanguage = window.mxLanguage || (function()
 
 // Add new languages here. First entry is translated to [Automatic]
 // in the menu defintion in Diagramly.js.
+// ======	NOLAI - Frontend /Sprint 4/ Task #190	======
 window.mxLanguageMap = window.mxLanguageMap ||
 {
-	'i18n': '',
-	'id' : 'Bahasa Indonesia',
-	'ms' : 'Bahasa Melayu',
-	'bs' : 'Bosanski',
-	'bg' : 'Bulgarian',
-	'ca' : 'Català',
-	'cs' : 'Čeština',
-	'da' : 'Dansk',
-	'de' : 'Deutsch',
-	'et' : 'Eesti',
-	'en' : 'English',
-	'es' : 'Español',
-	'eu' : 'Euskara',
-	'fil' : 'Filipino',
-	'fr' : 'Français',
-	'gl' : 'Galego',
-	'it' : 'Italiano',
-	'hu' : 'Magyar',
-	'kl' : 'Kalaallisut',
-	'lt' : 'Lietuvių',
-	'lv' : 'Latviešu',
-	'nl' : 'Nederlands',
-	'no' : 'Norsk',
-	'pl' : 'Polski',
-	'pt-br' : 'Português (Brasil)',
-	'pt' : 'Português (Portugal)',
-	'ro' : 'Română',
-	'fi' : 'Suomi',
-	'sv' : 'Svenska',
-	'vi' : 'Tiếng Việt',
-	'tr' : 'Türkçe',
-	'el' : 'Ελληνικά',
-	'ru' : 'Русский',
-	'sr' : 'Српски',
-	'uk' : 'Українська',
-	'he' : 'עברית',
-	'ar' : 'العربية',
-	'fa' : 'فارسی',
-	'th' : 'ไทย',
-	'ta' : 'தமிழ்',
-	'ko' : '한국어',
-	'ja' : '日本語',
-	'zh' : '简体中文',
-	'zh-tw' : '繁體中文'
+	'en' : 'English'
+	// 'nl' : 'Nederlands'   // disabled — re-enable to restore Dutch
 };
+// ====== end of changes by SE	======
 
 if (typeof window.mxBasePath === 'undefined')
 {
