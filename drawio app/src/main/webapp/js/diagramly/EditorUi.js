@@ -14656,16 +14656,6 @@
 				else
 				{
 					this.sidebar.showPalette('search', mxSettings.settings.search);
-					
-					/**
-					 * Shows scratchpad if never shown.
-					 */
-					if ((!this.editor.chromeless || this.editor.editable) && (mxSettings.settings.isNew ||
-						parseInt(mxSettings.settings.version || 0) <= 8))
-					{
-						this.toggleScratchpad();
-						mxSettings.save();
-					}
 				}
 			}
 
