@@ -1,16 +1,14 @@
 name: CI
 on:
+  # Tests run only on pull requests: when a PR is opened or reopened, when new
+  # commits are pushed to it (synchronize), and when a draft PR is marked ready
+  # for review. There is intentionally no `push:` trigger, so direct branch
+  # pushes do NOT run CI — tests run only once a PR exists.
   pull_request:
-    # Run when a PR is opened or reopened, when new commits are pushed to it
-    # (synchronize), and when a draft PR is marked ready for review.
     types: [opened, reopened, ready_for_review, synchronize]
     branches:
       - '**'
-  # Temporary: also run on direct branch pushes to validate the workflow
-  # without opening a PR. Remove once CI is confirmed working.
-  push:
-    branches:
-      - '**'
+  # Allow manual runs from the Actions tab when needed.
   workflow_dispatch:
 permissions:
   contents: read
