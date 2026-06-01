@@ -56,12 +56,11 @@ fi
 
 # ---- Build and start containers ----
 # COMPOSE_BUILD controls whether local images are (re)built on startup:
-#   1 (default) → `up -d --build`  — rebuild local images (normal dev behaviour).
+#   1 (default) → `up -d --build`  — rebuild local images (default for local dev).
 #   0           → `up -d`          — skip the build and reuse already-present
-#                                    images. CI sets this after pre-building the
-#                                    draw.io image with a cached layer build, so
+#                                    images, e.g. in CI where the draw.io image
+#                                    is pre-built with a cached layer build so
 #                                    `ant war` does not recompile on every run.
-# The default preserves the previous behaviour exactly for local developers.
 if [ "${COMPOSE_BUILD:-1}" = "1" ]; then
     echo "Building and starting containers..."
     $DOCKER_COMPOSE up -d --build

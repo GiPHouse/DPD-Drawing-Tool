@@ -1,18 +1,13 @@
 name: CI
 on:
   pull_request:
-    # 'opened' was added so the suite also runs when a PR is opened directly as
-    # non-draft (previously only 'ready_for_review' + 'synchronize' were listed,
-    # so a freshly opened ready PR never triggered CI). 'reopened' covers PRs
-    # that are closed and opened again.
+    # Run when a PR is opened or reopened, when new commits are pushed to it
+    # (synchronize), and when a draft PR is marked ready for review.
     types: [opened, reopened, ready_for_review, synchronize]
     branches:
       - '**'
-  # ---------------------------------------------------------------------------
-  # TEMPORARY: run on every branch push so the workflow can be tested without
-  # opening a PR. REMOVE this `push:` block once you've confirmed CI works -
-  # the intended trigger is pull_request (above) only.
-  # ---------------------------------------------------------------------------
+  # Temporary: also run on direct branch pushes to validate the workflow
+  # without opening a PR. Remove once CI is confirmed working.
   push:
     branches:
       - '**'
