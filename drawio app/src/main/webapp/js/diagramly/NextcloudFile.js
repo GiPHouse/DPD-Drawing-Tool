@@ -78,6 +78,26 @@ function nolaiClearCurrentNextcloudFile() {
 // ====== end of changes by SE ======
 var _nolaiTopBarRefresh = null;
 
+// ====== NOLAI - {- Frontend -} /Sprint 4/ Task 186 ======
+// _nolaiTopBarSetSignedOut — keeps the top-bar account widget in sync after a
+// sign-out action clears the shared Nextcloud session state.
+// ====== end of changes by SE ======
+var _nolaiTopBarSetSignedOut = null;
+
+// ====== NOLAI - {- Frontend -} /Sprint 4/ Task 186 ======
+// Nextcloud's user_oidc app exposes a single-logout route that forwards the
+// browser through the provider's end_session_endpoint. We use this instead of
+// only clearing local memory so the browser session and GoAuthentik session are
+// both actually ended.
+// ====== end of changes by SE ======
+function _nolaiLogoutViaNextcloudSingleLogout(nextcloudBaseUrl) {
+    if (!nextcloudBaseUrl) { return; }
+
+    var logoutBase = nextcloudBaseUrl.replace(/\/$/, '');
+    window.location.assign(logoutBase + '/index.php/apps/user_oidc/sls');
+}
+
+
 // ====== NOLAI - {- Frontend -} /Sprint 3/ Task 151 ======
 // _nolaiIsDark() — safe wrapper around Editor.isDarkMode().
 // Returns true when the editor is currently in dark mode, false otherwise.
@@ -918,6 +938,13 @@ function openNextcloudLoginPopup(nextcloudBaseUrl) {
 function attachNextcloudTopBarButton(container, nextcloudBaseUrl, onLoggedIn) {
     var nolaiColor = '#008f89';
 
+    function clearSessionCache() {
+        _nextcloudSessionCache.username = null;
+        _nextcloudSessionCache.password = null;
+        _nextcloudSessionCache.baseUrl = null;
+        _nextcloudSessionCache.displayName = null;
+    }
+
     container.style.cssText = [
         'display:inline-flex',
         'align-items:center',
@@ -1079,8 +1106,7 @@ function attachNextcloudTopBarButton(container, nextcloudBaseUrl, onLoggedIn) {
     // Background opacity, border colour, and text colour all adapt to dark mode
     // so the chip remains legible against both light and dark top bars.
     //
-    // The chip is non-interactive — it displays the signed-in user's name and avatar only.
-    // ====== NOLAI - {- Frontend -} /Sprint 4/ Task 191 ======
+
     function showUserChip(username, appPassword, displayName) {
         _chipState.mode        = 'signed-in';
         _chipState.username    = username;
@@ -1092,11 +1118,15 @@ function attachNextcloudTopBarButton(container, nextcloudBaseUrl, onLoggedIn) {
 
         var chip = document.createElement('div');
         chip.title = 'Signed in as ' + (displayName || username);
+        // ====== NOLAI - {- Frontend -} /Sprint 4/ Task 186 ======
+        // The account chip doubles as a dropdown trigger so the sign-out action
+        // stays grouped with the username without taking over the toolbar.
+        // ====== end of changes by SE ======
         chip.style.cssText = [
             'display:inline-flex',
             'align-items:center',
             'gap:7px',
-            'padding:3px 11px 3px 3px',
+            'padding:3px 8px 3px 3px',
             'background:' + (dark ? 'rgba(0,190,183,0.18)' : 'rgba(0,143,137,0.10)'),
             'border:1px solid ' + (dark ? 'rgba(0,190,183,0.40)' : 'rgba(0,143,137,0.30)'),
             'border-radius:16px',
@@ -1105,7 +1135,7 @@ function attachNextcloudTopBarButton(container, nextcloudBaseUrl, onLoggedIn) {
             'max-width:220px',
             'white-space:nowrap',
             'overflow:hidden',
-            'cursor:default',
+            'cursor:pointer',
             'user-select:none',
             'position:relative',
         ].join(';');
@@ -1135,13 +1165,155 @@ function attachNextcloudTopBarButton(container, nextcloudBaseUrl, onLoggedIn) {
             'text-overflow:ellipsis',
             'font-weight:500',
             'color:' + (dark ? '#e8e8e8' : '#111'),
-            'flex:1',
+            'max-width:150px',
             'min-width:0',
+        ].join(';');
+
+        var chevronEl = document.createElement('span');
+        chevronEl.innerHTML = '<svg width="11" height="11" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:block"><path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+        chevronEl.style.cssText = [
+            'display:inline-flex',
+            'align-items:center',
+            'justify-content:center',
+            'color:' + (dark ? '#d9d9d9' : '#444'),
+            'flex-shrink:0',
+            'margin-left:1px',
+            'transition:transform 0.12s ease',
         ].join(';');
 
         chip.appendChild(avatarImg);
         chip.appendChild(nameEl);
-        container.appendChild(chip);
+        chip.appendChild(chevronEl);
+
+        var userPanel = document.createElement('div');
+        userPanel.style.cssText = [
+            'display:inline-block',
+            'position:relative',
+            'vertical-align:middle',
+        ].join(';');
+        userPanel.appendChild(chip);
+
+        var logoutDropdown = document.createElement('div');
+        logoutDropdown.style.cssText = [
+            'position:fixed',
+            'z-index:100000',
+            'min-width:72px',
+            'display:none',
+        ].join(';');
+
+        var logoutDropdownShell = document.createElement('div');
+        logoutDropdownShell.style.cssText = [
+            'padding:0',
+            'width:100%',
+            'box-sizing:border-box',
+            'overflow:hidden',
+            'display:flex',
+            'justify-content:flex-start',
+            'align-items:center',
+            'border-radius:10px',
+            'background:' + (dark ? '#1e1e1e' : '#ffffff'),
+            'border:1px solid ' + (dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'),
+            'box-shadow:0 10px 30px rgba(0,0,0,0.18)',
+        ].join(';');
+
+        var logoutBtn = document.createElement('button');
+        logoutBtn.type = 'button';
+        logoutBtn.textContent = 'Sign out';
+        logoutBtn.style.cssText = [
+            'display:flex',
+            'align-items:center',
+            'width:auto',
+            'min-width:0',
+            'box-sizing:border-box',
+            'justify-content:flex-start',
+            'margin:6px',
+            'width:calc(100% - 12px)',
+            'padding:6px 14px',
+            'background:' + (dark ? 'rgba(0,190,183,0.18)' : 'rgba(0,143,137,0.10)'),
+            'border:1px solid ' + (dark ? 'rgba(0,190,183,0.40)' : 'rgba(0,143,137,0.30)'),
+            'border-radius:16px',
+            'font-size:12px',
+            'font-family:Helvetica,Arial,sans-serif',
+            'font-weight:500',
+            'color:' + (dark ? '#e8e8e8' : '#111'),
+            'white-space:nowrap',
+            'overflow:hidden',
+            'cursor:pointer',
+            'user-select:none',
+        ].join(';');
+        logoutBtn.addEventListener('mouseover', function() {
+            logoutBtn.style.background = dark ? 'rgba(0,190,183,0.28)' : 'rgba(0,143,137,0.16)';
+        });
+        logoutBtn.addEventListener('mouseout', function() {
+            logoutBtn.style.background = dark ? 'rgba(0,190,183,0.18)' : 'rgba(0,143,137,0.10)';
+        });
+
+        // ====== NOLAI - {- Frontend -} /Sprint 4/ Task 186 ======
+        // Menu visibility is controlled in one helper so the chevron rotation and
+        // panel display never drift out of sync. The dropdown is mounted on
+        // document.body with fixed positioning so it always stays in the foreground
+        // even when toolbar containers clip overflow.
+        // ====== end of changes by SE ======
+        var _resizeHandler = null;
+
+        function repositionDropdown() {
+            var chipRect = chip.getBoundingClientRect();
+            logoutDropdown.style.left = Math.round(chipRect.left) + 'px';
+            logoutDropdown.style.top = Math.round(chipRect.bottom + 6) + 'px';
+        }
+
+        function setMenuOpen(isOpen) {
+            if (isOpen) {
+                if (logoutDropdown.parentNode !== document.body) {
+                    document.body.appendChild(logoutDropdown);
+                }
+                repositionDropdown();
+                logoutDropdown.style.display = 'block';
+                if (_resizeHandler === null) {
+                    _resizeHandler = repositionDropdown;
+                    window.addEventListener('resize', _resizeHandler);
+                }
+            } else {
+                logoutDropdown.style.display = 'none';
+                if (_resizeHandler !== null) {
+                    window.removeEventListener('resize', _resizeHandler);
+                    _resizeHandler = null;
+                }
+            }
+            chevronEl.style.transform = isOpen ? 'rotate(180deg)' : 'rotate(0deg)';
+        }
+
+        function closeMenuOnOutsideClick(evt) {
+            if (!userPanel.contains(evt.target) && !logoutDropdown.contains(evt.target)) {
+                setMenuOpen(false);
+                document.removeEventListener('click', closeMenuOnOutsideClick, true);
+            }
+        }
+
+        logoutBtn.addEventListener('click', function(evt) {
+            evt.preventDefault();
+            evt.stopPropagation();
+            // ====== NOLAI - {- Frontend -} /Sprint 4/ Task 186 ======
+            // Sign-out now routes through Nextcloud's single logout service so the
+            // app password cache is cleared and the GoAuthentik browser session is
+            // ended at the identity provider too.
+            // ====== end of changes by SE ======
+            clearSessionCache();
+            _nolaiLogoutViaNextcloudSingleLogout(nextcloudBaseUrl);
+        });
+        chip.addEventListener('click', function(evt) {
+            evt.preventDefault();
+            evt.stopPropagation();
+            var willOpen = logoutDropdown.style.display === 'none';
+            setMenuOpen(willOpen);
+            document.removeEventListener('click', closeMenuOnOutsideClick, true);
+            if (willOpen) {
+                document.addEventListener('click', closeMenuOnOutsideClick, true);
+            }
+        });
+        logoutDropdownShell.appendChild(logoutBtn);
+        logoutDropdown.appendChild(logoutDropdownShell);
+        container.appendChild(userPanel);
     }
     // ====== end of changes by SE ======
 
@@ -1204,6 +1376,13 @@ function attachNextcloudTopBarButton(container, nextcloudBaseUrl, onLoggedIn) {
             showUserChip(c.username, c.password, c.displayName || c.username);
         }
     };
+    // ====== NOLAI - {- Frontend -} /Sprint 4/ Task 186 ======
+    // Clearing the cached session also resets the top-bar widget so the user
+    // does not see stale account state after sign-out.
+    // ====== end of changes by SE ======
+    _nolaiTopBarSetSignedOut = function() {
+        showSignInButton();
+    };
 
     // Restore from session cache (e.g., user opened the save dialog and logged in
     // there before this button was initialised) or show the sign-in button.
@@ -1241,11 +1420,22 @@ function attachNextcloudTopBarButton(container, nextcloudBaseUrl, onLoggedIn) {
 //   is not enough. We always need Login Flow v2 to get a usable app password.
 //   Removing the initial OCS check simplifies the flow and avoids a spurious
 //   CORS preflight on dialog open.
-//
 // ====== end of changes by SE ======
 function attachNextcloudSessionBanner(container, nextcloudBaseUrl, onLoggedIn) {
     var nolaiColor = '#008f89';
 
+    // ====== NOLAI - {- Frontend -} /Sprint 4/ Task 186 ======
+    // The banner reuses the same cache-clearing helper so its logout control
+    // leaves the session state and top-bar widget in a consistent state.
+    // ====== end of changes by SE ======
+
+    function clearSessionCache() {
+        _nextcloudSessionCache.username = null;
+        _nextcloudSessionCache.password = null;
+        _nextcloudSessionCache.baseUrl = null;
+        _nextcloudSessionCache.displayName = null;
+    }
+    // ====== end of changes by SE ======
     // Build the banner DOM — flex row: icon | status text | login button.
     // Initial colours are set here; setChecking/setLoggedOut/confirmLogin overwrite
     // them per-state with dark-mode-aware values.
@@ -1289,10 +1479,32 @@ function attachNextcloudSessionBanner(container, nextcloudBaseUrl, onLoggedIn) {
         'display:none',
         'white-space:nowrap',
     ].join(';');
+    // ====== NOLAI - {- Frontend -} /Sprint 4/ Task 186 ======
+    // The banner shows the same sign-out affordance as the top bar so users can
+    // leave the current session without hunting for a separate account screen.
+    // ====== end of changes by SE ======
+    var logoutBtn = document.createElement('button');
+    logoutBtn.type = 'button';
+    logoutBtn.innerHTML = 'Sign out';
+    logoutBtn.style.cssText = [
+        'padding:5px 14px',
+        'background:transparent',
+        'color:' + nolaiColor,
+        'border:1px solid ' + nolaiColor,
+        'border-radius:12px',
+        'cursor:pointer',
+        'font-size:12px',
+        'font-weight:600',
+        'flex-shrink:0',
+        'display:none',
+        'white-space:nowrap',
+    ].join(';');
 
     banner.appendChild(icon);
     banner.appendChild(statusText);
     banner.appendChild(loginBtn);
+    banner.appendChild(logoutBtn);
+    // ====== end of changes by SE ======
 
     // Insert the banner immediately after the dialog's <h2> title element.
     var titleEl = container.querySelector('h2');
@@ -1312,6 +1524,7 @@ function attachNextcloudSessionBanner(container, nextcloudBaseUrl, onLoggedIn) {
         statusText.style.color = dark ? '#ccc' : '#444';
         statusText.innerHTML = 'Opening Nextcloud login&hellip;';
         loginBtn.style.display = 'none';
+        logoutBtn.style.display = 'none';
     }
 
     // setLoggedOut — shown on initial load or after a cancelled / failed login attempt.
@@ -1329,6 +1542,7 @@ function attachNextcloudSessionBanner(container, nextcloudBaseUrl, onLoggedIn) {
             ? '<span style="color:' + textColor + '">' + errorMsg + '</span>'
             : 'Not signed in to Nextcloud. Use the <strong>Sign in to Nextcloud</strong> button in the top right, or sign in below.';
         loginBtn.style.display = 'inline-block';
+        logoutBtn.style.display = 'none';
     }
 
     // confirmLogin — called once Login Flow v2 resolves with credentials, or when
@@ -1355,6 +1569,7 @@ function attachNextcloudSessionBanner(container, nextcloudBaseUrl, onLoggedIn) {
         statusText.style.color = nameColor;
         statusText.innerHTML = 'Connected as <strong>' + (displayName || username) + '</strong>';
         loginBtn.style.display = 'none';
+        logoutBtn.style.display = 'inline-block';
         // Refresh the top-bar chip immediately so the user sees their avatar/name
         // without needing to close and reopen the dialog.
         if (typeof _nolaiTopBarRefresh === 'function') { _nolaiTopBarRefresh(); }
@@ -1411,6 +1626,15 @@ function attachNextcloudSessionBanner(container, nextcloudBaseUrl, onLoggedIn) {
             }
         });
     });
+    // ====== NOLAI - {- Frontend -} /Sprint 4/ Task 186 ======
+    // The logout action goes through Nextcloud's single logout route so the
+    // GoAuthentik session is actually ended instead of only clearing the local
+    // in-memory cache.
+    logoutBtn.addEventListener('click', function() {
+        clearSessionCache();
+        _nolaiLogoutViaNextcloudSingleLogout(nextcloudBaseUrl);
+    });
+    // ====== end of changes by SE ======
 
     // On banner creation, restore from cache if credentials exist from a previous
     // dialog in this browser session — no popup required. Otherwise show the
