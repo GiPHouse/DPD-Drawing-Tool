@@ -122,10 +122,32 @@ jobs:
         if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: npx playwright install-deps chromium
 
+      # Buildx is needed to use the GitHub Actions layer cache (type=gha) below.
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Pre-build the draw.io image with a cross-run layer cache. The Dockerfile
+      # compiles draw.io from source (`ant war`), which is the slowest part of
+      # bringing the stack up. Caching its layers means unchanged source skips
+      # the recompile entirely. The tag MUST match `image:` for the drawio
+      # service in docker-compose.yml so start.sh reuses it (COMPOSE_BUILD=0).
+      - name: Build draw.io image (cached)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./drawio app
+          tags: dpd-drawio-app:local
+          load: true
+          cache-from: type=gha,scope=drawio
+          cache-to: type=gha,mode=max,scope=drawio
+
       # Bring up ONLY the base stack. .env is gitignored, so create it from the
       # committed dev-safe template before start.sh sources it.
+      # COMPOSE_BUILD=0 makes start.sh skip `--build` and reuse the image built
+      # in the cached step above.
       - name: Start base docker stack (draw.io + Nextcloud)
         working-directory: .
+        env:
+          COMPOSE_BUILD: "0"
         run: |
           chmod +x ./start.sh
           if [ ! -f .env ]; then
