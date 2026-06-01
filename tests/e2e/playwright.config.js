@@ -2,25 +2,75 @@
 const { defineConfig, devices } = require('@playwright/test');
 
 /**
- * Playwright configuration for the DPD Drawing Tool E2E test suite.
+ * Playwright configuration for the DPD Drawing Tool E2E suite.
  *
- * The draw.io app is expected to be running at https://localhost:5443
- * through the Caddy reverse proxy when using the Docker Compose stack.
+ * The draw.io app must be running at https://localhost:5443 (Caddy reverse
+ * proxy in the dev Docker Compose stack). Override with DRAWIO_URL /
+ * NEXTCLOUD_URL environment variables.
  *
- * Set DRAWIO_URL and NEXTCLOUD_URL environment variables to override.
+ * SPEED vs. ISOLATION
+ * ───────────────────
+ * Two projects keep the trade-off clean:
+ *   • "fast"        — specs/custom-features.spec.js. Pure-UI tests on isolated
+ *                     pages with no shared backend, so they run fully parallel
+ *                     and finish in seconds.
+ *   • "integration" — specs/nextcloud-integration.spec.js. These hit ONE shared
+ *                     Nextcloud instance over WebDAV/OCS; running them in
+ *                     parallel causes real races (save-dialog re-renders,
+ *                     delete-before-readback). fullyParallel:false makes this
+ *                     project run its tests serially, eliminating contention.
+ *
+ * Chromium only by default; set CROSS_BROWSER=1 to add Firefox variants.
+ * The integration project is gated behind INTEGRATION=1 inside the spec.
  */
+
+const CHROME = {
+  ...devices['Desktop Chrome'],
+  // On headless Linux (CI/Docker) Chromium floods stdout with GPU/sandbox
+  // messages before it is ready; Playwright accumulates that into one string
+  // and can crash with "RangeError: Invalid string length". These flags
+  // suppress the noise and are required when running as root in a container
+  // (--no-sandbox) or with limited /dev/shm (--disable-dev-shm-usage).
+  launchOptions: {
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+    ],
+  },
+};
+
+const FAST_MATCH = /custom-features\.spec\.js/;
+const INTEGRATION_MATCH = /nextcloud-integration\.spec\.js/;
+
+const projects = [
+  // Fast UI suite — parallel.
+  { name: 'fast', testMatch: FAST_MATCH, fullyParallel: true, use: { ...CHROME } },
+  // Nextcloud round-trips — serial to avoid shared-backend races.
+  { name: 'integration', testMatch: INTEGRATION_MATCH, fullyParallel: false, use: { ...CHROME } },
+];
+
+// Opt-in cross-browser coverage (run `npx playwright install firefox` first).
+if (process.env.CROSS_BROWSER) {
+  const FF = { ...devices['Desktop Firefox'] };
+  projects.push(
+    { name: 'fast-firefox', testMatch: FAST_MATCH, fullyParallel: true, use: { ...FF } },
+    { name: 'integration-firefox', testMatch: INTEGRATION_MATCH, fullyParallel: false, use: { ...FF } }
+  );
+}
+
 module.exports = defineConfig({
   testDir: './specs',
 
-  // Run all tests in parallel inside a file; tests files run sequentially
-  // to avoid Nextcloud race conditions on file operations.
-  fullyParallel: false,
-  workers: 1,
+  // Default parallel for the fast project; the integration project overrides
+  // this to false (above) so its tests run one at a time.
+  fullyParallel: true,
+  workers: process.env.CI ? 2 : undefined,
 
-  // Retry once on CI to reduce flakiness from Docker startup timing
+  // Retry once on CI to absorb Docker startup timing jitter.
   retries: process.env.CI ? 1 : 0,
 
-  // HTML reporter shows screenshots and traces on failure
   reporter: [
     ['html', { open: 'never', outputFolder: 'playwright-report' }],
     ['list'],
@@ -29,54 +79,15 @@ module.exports = defineConfig({
   use: {
     baseURL: process.env.DRAWIO_URL || 'https://localhost:5443',
     ignoreHTTPSErrors: true,
-
-    // Capture trace on first retry to help debug CI failures
     trace: 'on-first-retry',
-
-    // Screenshot on failure
     screenshot: 'only-on-failure',
-
-    // Automatically dismiss alert() dialogs (the plugin startup alert)
-    // Each spec can override this if it needs to assert alert content.
-    // NOTE: Remove this line once issue #115 (Custom Alert Messages) replaces alert().
     acceptDownloads: true,
   },
 
-  projects: [
-    {
-      name: 'chromium',
-      use: {
-        ...devices['Desktop Chrome'],
-        // On headless Linux (CI/Docker), Chromium emits a large volume of
-        // GPU-initialisation and sandbox-setup messages to stdout before it
-        // is ready. Playwright's spawnAsync utility accumulates that output
-        // into a single string; if the string grows past the JavaScript
-        // maximum string length (~1 GB) the process crashes with:
-        //   RangeError: Invalid string length
-        // The flags below suppress the sources of that noise:
-        //   --no-sandbox / --disable-setuid-sandbox : required when running
-        //     as root inside a Docker container.
-        //   --disable-dev-shm-usage : avoids /dev/shm exhaustion in
-        //     memory-constrained CI runners.
-        //   --disable-gpu : prevents the GPU process from starting and
-        //     flooding stdout with driver-not-found errors.
-        launchOptions: {
-          args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-gpu',
-          ],
-        },
-      },
-    },
-    {
-      name: 'firefox',
-      use: { ...devices['Desktop Firefox'] },
-    },
-  ],
+  projects,
 
-  // Global test timeout — draw.io can be slow on first load
+  // draw.io can be slow on first load; keep a generous per-test ceiling but
+  // most tests finish in a few seconds.
   timeout: 30_000,
   expect: { timeout: 10_000 },
 });

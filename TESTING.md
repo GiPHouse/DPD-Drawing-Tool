@@ -135,12 +135,12 @@ The version pinned is **`@playwright/test` ^1.44**, which includes the Locator A
     │
     ├── e2e/                           # Layers 2 & 3 — Playwright tests
     │   ├── package.json
-    │   ├── playwright.config.js       # Projects (Chromium, Firefox), timeouts, reporters
+    │   ├── README.md                  # Authoritative guide to the E2E suite
+    │   ├── playwright.config.js       # Chromium by default; CROSS_BROWSER=1 adds Firefox
+    │   ├── helpers/index.js           # loadApp, graph-API shape insertion, menu/session helpers
     │   └── specs/
-    │       ├── plugin-init.spec.js    # Plugin init + NOLAI UI customisations
-    │       ├── dpd-rules.spec.js      # DPD rule enforcement on the canvas
-    │       └── file-operations.spec.js # Nextcloud save / load / delete / share
-      │       ├── stack-smoke.spec.js    # API health checks: Caddy HTTPS, WebDAV auth, CORS
+    │       ├── custom-features.spec.js     # FAST: one test per NOLAI feature (<1 min, no backend)
+    │       └── nextcloud-integration.spec.js # Full-stack round-trips + infra (INTEGRATION=1 only)
     │
     ├── manual/                        # Human-verified test records (historical reference)
     │   ├── PLUGIN_DEMO_TEST.md        # Manual walk-through of plugin events
@@ -202,8 +202,8 @@ Then install dependencies and run the UI specs:
 ```bash
 cd tests/e2e
 npm install
-npx playwright install --with-deps chromium firefox
-npx playwright test specs/plugin-init.spec.js specs/dpd-rules.spec.js
+npx playwright install --with-deps chromium
+npm test            # fast suite: specs/custom-features.spec.js (chromium, <1 min)
 cd ../..
 ```
 
@@ -229,7 +229,7 @@ bash setup_merged.sh
 
 # Then move into the e2e directory and run the integration spec
 cd tests/e2e
-INTEGRATION=1 npx playwright test specs/stack-smoke.spec.js specs/file-operations.spec.js --project=chromium
+npm run test:integration   # INTEGRATION=1 playwright test (all specs)
 cd ../..
 ```
 

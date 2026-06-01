@@ -3,9 +3,12 @@
   "version": "1.0.0",
   "description": "Playwright E2E tests for the DPD Drawing Tool",
   "scripts": {
-    "test": "playwright test",
+    "test": "playwright test --project=fast",
+    "test:fast": "playwright test --project=fast",
+    "test:integration": "INTEGRATION=1 playwright test",
+    "test:all": "INTEGRATION=1 CROSS_BROWSER=1 playwright test",
     "test:ui": "playwright test --ui",
-    "test:headed": "playwright test --headed",
+    "test:headed": "playwright test --project=fast --headed",
     "test:report": "playwright show-report"
   },
   "devDependencies": {
