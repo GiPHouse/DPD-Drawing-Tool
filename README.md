@@ -277,6 +277,7 @@ This stops all containers and deletes all volumes, including the Goauthentik dat
 
 The `docker/` directory contains everything needed to build a single distributable image. This is what the client uses — they don't interact with the codebase or run any scripts.
 
+
 ### Build the image
 
 ```bash
