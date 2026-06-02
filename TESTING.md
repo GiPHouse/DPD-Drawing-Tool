@@ -2,6 +2,10 @@
 
 This document is the single source of truth for the testing strategy of the DPD Drawing Tool, a custom draw.io implementation built for [NOLAI](https://www.ru.nl/en/nolai). It explains what is tested, how each tool works, why that tool was chosen, and how to run the tests locally and in CI.
 
+> **Just want to run the tests?** Jump to [Quick start](#quick-start).
+>
+> **Looking for CI status or coverage?** See [GitHub Actions CI pipeline](#github-actions-ci-pipeline) and [Code coverage](#code-coverage).
+
 ---
 
 ## Table of Contents
@@ -18,7 +22,7 @@ This document is the single source of truth for the testing strategy of the DPD 
 10. [Code coverage](#code-coverage)
 11. [GitHub Actions CI pipeline](#github-actions-ci-pipeline)
 12. [Adding new tests](#adding-new-tests)
-13. [Sprint 2 test stubs](#sprint-2-test-stubs)
+13. [Pending test stubs](#pending-test-stubs)
 
 ---
 
@@ -26,13 +30,13 @@ This document is the single source of truth for the testing strategy of the DPD 
 
 The project follows a **test pyramid** approach: many fast, isolated unit tests at the base; fewer, slower browser tests in the middle; and a small number of full-stack integration tests at the top. This keeps local feedback quick (unit tests finish in under 2 seconds) while still verifying real browser and server behaviour where it matters.
 
-The order of confidence levels, from highest to lowest, is:
-DPD rule is added, a corresponding unit test is expected to accompany it. E2E tests are written in advance as stubs (using `test.skip`) and activated once the feature is merged, so the test suite always reflects the current state of the product.
+The confidence levels, from lowest to highest scope:
 
----
 1. A unit test passing means the plugin logic is correct in isolation.
 2. A Playwright UI test passing means the browser renders the feature as designed.
 3. A Playwright integration test passing means the entire stack — draw.io, Nextcloud, and Caddy — works end to end.
+
+Whenever a new DPD rule is added, a corresponding unit test is expected to accompany it. E2E tests are written in advance as stubs (using `test.skip`) and activated once the feature is merged, so the test suite always reflects the current state of the product.
 
 ## Technology choices
 
@@ -111,7 +115,9 @@ The version pinned is **`@playwright/test` ^1.44**, which includes the Locator A
 .
 ├── README.md                          # Project overview and deployment guide
 ├── TESTING.md                         # This file
-├── setup_merged.sh                    # One-command full-stack deployment
+├── start.sh                           # Dev stack: build, start, enable app, export cert
+├── start-auth.sh                      # Dev auth stack: base stack + Goauthentik SSO
+├── start-client-auth.sh               # Helper for client-facing auth configuration
 ├── .gitignore
 │
 ├── docs/
@@ -126,12 +132,18 @@ The version pinned is **`@playwright/test` ^1.44**, which includes the Locator A
 │
 └── tests/
     │
+    ├── dpd_rules.test.js              # Standalone unit tests for the 15 DPD core rules
+    │                                  # (runs with plain `npx jest dpd_rules.test.js`)
+    │
     ├── unit/                          # Layer 1 — Jest unit tests
     │   ├── package.json               # Jest + dependencies
     │   ├── jest.config.js             # Jest configuration (rootDir = repo root)
     │   ├── jest.transform.js          # babel-jest wrapper fixing cwd for Istanbul
     │   ├── setup.js                   # mxGraph globals + Draw.loadPlugin shim
-    │   └── dpd.plugin.test.js         # All unit tests for dpd.js
+    │   ├── dpd.plugin.test.js         # Plugin lifecycle, graph events, DPD rule integration
+    │   ├── DPDConsole.test.js         # Unit tests for DPDConsole (violation panel DOM logic)
+    │   ├── share.test.js              # Unit tests for share-related Menu.js actions
+    │   └── templateLegend.test.js     # Unit tests for template legend rendering
     │
     ├── e2e/                           # Layers 2 & 3 — Playwright tests
     │   ├── package.json
@@ -139,12 +151,20 @@ The version pinned is **`@playwright/test` ^1.44**, which includes the Locator A
     │   ├── playwright.config.js       # Chromium by default; CROSS_BROWSER=1 adds Firefox
     │   ├── helpers/index.js           # loadApp, graph-API shape insertion, menu/session helpers
     │   └── specs/
-    │       ├── custom-features.spec.js     # FAST: one test per NOLAI feature (<1 min, no backend)
-    │       └── nextcloud-integration.spec.js # Full-stack round-trips + infra (INTEGRATION=1 only)
+    │       ├── custom-features.spec.js        # FAST: one test per NOLAI feature (<1 min, no backend)
+    │       └── nextcloud-integration.spec.js  # Full-stack round-trips + infra (INTEGRATION=1 only)
     │
     ├── manual/                        # Human-verified test records (historical reference)
-    │   ├── PLUGIN_DEMO_TEST.md        # Manual walk-through of plugin events
-    │   └── UI_LOGO_TEST.md            # Manual walk-through of logo + UI customisations
+    │   ├── PLUGIN_DEMO_TEST.md
+    │   ├── UI_LOGO_TEST.md
+    │   ├── DISABLE_THEMES_TEST.md
+    │   ├── DOCKER_AUTH_TEST.md
+    │   ├── DPD_TEST_PLAN.md
+    │   ├── ICONS_ON_EDGES.md
+    │   ├── LOGOUT_TESTS.md
+    │   ├── UI_HIGHLIGHTS_WAYPOINTS_TEST.md
+    │   ├── UI_LANGUAGE_LIBRARY_TEST.md
+    │   └── VERSION_CONTROL_TEST.md
     │
     └── nextcloudCallTests.js          # Inline browser console tests for WebDAV helpers
 ```
@@ -189,15 +209,14 @@ cd ../..
 
 ### Run E2E UI tests
 
-First, build and start the draw.io container. The build command uses a path argument so you stay in the repo root throughout:
+The E2E suite targets the full dev stack at `https://localhost:5443`. Start it first:
 
 ```bash
 # From the repo root
-docker build -t dpd-drawio "drawio app/"
-docker run -d --name drawio-app -p 5500:8080 dpd-drawio
+bash start.sh
 ```
 
-Then install dependencies and run the UI specs:
+Then install dependencies and run the fast UI specs:
 
 ```bash
 cd tests/e2e
@@ -215,21 +234,15 @@ npx playwright show-report
 cd ../..
 ```
 
-Stop the container when done:
-
-```bash
-docker stop drawio-app && docker rm drawio-app
-```
-
 ### Run integration tests (full stack)
 
 ```bash
 # From the repo root — start the full stack
-bash setup_merged.sh
+bash start.sh
 
 # Then move into the e2e directory and run the integration spec
 cd tests/e2e
-npm run test:integration   # INTEGRATION=1 playwright test (all specs)
+INTEGRATION=1 npx playwright test specs/nextcloud-integration.spec.js --project=integration
 cd ../..
 ```
 
@@ -311,11 +324,11 @@ npx jest dpd.plugin.test.js --verbose
 
 `tests/e2e/playwright.config.js` sets the key Playwright options:
 
-- **`baseURL`** — `http://localhost:5500` by default; override with `DRAWIO_URL`.
+- **`baseURL`** — `https://localhost:5443` by default (the Caddy reverse proxy in the dev stack); override with `DRAWIO_URL`.
 - **`fullyParallel: false, workers: 1`** — sequential execution prevents Nextcloud race conditions on shared file state.
 - **`retries: process.env.CI ? 1 : 0`** — one automatic retry in CI to absorb Docker startup timing; zero locally so failures surface immediately.
 - **`timeout: 30_000`** — draw.io takes several seconds to hydrate on first load.
-- **Projects: `chromium` and `firefox`** — the entire suite runs against both browsers.
+- **Projects: `fast` and `integration`** — `fast` runs `custom-features.spec.js` with no backend; `integration` runs `nextcloud-integration.spec.js` against the full stack. `CROSS_BROWSER=1` adds Firefox variants to both.
 
 ### Handling the startup alert
 
@@ -393,10 +406,18 @@ expect(response.status()).toBe(200);
 
 Before the automated E2E suite existed, the team performed and documented manual tests. These records are preserved in `tests/manual/` as historical reference:
 
-- **`PLUGIN_DEMO_TEST.md`** — Manual walk-through of vertex add, move, resize, delete, and edge creation events, confirming that `dpd.js` logs the correct messages to the console. All 8 cases: PASS.
-- **`UI_LOGO_TEST.md`** — Manual verification of the NOLAI logo display, browser resize behaviour, cross-browser rendering (Chrome, Firefox), and suppression of "Edit Data" and "Clear Default Style". All 8 cases: PASS.
+- **`PLUGIN_DEMO_TEST.md`** — Walk-through of vertex add, move, resize, delete, and edge creation events, confirming `dpd.js` logs the correct console messages.
+- **`UI_LOGO_TEST.md`** — Verification of NOLAI logo display, browser resize behaviour, cross-browser rendering, and suppression of stock draw.io UI elements.
+- **`DISABLE_THEMES_TEST.md`** — Confirms that draw.io themes are disabled and the NOLAI-only palette is enforced.
+- **`DOCKER_AUTH_TEST.md`** — Manual verification of the Goauthentik SSO login flow against the Docker auth stack.
+- **`DPD_TEST_PLAN.md`** — High-level test plan covering DPD rule coverage goals across all sprints.
+- **`ICONS_ON_EDGES.md`** — Verification that DPD edge icons render correctly on connections.
+- **`LOGOUT_TESTS.md`** — Manual walk-through of logout behaviour for both local and OIDC-authenticated sessions.
+- **`UI_HIGHLIGHTS_WAYPOINTS_TEST.md`** — Verification of the highlights/waypoints panel behaviour and edit-lock banner.
+- **`UI_LANGUAGE_LIBRARY_TEST.md`** — Confirms the DPD shape library loads and language settings are applied correctly.
+- **`VERSION_CONTROL_TEST.md`** — Manual verification of Nextcloud version history: saving, listing, and restoring previous diagram versions.
 
-These scenarios are now automated in `plugin-init.spec.js` and `dpd-rules.spec.js`.
+The early plugin and UI scenarios are now automated in `custom-features.spec.js`; Nextcloud file-management scenarios are automated in `nextcloud-integration.spec.js`.
 
 ---
 
@@ -430,28 +451,25 @@ The custom `jest.transform.js` solves a second problem: `babel-jest` passes `con
 
 ## GitHub Actions CI pipeline
 
-The pipeline is defined in `.github/workflows/ci.yml` and contains three jobs.
+The pipeline is defined in `.github/workflows/ci.yml` and is triggered on **pull requests only** (opened, reopened, synchronised, or marked ready for review). Direct branch pushes do not run CI — tests run once a PR exists. Manual runs are also available via the Actions tab.
+
+The pipeline contains two jobs.
 
 ### Job 1 — `unit-tests`
 
-Runs on every push. Installs Node 20, runs `npm install` and `npm run test:coverage` inside `tests/unit/`, and uploads the coverage HTML report as a build artifact (retained 14 days).
+Installs Node 20, runs `npm ci` and `npm test` inside `tests/unit/`, and uploads the coverage HTML report as a build artifact (retained 14 days).
 
 ### Job 2 — `e2e-ui-tests`
 
-Runs after `unit-tests` passes. Builds the draw.io Docker image, waits for Tomcat to be healthy on port 5500, then runs `plugin-init.spec.js` and `dpd-rules.spec.js` in both Chromium and Firefox. The Playwright HTML report is uploaded on failure.
+Runs after `unit-tests` passes. Brings up the full dev stack via `bash start.sh` (using a cached draw.io Docker image), waits for both draw.io and Nextcloud to be reachable, then runs `custom-features.spec.js` (the `fast` Playwright project) in Chromium. The Playwright HTML report is uploaded on failure; container logs are dumped if the job fails. The stack is torn down on completion regardless of outcome.
 
-### Job 3 — `integration-tests`
-
-Runs only on PRs targeting `main` and direct pushes to `main`. Executes `setup_merged.sh` to start the full Docker Compose stack, waits for both services to be healthy, runs `file-operations.spec.js` in Chromium, and tears the stack down on completion.
+> The `integration` Playwright project (`nextcloud-integration.spec.js`) is not run in CI — it requires the Goauthentik SSO stack and cannot pass on a stock GitHub Actions runner.
 
 ```
-Every push
+Pull request opened / updated
 │
 ├── unit-tests (~2 s)
-│   └── [on pass] e2e-ui-tests (~3–5 min)
-│
-└── [PRs → main / push to main only]
-    └── integration-tests (~10–15 min)
+│   └── [on pass] e2e-ui-tests (~5–10 min)
 ```
 
 ---
@@ -474,26 +492,26 @@ Every push
 
 ### Adding a new spec file
 
-Create `tests/e2e/specs/my-feature.spec.js`. Playwright discovers spec files automatically via `testDir: './specs'` — no config change needed. If the spec requires the full Nextcloud stack, add it to the `integration-tests` CI job; otherwise it runs in `e2e-ui-tests`.
+Create `tests/e2e/specs/my-feature.spec.js`. Playwright discovers spec files automatically via `testDir: './specs'` — no config change needed. If the spec requires the full Nextcloud stack, assign it to the `integration` project in `playwright.config.js`; otherwise assign it to `fast` so it runs automatically in CI.
 
 ---
 
-## Sprint 2 test stubs
+## Pending test stubs
 
-The following tests are scaffolded but skipped, waiting for the corresponding Sprint 2 issues to be merged:
+The following tests are scaffolded but skipped, waiting for the corresponding issues to be merged:
 
 | Test file | Description | Issue |
 |---|---|---|
-| `dpd-rules.spec.js` | Invalid connection triggers rule-violation alert | [#112](https://github.com/GiPHouse/DPD-Drawing-Tool/issues/112), [#113](https://github.com/GiPHouse/DPD-Drawing-Tool/issues/113) |
-| `dpd-rules.spec.js` | Valid connection shows no alert | [#113](https://github.com/GiPHouse/DPD-Drawing-Tool/issues/113) |
-| `dpd-rules.spec.js` | Clicking a shape opens the attribute panel | [#120](https://github.com/GiPHouse/DPD-Drawing-Tool/issues/120) |
-| `dpd-rules.spec.js` | Attribute panel shows correct DPD options | [#120](https://github.com/GiPHouse/DPD-Drawing-Tool/issues/120) |
-| `file-operations.spec.js` | Save dialog opens | [#98](https://github.com/GiPHouse/DPD-Drawing-Tool/issues/98) |
-| `file-operations.spec.js` | Saved file appears in Nextcloud | [#98](https://github.com/GiPHouse/DPD-Drawing-Tool/issues/98) |
-| `file-operations.spec.js` | Load dialog opens | [#100](https://github.com/GiPHouse/DPD-Drawing-Tool/issues/100) |
-| `file-operations.spec.js` | Delete with confirmation prompt | [#108](https://github.com/GiPHouse/DPD-Drawing-Tool/issues/108) |
-| `file-operations.spec.js` | Version history lists saved versions | [#107](https://github.com/GiPHouse/DPD-Drawing-Tool/issues/107) |
-| `file-operations.spec.js` | Share dialog accepts a recipient | [#99](https://github.com/GiPHouse/DPD-Drawing-Tool/issues/99) |
+| `custom-features.spec.js` | Invalid connection triggers rule-violation alert | [#112](https://github.com/GiPHouse/DPD-Drawing-Tool/issues/112), [#113](https://github.com/GiPHouse/DPD-Drawing-Tool/issues/113) |
+| `custom-features.spec.js` | Valid connection shows no alert | [#113](https://github.com/GiPHouse/DPD-Drawing-Tool/issues/113) |
+| `custom-features.spec.js` | Clicking a shape opens the attribute panel | [#120](https://github.com/GiPHouse/DPD-Drawing-Tool/issues/120) |
+| `custom-features.spec.js` | Attribute panel shows correct DPD options | [#120](https://github.com/GiPHouse/DPD-Drawing-Tool/issues/120) |
+| `nextcloud-integration.spec.js` | Save dialog opens | [#98](https://github.com/GiPHouse/DPD-Drawing-Tool/issues/98) |
+| `nextcloud-integration.spec.js` | Saved file appears in Nextcloud | [#98](https://github.com/GiPHouse/DPD-Drawing-Tool/issues/98) |
+| `nextcloud-integration.spec.js` | Load dialog opens | [#100](https://github.com/GiPHouse/DPD-Drawing-Tool/issues/100) |
+| `nextcloud-integration.spec.js` | Delete with confirmation prompt | [#108](https://github.com/GiPHouse/DPD-Drawing-Tool/issues/108) |
+| `nextcloud-integration.spec.js` | Version history lists saved versions | [#107](https://github.com/GiPHouse/DPD-Drawing-Tool/issues/107) |
+| `nextcloud-integration.spec.js` | Share dialog accepts a recipient | [#99](https://github.com/GiPHouse/DPD-Drawing-Tool/issues/99) |
 | `dpd.plugin.test.js` | Rejects incompatible DPD type connection | [#110](https://github.com/GiPHouse/DPD-Drawing-Tool/issues/110), [#113](https://github.com/GiPHouse/DPD-Drawing-Tool/issues/113) |
 | `dpd.plugin.test.js` | Allows valid DPD type connection | [#110](https://github.com/GiPHouse/DPD-Drawing-Tool/issues/110) |
 | `dpd.plugin.test.js` | Alert fires when required attribute is missing | [#115](https://github.com/GiPHouse/DPD-Drawing-Tool/issues/115) |
