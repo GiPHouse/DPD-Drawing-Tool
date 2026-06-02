@@ -2,16 +2,20 @@
 
 A customised [draw.io](https://www.drawio.com/) diagramming environment built for [NOLAI](https://www.ru.nl/en/nolai) (Nationaal Onderzoekslab voor AI). The tool enforces DPD (Data Protection by Design) semantic rules directly in the diagram canvas and stores diagrams in an integrated Nextcloud file storage instance.
 
+> **Client deployment?** Jump straight to [Single-container deployment](#single-container-deployment) — you only need Docker.
+>
+> **Developer?** Start at [Prerequisites](#prerequisites) then follow the [Quick start](#quick-start--development-stack).
+
 ---
 
 ## Contents
 
 - [Overview](#overview)
 - [Architecture](#architecture)
+- [Single-container deployment](#single-container-deployment) ← client start here
 - [Prerequisites](#prerequisites)
 - [Quick start — development stack](#quick-start--development-stack)
 - [Development auth stack — Goauthentik SSO](#development-auth-stack--goauthentik-sso)
-- [Single-container deployment](#single-container-deployment)
 - [Deploy draw.io only](#deploy-drawio-only)
 - [Development setup](#development-setup)
 - [Running the tests](#running-the-tests)
@@ -27,6 +31,7 @@ The DPD Drawing Tool is built on top of the open-source draw.io diagramming appl
 - **DPD plugin** (`drawio app/src/main/webapp/plugins/dpd.js`) — enforces DPD semantic rules in the diagram canvas: connection validation, cardinality constraints, and required attribute checks.
 - **NOLAI UI customisations** — the NOLAI logo, removal of draw.io UI elements not relevant to the DPD workflow, and hardened resize behaviour.
 - **Nextcloud integration** — diagrams are saved and loaded via Nextcloud's WebDAV API, giving users file versioning, sharing, and access control.
+- **Goauthentik SSO** — user authentication is delegated to a [Goauthentik](https://goauthentik.io/) OpenID Connect provider, allowing users to log in with their existing organisational credentials via the Nextcloud `user_oidc` app.
 - **Caddy reverse proxy** — handles HTTPS (secure connections) for both services so the browser and draw.io can communicate securely.
 
 ---
@@ -41,28 +46,41 @@ The DPD Drawing Tool is built on top of the open-source draw.io diagramming appl
 | **Nextcloud** | A self-hosted file storage platform (like a private Google Drive) | Stores and manages diagram files via WebDAV |
 | **MariaDB** | A relational database (similar to MySQL) | Stores Nextcloud's internal data (users, file metadata, settings) |
 | **Caddy** | A web server used as a reverse proxy | Sits in front of both services, handles HTTPS, and routes traffic to the right place |
+| **Goauthentik** | An open-source identity provider | Handles user authentication via OpenID Connect (OIDC); Nextcloud's `user_oidc` app delegates all logins to it |
 
 ### Why Caddy sits in front of everything
 
 Caddy is a **reverse proxy** — instead of the browser connecting directly to Draw.io or Nextcloud, all traffic goes through Caddy first. This allows Caddy to handle HTTPS (encrypted connections) in one place, so Draw.io and Nextcloud don't each need their own certificate setup. Caddy routes traffic based on port: port 443 goes to Nextcloud, port 5443 goes to Draw.io.
 
+### Goauthentik SSO integration
+
+Goauthentik is **not bundled inside the application container** — it runs as a separate service (either the client's existing instance or the local dev stack). Nextcloud connects to it at login time using the OpenID Connect protocol: the user clicks "Login with Goauthentik", is redirected to Goauthentik to authenticate, and is then redirected back to Nextcloud with a token. Nextcloud validates the token and creates or updates the user's account automatically.
+
+This means the application itself holds no passwords — credential management is entirely Goauthentik's responsibility.
+
 ### Development stack (Docker Compose)
 
-Four separate containers, each running one service:
+Four containers for the base stack, with an optional four-container Goauthentik overlay (`docker-compose.auth.yml`):
 
 ```
 Browser
   │
-  ├── https://localhost:5443  ──▶  Caddy  ──▶  Draw.io container  (port 8080)
+  ├── https://localhost:5443  ──▶  Caddy  ──▶  Draw.io container   (port 8080)
   │                                               └── dpd.js plugin
   │
-  └── https://localhost       ──▶  Caddy  ──▶  Nextcloud container (port 80)
-                                                 └── MariaDB container (port 3306)
+  ├── https://localhost       ──▶  Caddy  ──▶  Nextcloud container  (port 80)
+  │                                               │  └── MariaDB container (port 3306)
+  │                                               │
+  │                                               │  OIDC (server-side, Docker DNS)
+  │                                               ▼
+  └── http://authentik-server:9000  ──▶  Goauthentik container  (auth stack only)
+                                             ├── PostgreSQL container
+                                             └── Redis container
 ```
 
 ### Single-container image (`docker/Dockerfile`)
 
-All four services bundled inside one container, managed by `supervisord` (a process manager that starts and monitors multiple programs at once):
+All core services bundled inside one container, managed by `supervisord`. Goauthentik is **not** included — the container connects to the client's existing Goauthentik instance via the `OIDC_*` environment variables:
 
 ```
 docker run -p 443:443 -p 5443:5443 dpd-app
@@ -72,6 +90,8 @@ docker run -p 443:443 -p 5443:5443 dpd-app
         ├── Apache2  → internal port 8000 (serves Nextcloud PHP files)
         ├── Tomcat 9 → internal port 8080 (serves Draw.io WAR file)
         └── MariaDB  → internal socket    (database, not reachable externally)
+
+  Nextcloud user_oidc app  ──▶  client's Goauthentik instance (external, via OIDC_PROVIDER_URL)
 ```
 
 This image is intended for the client — they only need Docker installed and one command to run the entire application.
@@ -496,7 +516,7 @@ Caddy will automatically contact Let's Encrypt on first boot to obtain a certifi
 
 ## Deploy draw.io only
 
-Useful for UI development and running E2E tests without the full stack:
+Useful for isolated draw.io UI development without running Nextcloud or Caddy:
 
 ```bash
 # From the repo root
@@ -506,7 +526,7 @@ docker run -d --name drawio-app -p 5500:8080 dpd-drawio
 
 The app will be at [http://localhost:5500](http://localhost:5500).
 
-> **Note:** E2E tests in `tests/e2e/` target `http://localhost:5500`. When running integration tests against the full Compose stack, update the base URL in `tests/e2e/playwright.config.js` to `https://localhost:5443`.
+> **Note:** The E2E test suite targets the full Compose stack at `https://localhost:5443` by default. To run E2E tests against this standalone container instead, set `DRAWIO_URL=http://localhost:5500` when invoking Playwright.
 
 Stop and remove the container when done:
 
@@ -562,22 +582,22 @@ cd tests/unit && npm run test:coverage && cd ../..
 ```
 
 ```bash
-# E2E UI tests — requires the draw.io container running on port 5500 (see above)
+# E2E UI tests — requires the full stack running (bash start.sh)
 cd tests/e2e
 npm install
-npx playwright install --with-deps chromium firefox
-npx playwright test specs/plugin-init.spec.js specs/dpd-rules.spec.js
+npx playwright install --with-deps chromium
+npm test
 cd ../..
 ```
 
 ```bash
 # Integration tests — requires the full stack running (bash start.sh)
 cd tests/e2e
-INTEGRATION=1 npx playwright test specs/file-operations.spec.js --project=chromium
+INTEGRATION=1 npx playwright test specs/nextcloud-integration.spec.js --project=integration
 cd ../..
 ```
 
-Current test status: 15 unit tests passing, 5 stubs pending Sprint 2 features. Statement coverage **93.5%**, branch coverage **93.2%**, function coverage **100%**.
+See [TESTING.md](TESTING.md) for current coverage numbers and full test counts.
 
 ---
 
@@ -588,7 +608,8 @@ Current test status: 15 unit tests passing, 5 stubs pending Sprint 2 features. S
 ├── README.md                        # This file
 ├── TESTING.md                       # Full testing guide
 ├── start.sh                         # Dev stack: build, start, enable app, export cert
-├── setup_merged.sh                  # DEPRECATED — replaced by start.sh
+├── start-auth.sh                    # Dev auth stack: starts base stack + Goauthentik SSO
+├── start-client-auth.sh             # Helper for client-facing auth configuration
 ├── docker-compose.yml               # Defines all four dev containers and how they connect
 ├── Caddyfile                        # Reverse proxy config for the dev stack
 ├── .env.example                     # Template for environment variables — copy to .env
