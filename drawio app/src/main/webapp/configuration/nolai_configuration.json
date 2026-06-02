@@ -84,7 +84,7 @@
                   "title": "Distributed processes"
                 },
                 {
-                  "xml": "<mxGraphModel><root><mxCell id=\"0\"/><mxCell id=\"1\" parent=\"0\"/><mxCell id=\"2\" parent=\"1\" style=\"shape=rect;rounded=1;arcSize=15;strokeWidth=2;fillColor=#008a00;strokeColor=#005700;opacity=60;dashed=1;fixDash=1;fillStyle=cross-hatch;\" vertex=\"1\"><mxGeometry height=\"400\" width=\"400\" as=\"geometry\"/></mxCell></root></mxGraphModel>",
+                  "xml": "<mxGraphModel><root><mxCell id=\"0\"/><mxCell id=\"1\" parent=\"0\"/><mxCell id=\"2\" parent=\"1\" connectable=\"0\" style=\"shape=rect;rounded=1;arcSize=15;strokeWidth=2;fillColor=#008a00;strokeColor=#005700;opacity=60;dashed=1;fixDash=1;fillStyle=cross-hatch;\" vertex=\"1\"><mxGeometry height=\"400\" width=\"400\" as=\"geometry\"/></mxCell></root></mxGraphModel>",
                   "w": 400,
                   "h": 400,
                   "aspect": "fixed",
@@ -133,7 +133,7 @@
                   "title": "Directional connector"
                 },
                 {
-                  "xml": "<mxGraphModel><root><mxCell id=\"0\" /><mxCell id=\"1\" parent=\"0\" /><mxCell id=\"2zeXTtjjpeL2r_Vvo7NS-2\" parent=\"1\" style=\"text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;\" value=\"Text\" vertex=\"1\"><mxGeometry height=\"30\" width=\"60\" as=\"geometry\" /></mxCell></root></mxGraphModel>",
+                  "xml": "<mxGraphModel><root><mxCell id=\"0\" /><mxCell id=\"1\" parent=\"0\" /><mxCell id=\"2zeXTtjjpeL2r_Vvo7NS-2\" parent=\"1\" connectable=\"0\" style=\"text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;\" value=\"Text\" vertex=\"1\"><mxGeometry height=\"30\" width=\"60\" as=\"geometry\" /></mxCell></root></mxGraphModel>",
                   "w": 60,
                   "h": 30,
                   "aspect": "fixed",
