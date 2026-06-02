@@ -168,6 +168,14 @@ services:
   drawio:
     build:
       context: "./drawio app"
+    # Stable image name/tag for the locally-built draw.io image.
+    #
+    # WHY: with an explicit image name, `docker compose up` (without --build)
+    # reuses an already-present image instead of rebuilding. CI relies on this
+    # to pre-build the image once with a cross-run layer cache and start the
+    # stack without recompiling draw.io via `ant war`. With `up -d --build`
+    # (the start.sh default) the image is rebuilt and re-tagged as normal.
+    image: dpd-drawio-app:local
     container_name: drawio-app
     restart: always
 

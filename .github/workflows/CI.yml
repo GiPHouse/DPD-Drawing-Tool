@@ -1,9 +1,14 @@
 name: CI
 on:
+  # Tests run only on pull requests: when a PR is opened or reopened, when new
+  # commits are pushed to it (synchronize), and when a draft PR is marked ready
+  # for review. There is intentionally no `push:` trigger, so direct branch
+  # pushes do NOT run CI — tests run only once a PR exists.
   pull_request:
-    types: [ready_for_review, synchronize]
+    types: [opened, reopened, ready_for_review, synchronize]
     branches:
       - '**'
+  # Allow manual runs from the Actions tab when needed.
   workflow_dispatch:
 permissions:
   contents: read
@@ -38,110 +43,150 @@ jobs:
           name: unit-coverage
           path: tests/unit/coverage
           if-no-files-found: ignore
-  # e2e-tests:
-  #   name: E2E tests (Playwright)
-  #   runs-on: ubuntu-latest
-  #   timeout-minutes: 8
-  #   if: contains(github.event.pull_request.labels.*.name, 'frontend')    
-  #   defaults:
-  #     run:
-  #       working-directory: tests/e2e
-  #   steps:
-  #     - name: Check out repository
-  #       uses: actions/checkout@v4
-  #     - name: Set up Node.js
-  #       id: setup_node
-  #       uses: actions/setup-node@v4
-  #       with:
-  #         node-version: 20
-  #         cache: npm
-  #         cache-dependency-path: tests/e2e/package-lock.json
 
-      # - name: Log e2e npm cache status
-      #   run: |
-      #     echo "setup-node npm cache hit: ${{ steps.setup-node-e2e.outputs.cache-hit }}"
-      #     echo "npm cache dir: $(npm config get cache)"
-      #     du -sh "$(npm config get cache)" || true
+  # ---------------------------------------------------------------------------
+  # E2E tests (Playwright) — "fast" project only.
+  #
+  # SCOPE / WHY ONLY THE FAST PROJECT:
+  #   tests/e2e defines two Playwright projects (see playwright.config.js):
+  #     * "fast"        - specs/custom-features.spec.js: pure-UI checks that need
+  #                       the draw.io frontend but NO live Nextcloud backend.
+  #     * "integration" - specs/nextcloud-integration.spec.js: real WebDAV/OCS
+  #                       round-trips that require Nextcloud + the goauthentik SSO
+  #                       stack brought up by start-auth.sh.
+  #   The `npm test` script is `playwright test --project=fast`, so only the fast
+  #   spec runs here. The integration spec is never matched, so the tests that
+  #   depend on start-auth.sh / a live Nextcloud session are deliberately
+  #   excluded - they cannot pass on a stock GitHub Actions runner.
+  #
+  # WHY WE STILL BRING UP THE BASE STACK:
+  #   Even the fast tests load the draw.io app at https://localhost:5443. In the
+  #   compose stack draw.io is served by Caddy, and Caddy `depends_on` Nextcloud
+  #   being healthy, so the whole BASE stack (db + nextcloud + caddy + drawio via
+  #   start.sh / docker-compose.yml) must be up. The AUTH stack
+  #   (start-auth.sh / docker-compose.auth.yml) is intentionally NOT started.
+  #
+  # NOTE: ubuntu-latest GitHub runners ship Docker + the Compose v2 plugin, so
+  #   start.sh's `docker compose` calls work without extra setup.
+  # ---------------------------------------------------------------------------
+  e2e-tests:
+    name: E2E tests (Playwright, fast project)
+    runs-on: ubuntu-latest
+    # The base stack's first boot (Nextcloud install + image builds) can take a
+    # couple of minutes; give the whole job generous headroom.
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: tests/e2e
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
 
-      # - name: Install e2e dependencies
-      #   run: npm ci
-        
-      # - name: Restore Playwright browser cache
-      #   id: playwright-cache-restore
-      #   uses: actions/cache/restore@v4
-      #   with:
-      #     path: ~/.cache/ms-playwright
-      #     key: ${{ runner.os }}-playwright-${{ hashFiles('tests/e2e/package-lock.json') }}
-      #     restore-keys: |
-      #       ${{ runner.os }}-playwright-
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: tests/e2e/package-lock.json
 
-      # - name: Log Playwright cache status
-      #   run: |
-      #     echo "playwright cache hit: ${{ steps.playwright-cache.outputs.cache-hit }}"
-      #     if [ -d ~/.cache/ms-playwright ]; then
-      #       du -sh ~/.cache/ms-playwright
-      #       ls -1 ~/.cache/ms-playwright | head -n 20
-      #     else
-      #       echo "Playwright cache directory does not exist yet"
-      #     fi
+      - name: Install e2e dependencies
+        run: npm ci
 
-      # - name: Install Playwright system dependencies
-      #   run: npx playwright install-deps
-        
-      # - name: Install Playwright browsers
-      #   if: steps.playwright-cache.outputs.cache-hit  != 'true'
-      #   run: npx playwright install
+      # Cache the downloaded browser binaries between runs. Keyed on the e2e
+      # lockfile so a Playwright version bump invalidates the cache automatically.
+      - name: Restore Playwright browser cache
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('tests/e2e/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
 
-      # - name: Save Playwright browser cache
-      #   if: steps.playwright-cache-restore.outputs.cache-hit != 'true'   # only save when we just installed
-      #   uses: actions/cache/save@v4
-      #   with:
-      #     path: ~/.cache/ms-playwright
-      #     key: ${{ runner.os }}-playwright-${{ hashFiles('tests/e2e/package-lock.json') }}
-      
-      # - name: Generate and start integration stack
-      #   if: contains(github.event.pull_request.labels.*.name, 'frontend')
-      #   working-directory: .
-      #   run: |
-      #     chmod +x ./start.sh
-      #     if [ ! -f .env ]; then
-      #       cp .env.example .env
-      #     fi
-      #     ./start.sh
-      # - name: Wait for draw.io and Nextcloud
-      #   run: |
-      #     for i in {1..60}; do
-      #       if curl -kfsS https://localhost:5443 >/dev/null && \
-      #         curl -kfsS https://localhost/status.php | grep -q '"installed":true'; then
-      #         echo "Services are ready"
-      #         exit 0
-      #       fi
-      #       echo "Waiting for services to become ready... ($i/60)"
-      #       sleep 5
-      #     done
-      #     echo "Services did not become ready in time"
-      #     if [ -f "$GITHUB_WORKSPACE/docker-compose.yml" ]; then
-      #       docker compose -f "$GITHUB_WORKSPACE/docker-compose.yml" ps
-      #     fi
-      #     exit 1
-      # - name: Run Playwright tests
-      #   run: npm test
-      # - name: Upload Playwright report
-      #   if: always()
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: playwright-report
-      #     path: tests/e2e/playwright-report
-      #     if-no-files-found: ignore
-      # - name: Dump Docker logs on failure
-      #   if: failure()
-      #   run: |
-      #     if [ -f "$GITHUB_WORKSPACE/docker-compose.yml" ]; then
-      #       docker compose -f "$GITHUB_WORKSPACE/docker-compose.yml" logs --no-color
-      #     fi
-      # - name: Stop Docker stack
-      #   if: always()
-      #   run: |
-      #     if [ -f "$GITHUB_WORKSPACE/docker-compose.yml" ]; then
-      #       docker compose -f "$GITHUB_WORKSPACE/docker-compose.yml" logs --no-color
-      #     fi
+      # Only Chromium is needed: playwright.config.js uses Desktop Chrome for the
+      # fast project (Firefox is opt-in via CROSS_BROWSER, which we do not set).
+      - name: Install Playwright browser (Chromium) + system deps
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+
+      # On a cache hit the binaries exist but OS-level libs (not cached) still
+      # need installing.
+      - name: Install Playwright system deps (cache hit)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      # Buildx is needed to use the GitHub Actions layer cache (type=gha) below.
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Pre-build the draw.io image with a cross-run layer cache. The Dockerfile
+      # compiles draw.io from source (`ant war`), which is the slowest part of
+      # bringing the stack up. Caching its layers means unchanged source skips
+      # the recompile entirely. The tag MUST match `image:` for the drawio
+      # service in docker-compose.yml so start.sh reuses it (COMPOSE_BUILD=0).
+      - name: Build draw.io image (cached)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./drawio app
+          tags: dpd-drawio-app:local
+          load: true
+          cache-from: type=gha,scope=drawio
+          cache-to: type=gha,mode=max,scope=drawio
+
+      # Bring up ONLY the base stack. .env is gitignored, so create it from the
+      # committed dev-safe template before start.sh sources it.
+      # COMPOSE_BUILD=0 makes start.sh skip `--build` and reuse the image built
+      # in the cached step above.
+      - name: Start base docker stack (draw.io + Nextcloud)
+        working-directory: .
+        env:
+          COMPOSE_BUILD: "0"
+        run: |
+          chmod +x ./start.sh
+          if [ ! -f .env ]; then
+            cp .env.example .env
+          fi
+          ./start.sh
+
+      # start.sh already waits for Nextcloud to report healthy, but Caddy/draw.io
+      # may need a moment more. Poll both endpoints before launching the browser.
+      - name: Wait for draw.io and Nextcloud to be reachable
+        working-directory: .
+        run: |
+          for i in $(seq 1 60); do
+            if curl -kfsS https://localhost:5443 >/dev/null \
+               && curl -kfsS https://localhost/status.php | grep -q '"installed":true'; then
+              echo "Services are ready"
+              exit 0
+            fi
+            echo "Waiting for services to become ready... ($i/60)"
+            sleep 5
+          done
+          echo "Services did not become ready in time"
+          docker compose -f "$GITHUB_WORKSPACE/docker-compose.yml" ps
+          exit 1
+
+      # `npm test` == `playwright test --project=fast`. GitHub Actions sets
+      # CI=true automatically, which the config uses to enable 2 workers + 1 retry.
+      - name: Run Playwright tests (fast project)
+        run: npm test
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: tests/e2e/playwright-report
+          if-no-files-found: ignore
+
+      # On failure, dump container logs to make debugging the run possible.
+      - name: Dump Docker logs on failure
+        if: failure()
+        working-directory: .
+        run: docker compose -f "$GITHUB_WORKSPACE/docker-compose.yml" logs --no-color
+
+      # Always tear the stack down so a cancelled/failed run leaves nothing behind.
+      - name: Stop Docker stack
+        if: always()
+        working-directory: .
+        run: docker compose -f "$GITHUB_WORKSPACE/docker-compose.yml" down -v

@@ -149,13 +149,17 @@ test('right-clicking a DPD node shows "Edit Properties…"', async ({ page }) =>
   await hideAppDialog(page);
   await expect(page.locator('h3:has-text("Annotate Data Flow")')).toBeHidden({ timeout: 5_000 });
 
-  // Right-click the shape at its real screen position (derived from cell state).
-  const c = await cellScreenCenter(page, cellId);
-  await page.mouse.click(c.x, c.y, { button: 'right' });
-
-  const menu = page.locator('.mxPopupMenu').last();
-  await menu.waitFor({ state: 'visible', timeout: 5_000 });
-  await expect(menu.getByText('Edit Properties…')).toBeVisible({ timeout: 3_000 });
+  // dpd.js adds "Edit Properties…" only when the cell under the cursor is a DPD
+  // vertex (see its popup factoryMethod), so the right-click must land on the
+  // 120x60 node. Recompute the node centre and re-issue the click on each
+  // attempt so the menu is opened on the node once the graph layout has settled.
+  const editItem = page.locator('.mxPopupMenu').last().getByText('Edit Properties…');
+  await expect(async () => {
+    await closeDialogs(page);
+    const c = await cellScreenCenter(page, cellId);
+    await page.mouse.click(c.x, c.y, { button: 'right' });
+    await expect(editItem).toBeVisible({ timeout: 2_000 });
+  }).toPass({ timeout: 15_000 });
   await closeDialogs(page);
 });
 

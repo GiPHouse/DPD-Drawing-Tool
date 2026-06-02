@@ -55,8 +55,19 @@ if [ ! -f ".env" ]; then
 fi
 
 # ---- Build and start containers ----
-echo "Building and starting containers..."
-$DOCKER_COMPOSE up -d --build
+# COMPOSE_BUILD controls whether local images are (re)built on startup:
+#   1 (default) → `up -d --build`  — rebuild local images (default for local dev).
+#   0           → `up -d`          — skip the build and reuse already-present
+#                                    images, e.g. in CI where the draw.io image
+#                                    is pre-built with a cached layer build so
+#                                    `ant war` does not recompile on every run.
+if [ "${COMPOSE_BUILD:-1}" = "1" ]; then
+    echo "Building and starting containers..."
+    $DOCKER_COMPOSE up -d --build
+else
+    echo "Starting containers (COMPOSE_BUILD=0 — reusing pre-built images)..."
+    $DOCKER_COMPOSE up -d
+fi
 
 # ---- Wait for Nextcloud to be healthy ----
 # docker compose up returns as soon as containers start, not when they are ready.
